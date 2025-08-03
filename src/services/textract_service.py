@@ -73,3 +73,7 @@ class TextractService:
                     text_lines.append(block['Text'])
         
         return '\n'.join(text_lines)
+    
+    def get_text_from_response(self, textract_response: Dict[str, Any]) -> str:
+        """Extract plain text from Textract response for Bedrock"""
+        return self.extract_text_blocks(textract_response)

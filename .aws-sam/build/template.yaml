@@ -71,6 +71,16 @@ Resources:
           - textract:DetectDocumentText
           - textract:AnalyzeDocument
           - textract:AnalyzeExpense
+          - textract:StartDocumentTextDetection
+          - textract:StartDocumentAnalysis
+          - textract:GetDocumentTextDetection
+          - textract:GetDocumentAnalysis
+          Resource: '*'
+        - Effect: Allow
+          Action:
+          - logs:CreateLogGroup
+          - logs:CreateLogStream
+          - logs:PutLogEvents
           Resource: '*'
     Metadata:
       SamResourceId: ProcessDocumentFunction
@@ -127,6 +137,16 @@ Resources:
           - textract:DetectDocumentText
           - textract:AnalyzeDocument
           - textract:AnalyzeExpense
+          - textract:StartDocumentTextDetection
+          - textract:StartDocumentAnalysis
+          - textract:GetDocumentTextDetection
+          - textract:GetDocumentAnalysis
+          Resource: '*'
+        - Effect: Allow
+          Action:
+          - logs:CreateLogGroup
+          - logs:CreateLogStream
+          - logs:PutLogEvents
           Resource: '*'
     Metadata:
       SamResourceId: ApiProcessFunction

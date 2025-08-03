@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaxDoc API Tester</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .section { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }
+        input, button { padding: 10px; margin: 5px; border: 1px solid #ddd; border-radius: 4px; }
+        button { background: #3498db; color: white; cursor: pointer; border: none; }
+        button:hover { background: #2980b9; }
+        .results { background: #f8f9fa; padding: 15px; border-radius: 5px; margin-top: 15px; white-space: pre-wrap; font-family: monospace; }
+        .error { background: #fee; color: #c33; padding: 10px; border-radius: 4px; margin: 10px 0; }
+        .success { background: #efe; color: #363; padding: 10px; border-radius: 4px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧾 TaxDoc API Tester</h1>
+        
+        <div class="section">
+            <h3>📤 Upload & Process Document</h3>
+            <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png,.txt">
+            <button onclick="uploadAndProcess()">Upload & Process</button>
+            <div id="uploadResults"></div>
+        </div>
+        
+        <div class="section">
+            <h3>📊 Check Results by Document ID</h3>
+            <input type="text" id="documentId" placeholder="Enter document filename" style="width: 300px;">
+            <button onclick="checkResults()">Check Results</button>
+            <div id="resultsDisplay"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'https://yjj6ifqqxi.execute-api.us-east-1.amazonaws.com/dev';
+        
+        async function uploadAndProcess() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                showError('uploadResults', 'Please select a file');
+                return;
+            }
+            
+            showLoading('uploadResults', 'Processing document...');
+            
+            try {
+                // First upload to S3 (simulate the S3 trigger)
+                const uploadResponse = await fetch(`${API_BASE}/process-document`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        filename: file.name,
+                        contentType: file.type,
+                        size: file.size
+                    })
+                });
+                
+                if (!uploadResponse.ok) {
+                    throw new Error(`HTTP ${uploadResponse.status}: ${uploadResponse.statusText}`);
+                }
+                
+                const result = await uploadResponse.json();
+                
+                document.getElementById('uploadResults').innerHTML = 
+                    '<div class="success">Document processed successfully!</div>' +
+                    '<div class="results">' + JSON.stringify(result, null, 2) + '</div>';
+                
+                // Set document ID for checking
+                document.getElementById('documentId').value = file.name;
+                
+            } catch (error) {
+                showError('uploadResults', `Processing failed: ${error.message}`);
+            }
+        }
+        
+        async function checkResults() {
+            const documentId = document.getElementById('documentId').value;
+            
+            if (!documentId) {
+                showError('resultsDisplay', 'Please enter document ID');
+                return;
+            }
+            
+            showLoading('resultsDisplay', 'Checking results...');
+            
+            try {
+                const response = await fetch(`${API_BASE}/result/${encodeURIComponent(documentId)}`);
+                
+                if (response.status === 404) {
+                    showError('resultsDisplay', 'Document not found. May still be processing.');
+                    return;
+                }
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                
+                document.getElementById('resultsDisplay').innerHTML = 
+                    '<div class="success">Document found!</div>' +
+                    '<div class="results">' + JSON.stringify(result, null, 2) + '</div>';
+                
+            } catch (error) {
+                showError('resultsDisplay', `Error: ${error.message}`);
+            }
+        }
+        
+        function showError(elementId, message) {
+            document.getElementById(elementId).innerHTML = `<div class="error">${message}</div>`;
+        }
+        
+        function showLoading(elementId, message) {
+            document.getElementById(elementId).innerHTML = `<div style="color: #666; font-style: italic;">${message}</div>`;
+        }
+    </script>
+</body>
+</html>

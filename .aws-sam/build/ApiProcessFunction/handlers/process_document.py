@@ -15,11 +15,15 @@ from services.storage_service import StorageService
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """Main Lambda handler for document processing"""
     
+    print(f"Processing event: {json.dumps(event)}")
+    
     try:
         # Parse S3 event
         record = event['Records'][0]
         bucket = record['s3']['bucket']['name']
         key = record['s3']['object']['key']
+        
+        print(f"Processing document: s3://{bucket}/{key}")
         
         # Initialize services
         textract = TextractService()
@@ -28,13 +32,19 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         storage = StorageService()
         
         # Step 1: Extract text and form data using Textract
+        print("Calling Textract for OCR...")
         textract_response = textract.analyze_document(bucket, key)
+        print(f"Textract response received with {len(textract_response.get('Blocks', []))} blocks")
         
         # Step 2: Classify document type
+        print("Classifying document type...")
         doc_type = classifier.classify_document(textract_response)
+        print(f"Document classified as: {doc_type}")
         
         # Step 3: Extract key fields based on document type
+        print("Extracting key fields...")
         extracted_data = extractor.extract_fields(textract_response, doc_type)
+        print(f"Extracted data: {json.dumps(extracted_data)}")
         
         # Step 4: Structure the output
         result = {
@@ -47,7 +57,9 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         }
         
         # Step 5: Store results
+        print("Storing results to DynamoDB...")
         storage.save_document_metadata(result)
+        print("Processing completed successfully")
         
         return {
             'statusCode': 200,
@@ -55,11 +67,22 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         }
         
     except Exception as e:
+        print(f"Error processing document: {str(e)}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
+        
         error_result = {
             "DocumentID": key.split('/')[-1] if 'key' in locals() else "unknown",
             "ProcessingStatus": "Failed",
             "Error": str(e)
         }
+        
+        # Try to store error result
+        try:
+            storage = StorageService()
+            storage.save_document_metadata(error_result)
+        except:
+            print("Failed to store error result")
         
         return {
             'statusCode': 500,
