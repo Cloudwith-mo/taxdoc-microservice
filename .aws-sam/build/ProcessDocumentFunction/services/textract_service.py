@@ -77,3 +77,72 @@ class TextractService:
     def get_text_from_response(self, textract_response: Dict[str, Any]) -> str:
         """Extract plain text from Textract response for Bedrock"""
         return self.extract_text_blocks(textract_response)
+    
+    def start_async_analysis(self, bucket: str, key: str) -> str:
+        """Start async Textract job and return JobId"""
+        import os
+        
+        try:
+            if self._is_expense_document(key):
+                response = self.client.start_expense_analysis(
+                    DocumentLocation={'S3Object': {'Bucket': bucket, 'Name': key}},
+                    NotificationChannel={
+                        'SNSTopicArn': os.environ['TEXTRACT_SNS_TOPIC'],
+                        'RoleArn': os.environ['TEXTRACT_ROLE_ARN']
+                    },
+                    JobTag='TaxDoc-Expense'
+                )
+            else:
+                response = self.client.start_document_analysis(
+                    DocumentLocation={'S3Object': {'Bucket': bucket, 'Name': key}},
+                    FeatureTypes=['FORMS', 'TABLES'],
+                    NotificationChannel={
+                        'SNSTopicArn': os.environ['TEXTRACT_SNS_TOPIC'],
+                        'RoleArn': os.environ['TEXTRACT_ROLE_ARN']
+                    },
+                    JobTag='TaxDoc-Analysis'
+                )
+            
+            return response['JobId']
+        except Exception as e:
+            print(f"Error starting async Textract job: {e}")
+            raise e
+    
+    def get_async_results(self, job_id: str, job_type: str = 'analysis') -> Dict[str, Any]:
+        """Retrieve async Textract results with pagination"""
+        pages = []
+        next_token = None
+        
+        try:
+            while True:
+                if job_type == 'expense':
+                    if next_token:
+                        response = self.client.get_expense_analysis(JobId=job_id, NextToken=next_token)
+                    else:
+                        response = self.client.get_expense_analysis(JobId=job_id)
+                else:
+                    if next_token:
+                        response = self.client.get_document_analysis(JobId=job_id, NextToken=next_token)
+                    else:
+                        response = self.client.get_document_analysis(JobId=job_id)
+                
+                pages.append(response)
+                next_token = response.get('NextToken')
+                if not next_token:
+                    break
+            
+            # Combine all pages
+            if job_type == 'expense':
+                combined_docs = []
+                for page in pages:
+                    combined_docs.extend(page.get('ExpenseDocuments', []))
+                return {'ExpenseDocuments': combined_docs}
+            else:
+                combined_blocks = []
+                for page in pages:
+                    combined_blocks.extend(page.get('Blocks', []))
+                return {'Blocks': combined_blocks}
+                
+        except Exception as e:
+            print(f"Error retrieving async results: {e}")
+            raise e

@@ -19,6 +19,16 @@ Globals:
           Ref: DocumentUploadBucket
         RESULTS_TABLE:
           Ref: DocumentsTable
+        TEXTRACT_SNS_TOPIC:
+          Ref: TextractCompleteTopic
+        TEXTRACT_ROLE_ARN:
+          Fn::GetAtt:
+          - TextractSNSRole
+          - Arn
+        COMPREHEND_ENDPOINT: ''
+        COMPREHEND_CONFIDENCE_THRESHOLD: '0.8'
+        BEDROCK_MODEL_ID: amazon.titan-text-premier-v1:0
+        ENABLE_BEDROCK_SUMMARY: 'false'
 Resources:
   DocumentUploadBucket:
     Type: AWS::S3::Bucket
@@ -51,6 +61,32 @@ Resources:
           KeyType: HASH
         Projection:
           ProjectionType: ALL
+  TextractCompleteTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName:
+        Fn::Sub: ${AWS::StackName}-textract-complete
+  TextractSNSRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Fn::Sub: ${AWS::StackName}-TextractSNSRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: textract.amazonaws.com
+          Action: sts:AssumeRole
+      Policies:
+      - PolicyName: SNSPublishPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action: sns:Publish
+            Resource:
+              Ref: TextractCompleteTopic
   ProcessDocumentFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -78,6 +114,11 @@ Resources:
           Resource: '*'
         - Effect: Allow
           Action:
+          - comprehend:ClassifyDocument
+          - bedrock:InvokeModel
+          Resource: '*'
+        - Effect: Allow
+          Action:
           - logs:CreateLogGroup
           - logs:CreateLogStream
           - logs:PutLogEvents
@@ -93,6 +134,47 @@ Resources:
       Principal: s3.amazonaws.com
       SourceArn:
         Fn::Sub: arn:aws:s3:::taxdoc-uploads-${Environment}-${AWS::AccountId}/*
+  TextractResultProcessor:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: TaxDoc-TextractResult-${Environment}
+      CodeUri: TextractResultProcessor
+      Handler: handlers.textract_result_handler.lambda_handler
+      Timeout: 600
+      Policies:
+      - S3ReadPolicy:
+          BucketName:
+            Ref: DocumentUploadBucket
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: DocumentsTable
+      - Statement:
+        - Effect: Allow
+          Action:
+          - textract:GetDocumentAnalysis
+          - textract:GetDocumentTextDetection
+          - textract:GetExpenseAnalysis
+          Resource: '*'
+        - Effect: Allow
+          Action:
+          - comprehend:ClassifyDocument
+          - bedrock:InvokeModel
+          Resource: '*'
+        - Effect: Allow
+          Action:
+          - logs:CreateLogGroup
+          - logs:CreateLogStream
+          - logs:PutLogEvents
+          Resource: '*'
+      Events:
+        SNSEvent:
+          Type: SNS
+          Properties:
+            Topic:
+              Ref: TextractCompleteTopic
+    Metadata:
+      SamResourceId: TextractResultProcessor
   DocumentProcessingApi:
     Type: AWS::Serverless::Api
     Properties:
@@ -150,6 +232,38 @@ Resources:
           Resource: '*'
     Metadata:
       SamResourceId: ApiProcessFunction
+  ExcelGeneratorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: TaxDoc-ExcelGenerator-${Environment}
+      CodeUri: ExcelGeneratorFunction
+      Handler: handlers.excel_generator.lambda_handler
+      Timeout: 60
+      Events:
+        DownloadExcel:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: DocumentProcessingApi
+            Path: /download-excel/{doc_id}
+            Method: get
+      Policies:
+      - S3FullAccessPolicy:
+          BucketName:
+            Ref: DocumentUploadBucket
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: DocumentsTable
+      - Statement:
+        - Effect: Allow
+          Action:
+          - logs:CreateLogGroup
+          - logs:CreateLogStream
+          - logs:PutLogEvents
+          Resource: '*'
+    Metadata:
+      SamResourceId: ExcelGeneratorFunction
 Outputs:
   UploadBucket:
     Description: S3 bucket for document uploads
@@ -172,3 +286,10 @@ Outputs:
     Export:
       Name:
         Fn::Sub: ${AWS::StackName}-DocumentsTable
+  TextractSNSTopic:
+    Description: SNS topic for Textract completion notifications
+    Value:
+      Ref: TextractCompleteTopic
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-TextractSNSTopic

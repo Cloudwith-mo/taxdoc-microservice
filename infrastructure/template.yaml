@@ -16,6 +16,12 @@ Globals:
       Variables:
         UPLOAD_BUCKET: !Ref DocumentUploadBucket
         RESULTS_TABLE: !Ref DocumentsTable
+        TEXTRACT_SNS_TOPIC: !Ref TextractCompleteTopic
+        TEXTRACT_ROLE_ARN: !GetAtt TextractSNSRole.Arn
+        COMPREHEND_ENDPOINT: ''
+        COMPREHEND_CONFIDENCE_THRESHOLD: '0.8'
+        BEDROCK_MODEL_ID: 'amazon.titan-text-premier-v1:0'
+        ENABLE_BEDROCK_SUMMARY: 'false'
 
 Resources:
   # S3 Bucket for document uploads
@@ -51,6 +57,33 @@ Resources:
           Projection:
             ProjectionType: ALL
 
+  # SNS Topic for Textract completion notifications
+  TextractCompleteTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${AWS::StackName}-textract-complete'
+
+  # IAM Role for Textract to publish to SNS
+  TextractSNSRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-TextractSNSRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: textract.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SNSPublishPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: sns:Publish
+                Resource: !Ref TextractCompleteTopic
+
   # Lambda function for document processing
   ProcessDocumentFunction:
     Type: AWS::Serverless::Function
@@ -76,6 +109,11 @@ Resources:
               Resource: '*'
             - Effect: Allow
               Action:
+                - comprehend:ClassifyDocument
+                - bedrock:InvokeModel
+              Resource: '*'
+            - Effect: Allow
+              Action:
                 - logs:CreateLogGroup
                 - logs:CreateLogStream
                 - logs:PutLogEvents
@@ -89,6 +127,43 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: s3.amazonaws.com
       SourceArn: !Sub 'arn:aws:s3:::taxdoc-uploads-${Environment}-${AWS::AccountId}/*'
+
+  # Lambda function for processing Textract results
+  TextractResultProcessor:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'TaxDoc-TextractResult-${Environment}'
+      CodeUri: ../src/
+      Handler: handlers.textract_result_handler.lambda_handler
+      Timeout: 600
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref DocumentUploadBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref DocumentsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - textract:GetDocumentAnalysis
+                - textract:GetDocumentTextDetection
+                - textract:GetExpenseAnalysis
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - comprehend:ClassifyDocument
+                - bedrock:InvokeModel
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: '*'
+      Events:
+        SNSEvent:
+          Type: SNS
+          Properties:
+            Topic: !Ref TextractCompleteTopic
 
 
 
@@ -145,6 +220,34 @@ Resources:
                 - logs:PutLogEvents
               Resource: '*'
 
+  # Lambda function for Excel generation
+  ExcelGeneratorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'TaxDoc-ExcelGenerator-${Environment}'
+      CodeUri: ../src/
+      Handler: handlers.excel_generator.lambda_handler
+      Timeout: 60
+      Events:
+        DownloadExcel:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DocumentProcessingApi
+            Path: /download-excel/{doc_id}
+            Method: get
+      Policies:
+        - S3FullAccessPolicy:
+            BucketName: !Ref DocumentUploadBucket
+        - DynamoDBReadPolicy:
+            TableName: !Ref DocumentsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: '*'
+
 Outputs:
   UploadBucket:
     Description: S3 bucket for document uploads
@@ -163,3 +266,9 @@ Outputs:
     Value: !Ref DocumentsTable
     Export:
       Name: !Sub '${AWS::StackName}-DocumentsTable'
+
+  TextractSNSTopic:
+    Description: SNS topic for Textract completion notifications
+    Value: !Ref TextractCompleteTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-TextractSNSTopic'
