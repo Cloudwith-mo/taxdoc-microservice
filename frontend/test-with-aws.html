@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaxDoc AWS Tester</title>
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1.24.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #333;
+        }
+        
+        .section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        
+        .section h3 {
+            margin-top: 0;
+            color: #2c3e50;
+        }
+        
+        input, button, select {
+            padding: 10px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        button {
+            background: #3498db;
+            color: white;
+            cursor: pointer;
+            border: none;
+        }
+        
+        button:hover {
+            background: #2980b9;
+        }
+        
+        button:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+        
+        .results {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 15px;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+        
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        
+        .success {
+            background: #efe;
+            color: #363;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        
+        .loading {
+            color: #666;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧾 TaxDoc AWS Tester</h1>
+            <p>Real AWS integration testing</p>
+        </div>
+        
+        <div class="section">
+            <h3>🔧 AWS Configuration</h3>
+            <input type="text" id="accessKey" placeholder="AWS Access Key ID" style="width: 300px;">
+            <input type="password" id="secretKey" placeholder="AWS Secret Access Key" style="width: 300px;">
+            <input type="text" id="region" placeholder="Region" value="us-east-1" style="width: 150px;">
+            <button onclick="configureAWS()">Configure AWS</button>
+            <div id="awsStatus"></div>
+        </div>
+        
+        <div class="section">
+            <h3>📤 Upload Test</h3>
+            <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png,.txt">
+            <input type="text" id="bucketName" placeholder="S3 Bucket" value="taxdoc-uploads-dev-995805900737" style="width: 300px;">
+            <button onclick="uploadFile()" id="uploadBtn" disabled>Upload to S3</button>
+            <div id="uploadResults"></div>
+        </div>
+        
+        <div class="section">
+            <h3>📊 Check Processing Results</h3>
+            <input type="text" id="documentId" placeholder="Document ID (filename)" style="width: 300px;">
+            <input type="text" id="tableName" placeholder="DynamoDB Table" value="TaxDocuments-dev" style="width: 200px;">
+            <button onclick="checkResults()" id="checkBtn" disabled>Check Results</button>
+            <div id="resultsDisplay"></div>
+        </div>
+        
+        <div class="section">
+            <h3>📋 Lambda Logs</h3>
+            <input type="text" id="functionName" placeholder="Function Name" value="TaxDoc-ProcessDocument-dev" style="width: 300px;">
+            <button onclick="getLogs()" id="logsBtn" disabled>Get Recent Logs</button>
+            <div id="logsDisplay"></div>
+        </div>
+        
+        <div class="section">
+            <h3>🧪 Quick Tests</h3>
+            <button onclick="runAllTests()" id="testBtn" disabled>Run All Tests</button>
+            <div id="testResults"></div>
+        </div>
+    </div>
+
+    <script>
+        let awsConfigured = false;
+        
+        function configureAWS() {
+            const accessKey = document.getElementById('accessKey').value;
+            const secretKey = document.getElementById('secretKey').value;
+            const region = document.getElementById('region').value;
+            
+            if (!accessKey || !secretKey) {
+                showStatus('awsStatus', 'Please enter AWS credentials', 'error');
+                return;
+            }
+            
+            AWS.config.update({
+                accessKeyId: accessKey,
+                secretAccessKey: secretKey,
+                region: region
+            });
+            
+            awsConfigured = true;
+            showStatus('awsStatus', 'AWS configured successfully', 'success');
+            
+            // Enable other buttons
+            document.getElementById('uploadBtn').disabled = false;
+            document.getElementById('checkBtn').disabled = false;
+            document.getElementById('logsBtn').disabled = false;
+            document.getElementById('testBtn').disabled = false;
+        }
+        
+        async function uploadFile() {
+            const fileInput = document.getElementById('fileInput');
+            const bucketName = document.getElementById('bucketName').value;
+            
+            if (!fileInput.files[0]) {
+                showStatus('uploadResults', 'Please select a file', 'error');
+                return;
+            }
+            
+            if (!bucketName) {
+                showStatus('uploadResults', 'Please enter bucket name', 'error');
+                return;
+            }
+            
+            const file = fileInput.files[0];
+            const s3 = new AWS.S3();
+            
+            showStatus('uploadResults', 'Uploading...', 'loading');
+            
+            try {
+                const params = {
+                    Bucket: bucketName,
+                    Key: `incoming/${file.name}`,
+                    Body: file,
+                    ContentType: file.type
+                };
+                
+                const result = await s3.upload(params).promise();
+                showStatus('uploadResults', `File uploaded successfully!\\nLocation: ${result.Location}`, 'success');
+                
+                // Set document ID for checking results
+                document.getElementById('documentId').value = file.name;
+                
+            } catch (error) {
+                showStatus('uploadResults', `Upload failed: ${error.message}`, 'error');
+            }
+        }
+        
+        async function checkResults() {
+            const documentId = document.getElementById('documentId').value;
+            const tableName = document.getElementById('tableName').value;
+            
+            if (!documentId) {
+                showStatus('resultsDisplay', 'Please enter document ID', 'error');
+                return;
+            }
+            
+            const dynamodb = new AWS.DynamoDB.DocumentClient();
+            
+            showStatus('resultsDisplay', 'Checking results...', 'loading');
+            
+            try {
+                const params = {
+                    TableName: tableName,
+                    Key: {
+                        DocumentID: documentId
+                    }
+                };
+                
+                const result = await dynamodb.get(params).promise();
+                
+                if (result.Item) {
+                    const formatted = JSON.stringify(result.Item, null, 2);
+                    document.getElementById('resultsDisplay').innerHTML = 
+                        '<div class="success">Document found!</div><div class="results">' + formatted + '</div>';
+                } else {
+                    showStatus('resultsDisplay', 'Document not found. Processing may still be in progress.', 'error');
+                }
+                
+            } catch (error) {
+                showStatus('resultsDisplay', `Error checking results: ${error.message}`, 'error');
+            }
+        }
+        
+        async function getLogs() {
+            const functionName = document.getElementById('functionName').value;
+            
+            if (!functionName) {
+                showStatus('logsDisplay', 'Please enter function name', 'error');
+                return;
+            }
+            
+            const cloudwatchlogs = new AWS.CloudWatchLogs();
+            
+            showStatus('logsDisplay', 'Fetching logs...', 'loading');
+            
+            try {
+                const logGroupName = `/aws/lambda/${functionName}`;
+                
+                // Get log streams
+                const streamsParams = {
+                    logGroupName: logGroupName,
+                    orderBy: 'LastEventTime',
+                    descending: true,
+                    limit: 1
+                };
+                
+                const streams = await cloudwatchlogs.describeLogStreams(streamsParams).promise();
+                
+                if (streams.logStreams.length === 0) {
+                    showStatus('logsDisplay', 'No log streams found', 'error');
+                    return;
+                }
+                
+                // Get recent log events
+                const eventsParams = {
+                    logGroupName: logGroupName,
+                    logStreamName: streams.logStreams[0].logStreamName,
+                    limit: 20,
+                    startFromHead: false
+                };
+                
+                const events = await cloudwatchlogs.getLogEvents(eventsParams).promise();
+                
+                const logText = events.events.map(event => 
+                    new Date(event.timestamp).toISOString() + ': ' + event.message
+                ).join('\\n');
+                
+                document.getElementById('logsDisplay').innerHTML = 
+                    '<div class="success">Recent logs:</div><div class="results">' + logText + '</div>';
+                
+            } catch (error) {
+                showStatus('logsDisplay', `Error fetching logs: ${error.message}`, 'error');
+            }
+        }
+        
+        async function runAllTests() {
+            showStatus('testResults', 'Running comprehensive tests...', 'loading');
+            
+            let results = [];
+            
+            // Test 1: Check S3 bucket exists
+            try {
+                const s3 = new AWS.S3();
+                const bucketName = document.getElementById('bucketName').value;
+                await s3.headBucket({Bucket: bucketName}).promise();
+                results.push('✅ S3 bucket accessible');
+            } catch (error) {
+                results.push('❌ S3 bucket error: ' + error.message);
+            }
+            
+            // Test 2: Check DynamoDB table exists
+            try {
+                const dynamodb = new AWS.DynamoDB();
+                const tableName = document.getElementById('tableName').value;
+                await dynamodb.describeTable({TableName: tableName}).promise();
+                results.push('✅ DynamoDB table accessible');
+            } catch (error) {
+                results.push('❌ DynamoDB table error: ' + error.message);
+            }
+            
+            // Test 3: Check Lambda function exists
+            try {
+                const lambda = new AWS.Lambda();
+                const functionName = document.getElementById('functionName').value;
+                await lambda.getFunction({FunctionName: functionName}).promise();
+                results.push('✅ Lambda function accessible');
+            } catch (error) {
+                results.push('❌ Lambda function error: ' + error.message);
+            }
+            
+            document.getElementById('testResults').innerHTML = 
+                '<div class="results">' + results.join('\\n') + '</div>';
+        }
+        
+        function showStatus(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : 'loading';
+            element.innerHTML = `<div class="${className}">${message}</div>`;
+        }
+    </script>
+</body>
+</html>

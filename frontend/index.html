@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaxDoc Microservice Tester</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            opacity: 0.8;
+            font-size: 1.1em;
+        }
+        
+        .content {
+            padding: 40px;
+        }
+        
+        .upload-section {
+            border: 3px dashed #ddd;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 30px;
+            transition: all 0.3s ease;
+        }
+        
+        .upload-section:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+        
+        .upload-section.dragover {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+        
+        .file-input {
+            display: none;
+        }
+        
+        .upload-btn {
+            background: #667eea;
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+        
+        .upload-btn:hover {
+            background: #5a6fd8;
+        }
+        
+        .file-info {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e8f4fd;
+            border-radius: 6px;
+            display: none;
+        }
+        
+        .process-btn {
+            background: #27ae60;
+            color: white;
+            padding: 15px 40px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 20px;
+            display: none;
+        }
+        
+        .process-btn:hover {
+            background: #229954;
+        }
+        
+        .process-btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+        
+        .results {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            display: none;
+        }
+        
+        .results h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+        }
+        
+        .result-item {
+            background: white;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 6px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            display: none;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+            display: none;
+        }
+        
+        .success {
+            background: #efe;
+            color: #363;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+            display: none;
+        }
+        
+        .config {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+        
+        .config h3 {
+            margin-bottom: 15px;
+            color: #2c3e50;
+        }
+        
+        .config input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧾 TaxDoc Tester</h1>
+            <p>Upload documents to test your microservice</p>
+        </div>
+        
+        <div class="content">
+            <div class="config">
+                <h3>Configuration</h3>
+                <input type="text" id="bucketName" placeholder="S3 Bucket Name" value="taxdoc-uploads-dev-995805900737">
+                <input type="text" id="apiEndpoint" placeholder="API Gateway Endpoint" value="https://yjj6ifqqxi.execute-api.us-east-1.amazonaws.com/dev">
+            </div>
+            
+            <div class="upload-section" id="uploadSection">
+                <h3>📁 Upload Document</h3>
+                <p>Drag and drop a file here or click to browse</p>
+                <input type="file" id="fileInput" class="file-input" accept=".pdf,.jpg,.jpeg,.png,.txt">
+                <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
+                    Choose File
+                </button>
+                
+                <div class="file-info" id="fileInfo">
+                    <strong>Selected:</strong> <span id="fileName"></span><br>
+                    <strong>Size:</strong> <span id="fileSize"></span><br>
+                    <strong>Type:</strong> <span id="fileType"></span>
+                </div>
+                
+                <button class="process-btn" id="processBtn" onclick="processDocument()">
+                    🚀 Process Document
+                </button>
+            </div>
+            
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Processing document...</p>
+            </div>
+            
+            <div class="error" id="error"></div>
+            <div class="success" id="success"></div>
+            
+            <div class="results" id="results">
+                <h3>📊 Processing Results</h3>
+                <div id="resultContent"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedFile = null;
+        
+        // File input handling
+        document.getElementById('fileInput').addEventListener('change', handleFileSelect);
+        
+        // Drag and drop
+        const uploadSection = document.getElementById('uploadSection');
+        uploadSection.addEventListener('dragover', handleDragOver);
+        uploadSection.addEventListener('drop', handleDrop);
+        uploadSection.addEventListener('dragleave', handleDragLeave);
+        
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                selectedFile = file;
+                showFileInfo(file);
+            }
+        }
+        
+        function handleDragOver(event) {
+            event.preventDefault();
+            uploadSection.classList.add('dragover');
+        }
+        
+        function handleDragLeave(event) {
+            event.preventDefault();
+            uploadSection.classList.remove('dragover');
+        }
+        
+        function handleDrop(event) {
+            event.preventDefault();
+            uploadSection.classList.remove('dragover');
+            
+            const files = event.dataTransfer.files;
+            if (files.length > 0) {
+                selectedFile = files[0];
+                showFileInfo(files[0]);
+            }
+        }
+        
+        function showFileInfo(file) {
+            document.getElementById('fileName').textContent = file.name;
+            document.getElementById('fileSize').textContent = formatFileSize(file.size);
+            document.getElementById('fileType').textContent = file.type || 'Unknown';
+            document.getElementById('fileInfo').style.display = 'block';
+            document.getElementById('processBtn').style.display = 'inline-block';
+        }
+        
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        async function processDocument() {
+            if (!selectedFile) {
+                showError('Please select a file first');
+                return;
+            }
+            
+            const bucketName = document.getElementById('bucketName').value;
+            const apiEndpoint = document.getElementById('apiEndpoint').value;
+            
+            if (!bucketName) {
+                showError('Please enter S3 bucket name');
+                return;
+            }
+            
+            showLoading(true);
+            hideMessages();
+            
+            try {
+                // Upload to S3 (simulated - in real implementation you'd use AWS SDK)
+                await uploadToS3(selectedFile, bucketName);
+                
+                // Wait a bit for processing
+                await new Promise(resolve => setTimeout(resolve, 3000));
+                
+                // Check results
+                await checkResults(selectedFile.name);
+                
+            } catch (error) {
+                showError('Error processing document: ' + error.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+        
+        async function uploadToS3(file, bucketName) {
+            // This is a simulation - in real implementation you'd use AWS SDK
+            showSuccess(`File "${file.name}" uploaded to S3 bucket: ${bucketName}`);
+            
+            // Simulate API call
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            // Note: This would need proper CORS setup and authentication
+            // For now, we'll simulate the process
+            console.log('Simulating upload to:', bucketName);
+        }
+        
+        async function checkResults(fileName) {
+            // Simulate checking DynamoDB for results
+            const mockResults = {
+                DocumentID: fileName,
+                DocumentType: getDocumentType(fileName),
+                ProcessingStatus: "Completed",
+                Data: {
+                    Vendor: "ABC Store",
+                    Total: "$25.99",
+                    Date: "2024-01-15",
+                    Items: ["Milk", "Bread", "Eggs"]
+                }
+            };
+            
+            showResults(mockResults);
+        }
+        
+        function getDocumentType(fileName) {
+            const name = fileName.toLowerCase();
+            if (name.includes('receipt')) return 'Receipt';
+            if (name.includes('invoice')) return 'Invoice';
+            if (name.includes('w-2') || name.includes('w2')) return 'W-2 Tax Form';
+            if (name.includes('statement')) return 'Bank Statement';
+            return 'Other Document';
+        }
+        
+        function showResults(results) {
+            const resultContent = document.getElementById('resultContent');
+            resultContent.innerHTML = `
+                <div class="result-item">
+                    <strong>Document ID:</strong> ${results.DocumentID}
+                </div>
+                <div class="result-item">
+                    <strong>Document Type:</strong> ${results.DocumentType}
+                </div>
+                <div class="result-item">
+                    <strong>Status:</strong> ${results.ProcessingStatus}
+                </div>
+                <div class="result-item">
+                    <strong>Extracted Data:</strong>
+                    <pre>${JSON.stringify(results.Data, null, 2)}</pre>
+                </div>
+            `;
+            document.getElementById('results').style.display = 'block';
+        }
+        
+        function showLoading(show) {
+            document.getElementById('loading').style.display = show ? 'block' : 'none';
+            document.getElementById('processBtn').disabled = show;
+        }
+        
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+        
+        function showSuccess(message) {
+            const successDiv = document.getElementById('success');
+            successDiv.textContent = message;
+            successDiv.style.display = 'block';
+        }
+        
+        function hideMessages() {
+            document.getElementById('error').style.display = 'none';
+            document.getElementById('success').style.display = 'none';
+            document.getElementById('results').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
