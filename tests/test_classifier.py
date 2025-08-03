@@ -1,4 +1,3 @@
-import pytest
 from src.services.classifier_service import ClassifierService
 
 class TestClassifierService:
