@@ -1,0 +1,154 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: TaxDoc Document Ingestion Microservice
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+    - dev
+    - staging
+    - prod
+Globals:
+  Function:
+    Timeout: 300
+    Runtime: python3.9
+    Environment:
+      Variables:
+        UPLOAD_BUCKET:
+          Ref: DocumentUploadBucket
+        RESULTS_TABLE:
+          Ref: DocumentsTable
+Resources:
+  DocumentUploadBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Fn::Sub: taxdoc-uploads-${Environment}-${AWS::AccountId}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+  DocumentsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName:
+        Fn::Sub: TaxDocuments-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: DocumentID
+        AttributeType: S
+      - AttributeName: DocumentType
+        AttributeType: S
+      KeySchema:
+      - AttributeName: DocumentID
+        KeyType: HASH
+      GlobalSecondaryIndexes:
+      - IndexName: DocumentTypeIndex
+        KeySchema:
+        - AttributeName: DocumentType
+          KeyType: HASH
+        Projection:
+          ProjectionType: ALL
+  ProcessDocumentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: TaxDoc-ProcessDocument-${Environment}
+      CodeUri: ProcessDocumentFunction
+      Handler: handlers.process_document.lambda_handler
+      Policies:
+      - S3ReadPolicy:
+          BucketName:
+            Ref: DocumentUploadBucket
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: DocumentsTable
+      - Statement:
+        - Effect: Allow
+          Action:
+          - textract:DetectDocumentText
+          - textract:AnalyzeDocument
+          - textract:AnalyzeExpense
+          Resource: '*'
+    Metadata:
+      SamResourceId: ProcessDocumentFunction
+  S3InvokeLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Ref: ProcessDocumentFunction
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceArn:
+        Fn::Sub: arn:aws:s3:::taxdoc-uploads-${Environment}-${AWS::AccountId}/*
+  DocumentProcessingApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName:
+        Ref: Environment
+      Cors:
+        AllowMethods: '''POST, GET, OPTIONS'''
+        AllowHeaders: '''Content-Type,X-Amz-Date,Authorization,X-Api-Key'''
+        AllowOrigin: '''*'''
+  ApiProcessFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: TaxDoc-ApiProcess-${Environment}
+      CodeUri: ApiProcessFunction
+      Handler: handlers.api_handler.lambda_handler
+      Events:
+        ProcessDocument:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: DocumentProcessingApi
+            Path: /process-document
+            Method: post
+        GetResult:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: DocumentProcessingApi
+            Path: /result/{doc_id}
+            Method: get
+      Policies:
+      - S3ReadPolicy:
+          BucketName:
+            Ref: DocumentUploadBucket
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: DocumentsTable
+      - Statement:
+        - Effect: Allow
+          Action:
+          - textract:DetectDocumentText
+          - textract:AnalyzeDocument
+          - textract:AnalyzeExpense
+          Resource: '*'
+    Metadata:
+      SamResourceId: ApiProcessFunction
+Outputs:
+  UploadBucket:
+    Description: S3 bucket for document uploads
+    Value:
+      Ref: DocumentUploadBucket
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-UploadBucket
+  ApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value:
+      Fn::Sub: https://${DocumentProcessingApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-ApiEndpoint
+  DocumentsTable:
+    Description: DynamoDB table for document metadata
+    Value:
+      Ref: DocumentsTable
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-DocumentsTable

@@ -28,15 +28,6 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      NotificationConfiguration:
-        LambdaConfigurations:
-          - Event: s3:ObjectCreated:*
-            Function: !GetAtt ProcessDocumentFunction.Arn
-            Filter:
-              S3Key:
-                Rules:
-                  - Name: prefix
-                    Value: incoming/
 
   # DynamoDB table for document metadata
   DocumentsTable:
@@ -87,7 +78,9 @@ Resources:
       FunctionName: !Ref ProcessDocumentFunction
       Action: lambda:InvokeFunction
       Principal: s3.amazonaws.com
-      SourceArn: !Sub '${DocumentUploadBucket}/*'
+      SourceArn: !Sub 'arn:aws:s3:::taxdoc-uploads-${Environment}-${AWS::AccountId}/*'
+
+
 
   # API Gateway for synchronous processing
   DocumentProcessingApi:

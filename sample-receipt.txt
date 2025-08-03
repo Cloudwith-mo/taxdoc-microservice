@@ -1,0 +1,20 @@
+GROCERY STORE RECEIPT
+ABC Market
+123 Main Street
+City, State 12345
+
+Date: 01/15/2024
+Time: 14:30
+
+Items:
+Milk - Organic 1 Gal    $4.99
+Bread - Whole Wheat     $2.49
+Eggs - Large Dozen      $3.29
+Apples - Red 2 lbs      $1.98
+
+Subtotal:              $12.75
+Tax:                   $1.02
+Total:                $13.77
+
+Payment Method: Credit Card
+Thank you for shopping with us!

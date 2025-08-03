@@ -56,22 +56,25 @@ def check_processing_result(doc_id: str):
         print(f"Error checking result: {str(e)}")
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python test_upload.py <file_path> [bucket_name]")
-        sys.exit(1)
-    
-    file_path = sys.argv[1]
-    bucket_name = sys.argv[2] if len(sys.argv) > 2 else None
-    
-    # Upload document
-    s3_key = upload_test_document(file_path, bucket_name)
-    
-    if s3_key:
-        doc_id = Path(s3_key).name
-        print(f"\nWait a few seconds for processing, then check result with:")
-        print(f"python scripts/test_upload.py --check {doc_id}")
-    
     # If --check flag is used
     if len(sys.argv) > 1 and sys.argv[1] == '--check':
+        if len(sys.argv) < 3:
+            print("Usage: python test_upload.py --check <document_id>")
+            sys.exit(1)
         doc_id = sys.argv[2]
         check_processing_result(doc_id)
+    else:
+        if len(sys.argv) < 2:
+            print("Usage: python test_upload.py <file_path> [bucket_name]")
+            sys.exit(1)
+        
+        file_path = sys.argv[1]
+        bucket_name = sys.argv[2] if len(sys.argv) > 2 else None
+        
+        # Upload document
+        s3_key = upload_test_document(file_path, bucket_name)
+        
+        if s3_key:
+            doc_id = Path(s3_key).name
+            print(f"\nWait a few seconds for processing, then check result with:")
+            print(f"python scripts/test_upload.py --check {doc_id}")
