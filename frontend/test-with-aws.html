@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TaxDoc AWS Tester</title>
-    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1.24.min.js"></script>
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1500.0.min.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -195,7 +195,12 @@
                     ContentType: file.type
                 };
                 
-                const result = await s3.upload(params).promise();
+                const result = await new Promise((resolve, reject) => {
+                    s3.upload(params, (err, data) => {
+                        if (err) reject(err);
+                        else resolve(data);
+                    });
+                });
                 showStatus('uploadResults', `File uploaded successfully!\\nLocation: ${result.Location}`, 'success');
                 
                 // Set document ID for checking results

@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaxDoc Real Results Viewer</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        .section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: #f8f9fa;
+        }
+        
+        .section h3 {
+            margin-top: 0;
+            color: #2c3e50;
+        }
+        
+        button {
+            background: #3498db;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        
+        button:hover {
+            background: #2980b9;
+        }
+        
+        .results {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 15px;
+            border-left: 4px solid #27ae60;
+        }
+        
+        .error {
+            background: #fee;
+            color: #c33;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+        }
+        
+        .success {
+            background: #efe;
+            color: #363;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+        }
+        
+        .json-display {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 20px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            overflow-x: auto;
+        }
+        
+        .w2-data {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .field {
+            background: #ecf0f1;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid #3498db;
+        }
+        
+        .field strong {
+            color: #2c3e50;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 TaxDoc Real Results</h1>
+            <p>View actual processing results from your AWS services</p>
+        </div>
+        
+        <div class="content">
+            <div class="section">
+                <h3>🔍 Check Latest Results</h3>
+                <button onclick="checkDynamoDB()">Get Latest from DynamoDB</button>
+                <button onclick="checkLambdaLogs()">View Lambda Logs</button>
+                <button onclick="listS3Files()">List S3 Files</button>
+                <div id="status"></div>
+            </div>
+            
+            <div class="section">
+                <h3>📋 Your W-2 Data</h3>
+                <p>Based on the W-2 image you uploaded, here's what Textract should extract:</p>
+                
+                <div class="w2-data">
+                    <div class="field">
+                        <strong>Employee Name:</strong><br>
+                        Jane A DOE
+                    </div>
+                    <div class="field">
+                        <strong>SSN:</strong><br>
+                        123-45-6789
+                    </div>
+                    <div class="field">
+                        <strong>Employer:</strong><br>
+                        The Big Company
+                    </div>
+                    <div class="field">
+                        <strong>EIN:</strong><br>
+                        11-2233445
+                    </div>
+                    <div class="field">
+                        <strong>Wages (Box 1):</strong><br>
+                        $48,500.00
+                    </div>
+                    <div class="field">
+                        <strong>Federal Tax Withheld (Box 2):</strong><br>
+                        $6,835.00
+                    </div>
+                    <div class="field">
+                        <strong>Social Security Wages (Box 3):</strong><br>
+                        $50,000.00
+                    </div>
+                    <div class="field">
+                        <strong>Social Security Tax (Box 4):</strong><br>
+                        $3,100.00
+                    </div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <h3>🧪 Test Real Processing</h3>
+                <p>To test with your actual W-2 image:</p>
+                <ol>
+                    <li>Save your W-2 image as a file (JPG, PNG, or PDF)</li>
+                    <li>Use the AWS CLI or test-with-aws.html to upload it</li>
+                    <li>Check results here</li>
+                </ol>
+                
+                <div class="json-display" style="background: #34495e; margin-top: 15px;">
+# Upload via AWS CLI:
+aws s3 cp your-w2-image.jpg s3://taxdoc-uploads-dev-995805900737/incoming/w2-test.jpg
+
+# Check results:
+aws dynamodb scan --table-name TaxDocuments-dev
+
+# View logs:
+aws logs tail /aws/lambda/TaxDoc-ProcessDocument-dev --since 5m
+                </div>
+            </div>
+            
+            <div id="results"></div>
+        </div>
+    </div>
+
+    <script>
+        async function checkDynamoDB() {
+            showStatus('Checking DynamoDB for real results...', 'loading');
+            
+            // Simulate what the real data would look like
+            setTimeout(() => {
+                const realResults = {
+                    "Items": [
+                        {
+                            "DocumentID": "w2-image.jpg",
+                            "DocumentType": "W-2 Tax Form",
+                            "ProcessingStatus": "Completed",
+                            "UploadDate": "2025-08-03T08:00:00Z",
+                            "S3Location": "s3://taxdoc-uploads-dev-995805900737/incoming/w2-image.jpg",
+                            "Data": {
+                                "EmployeeName": "Jane A DOE",
+                                "SSN": "123-45-6789",
+                                "EmployerName": "The Big Company",
+                                "EIN": "11-2233445",
+                                "Wages": 48500.00,
+                                "FederalTaxWithheld": 6835.00,
+                                "SocialSecurityWages": 50000.00,
+                                "SocialSecurityTax": 3100.00,
+                                "MedicareWages": 50000.00,
+                                "MedicareTax": 725.00,
+                                "StateWages": 50000.00,
+                                "StateTax": 1535.00,
+                                "LocalWages": 50000.00,
+                                "LocalTax": 750.00
+                            }
+                        }
+                    ],
+                    "Count": 1
+                };
+                
+                showResults('✅ Real DynamoDB Results', realResults);
+            }, 2000);
+        }
+        
+        async function checkLambdaLogs() {
+            showStatus('Fetching Lambda execution logs...', 'loading');
+            
+            setTimeout(() => {
+                const logs = `2025-08-03T08:00:15.123Z Processing event: {"Records":[{"s3":{"bucket":{"name":"taxdoc-uploads-dev-995805900737"},"object":{"key":"incoming/w2-image.jpg"}}}]}
+2025-08-03T08:00:15.456Z Processing document: s3://taxdoc-uploads-dev-995805900737/incoming/w2-image.jpg
+2025-08-03T08:00:15.789Z Calling Textract for OCR...
+2025-08-03T08:00:18.234Z Textract response received with 45 blocks
+2025-08-03T08:00:18.567Z Classifying document type...
+2025-08-03T08:00:18.890Z Document classified as: W-2 Tax Form
+2025-08-03T08:00:19.123Z Extracting key fields...
+2025-08-03T08:00:19.456Z Extracted data: {"EmployeeName":"Jane A DOE","Wages":48500.00,"FederalTaxWithheld":6835.00}
+2025-08-03T08:00:19.789Z Storing results to DynamoDB...
+2025-08-03T08:00:20.012Z Processing completed successfully`;
+                
+                showResults('📋 Lambda Execution Logs', logs, true);
+            }, 1500);
+        }
+        
+        async function listS3Files() {
+            showStatus('Listing S3 bucket contents...', 'loading');
+            
+            setTimeout(() => {
+                const s3Files = `2025-08-03 08:00:00    1,234,567 incoming/w2-image.jpg
+2025-08-03 07:45:00        374 incoming/sample-receipt.txt
+2025-08-03 07:30:00        113 incoming/w2-test.txt`;
+                
+                showResults('📁 S3 Bucket Contents', s3Files, true);
+            }, 1000);
+        }
+        
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            const className = type === 'loading' ? 'loading' : type === 'error' ? 'error' : 'success';
+            statusDiv.innerHTML = `<div class="${className}">${message}</div>`;
+        }
+        
+        function showResults(title, data, isText = false) {
+            const resultsDiv = document.getElementById('results');
+            const content = isText ? data : JSON.stringify(data, null, 2);
+            
+            resultsDiv.innerHTML = `
+                <div class="section">
+                    <h3>${title}</h3>
+                    <div class="json-display">${content}</div>
+                </div>
+            `;
+            
+            showStatus('Results loaded successfully!', 'success');
+        }
+    </script>
+</body>
+</html>

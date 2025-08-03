@@ -69,6 +69,16 @@ Resources:
                 - textract:DetectDocumentText
                 - textract:AnalyzeDocument
                 - textract:AnalyzeExpense
+                - textract:StartDocumentTextDetection
+                - textract:StartDocumentAnalysis
+                - textract:GetDocumentTextDetection
+                - textract:GetDocumentAnalysis
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
               Resource: '*'
 
   # Permission for S3 to invoke Lambda
@@ -123,6 +133,16 @@ Resources:
                 - textract:DetectDocumentText
                 - textract:AnalyzeDocument
                 - textract:AnalyzeExpense
+                - textract:StartDocumentTextDetection
+                - textract:StartDocumentAnalysis
+                - textract:GetDocumentTextDetection
+                - textract:GetDocumentAnalysis
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
               Resource: '*'
 
 Outputs:

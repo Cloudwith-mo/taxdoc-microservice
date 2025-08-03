@@ -1,0 +1,6 @@
+W-2 Wage and Tax Statement
+Jane A DOE
+SSN: 123-45-6789
+Wages: 48,500.00
+Federal tax withheld: 6,835.00
+The Big Company

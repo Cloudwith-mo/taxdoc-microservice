@@ -5,8 +5,9 @@ from typing import Dict, Any
 
 class StorageService:
     def __init__(self):
+        import os
         self.dynamodb = boto3.resource('dynamodb')
-        self.table_name = 'TaxDocuments'  # Environment variable in production
+        self.table_name = os.environ.get('RESULTS_TABLE', 'TaxDocuments-dev')
         
     def save_document_metadata(self, document_data: Dict[str, Any]) -> None:
         """Save document metadata to DynamoDB"""

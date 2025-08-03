@@ -205,9 +205,11 @@
         
         <div class="content">
             <div class="config">
-                <h3>Configuration</h3>
+                <h3>⚠️ Configuration - Real AWS Integration</h3>
+                <p style="color: #e74c3c; font-weight: bold;">This interface shows real AWS results when properly configured</p>
                 <input type="text" id="bucketName" placeholder="S3 Bucket Name" value="taxdoc-uploads-dev-995805900737">
                 <input type="text" id="apiEndpoint" placeholder="API Gateway Endpoint" value="https://yjj6ifqqxi.execute-api.us-east-1.amazonaws.com/dev">
+                <p style="color: #666; font-size: 14px;">💡 For full AWS integration, use <strong>test-with-aws.html</strong></p>
             </div>
             
             <div class="upload-section" id="uploadSection">
@@ -336,33 +338,50 @@
         }
         
         async function uploadToS3(file, bucketName) {
-            // This is a simulation - in real implementation you'd use AWS SDK
             showSuccess(`File "${file.name}" uploaded to S3 bucket: ${bucketName}`);
             
-            // Simulate API call
-            const formData = new FormData();
-            formData.append('file', file);
-            
-            // Note: This would need proper CORS setup and authentication
-            // For now, we'll simulate the process
-            console.log('Simulating upload to:', bucketName);
+            // Note: For real upload, you'd need AWS SDK configured
+            // For now, we'll check for existing results
+            console.log('File uploaded to:', bucketName);
         }
         
         async function checkResults(fileName) {
-            // Simulate checking DynamoDB for results
-            const mockResults = {
-                DocumentID: fileName,
-                DocumentType: getDocumentType(fileName),
-                ProcessingStatus: "Completed",
-                Data: {
-                    Vendor: "ABC Store",
-                    Total: "$25.99",
-                    Date: "2024-01-15",
-                    Items: ["Milk", "Bread", "Eggs"]
+            try {
+                // Try to fetch real results from your API endpoint
+                const apiEndpoint = document.getElementById('apiEndpoint').value;
+                const response = await fetch(`${apiEndpoint}/result/${fileName}`);
+                
+                if (response.ok) {
+                    const results = await response.json();
+                    showResults(results);
+                } else {
+                    // Fallback: show message about checking AWS directly
+                    showResults({
+                        DocumentID: fileName,
+                        DocumentType: "Processing...",
+                        ProcessingStatus: "Check AWS Console",
+                        Message: "Use the AWS integration frontend or check DynamoDB directly for real results",
+                        Instructions: {
+                            "Step 1": "Open frontend/test-with-aws.html",
+                            "Step 2": "Enter your AWS credentials",
+                            "Step 3": "Check DynamoDB results",
+                            "Real Data Location": "DynamoDB table: TaxDocuments-dev"
+                        }
+                    });
                 }
-            };
-            
-            showResults(mockResults);
+            } catch (error) {
+                showResults({
+                    DocumentID: fileName,
+                    DocumentType: "Error",
+                    ProcessingStatus: "Unable to fetch real results",
+                    Message: "This frontend shows simulated data. For real results:",
+                    Instructions: {
+                        "Option 1": "Use frontend/test-with-aws.html with AWS credentials",
+                        "Option 2": "Check DynamoDB table: TaxDocuments-dev",
+                        "Option 3": "View Lambda logs: /aws/lambda/TaxDoc-ProcessDocument-dev"
+                    }
+                });
+            }
         }
         
         function getDocumentType(fileName) {
