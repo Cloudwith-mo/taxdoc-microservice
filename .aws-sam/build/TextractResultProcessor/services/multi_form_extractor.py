@@ -14,7 +14,7 @@ class MultiFormExtractor:
     def __init__(self):
         self.textract_client = boto3.client('textract', region_name='us-east-1')
         self.bedrock_client = boto3.client('bedrock-runtime', region_name='us-east-1')
-        self.claude_model_id = 'anthropic.claude-sonnet-4-20250514-v1:0'
+        self.claude_model_id = 'us.anthropic.claude-sonnet-4-20250514-v1:0'
         self.titan_model_id = 'amazon.titan-text-premier-v1:0'
         self.preferred_model = 'claude'  # Switch to Claude as primary
         self.confidence_threshold = 0.85
@@ -26,99 +26,98 @@ class MultiFormExtractor:
         print(f"Starting multi-form extraction for document type: {document_type}")
         
         if document_type not in DOCUMENT_CONFIGS:
-            return {"error": f"Unsupported document type: {document_type}"}
+            raise ValueError(f"Unsupported document type: {document_type}")
         
         config = DOCUMENT_CONFIGS[document_type]
         
-        # Layer 1: Textract Queries
-        textract_results = self._extract_with_textract_queries(document_bytes, config["queries"], s3_bucket, s3_key)
-        
-        # Layer 2: Claude LLM for low-confidence fields
-        llm_results = self._extract_with_claude_llm(document_bytes, document_type, config["claude_prompt"], textract_results)
-        
-        # Layer 3: Regex fallback for missing fields
-        regex_results = self._extract_with_regex(document_bytes, config.get("regex_patterns", {}), textract_results, llm_results)
-        
-        # Orchestrate and merge results
-        final_results = self._orchestrate_results(textract_results, llm_results, regex_results, document_type)
-        
-        return final_results
+        try:
+            # Layer 1: Textract Queries
+            textract_results = self._extract_with_textract_queries(document_bytes, config["queries"], s3_bucket, s3_key)
+            
+            # Layer 2: Claude LLM for low-confidence fields
+            llm_results = self._extract_with_claude_llm(document_bytes, document_type, config["claude_prompt"], textract_results)
+            
+            # Layer 3: Regex fallback for missing fields
+            regex_results = self._extract_with_regex(document_bytes, config.get("regex_patterns", {}), textract_results, llm_results)
+            
+            # Orchestrate and merge results
+            final_results = self._orchestrate_results(textract_results, llm_results, regex_results, document_type)
+            
+            return final_results
+            
+        except Exception as e:
+            print(f"Extraction failed: {e}")
+            raise Exception(f"Document extraction failed: {str(e)}")
     
     def _extract_with_textract_queries(self, document_bytes: bytes, queries: List[Dict], s3_bucket: str = None, s3_key: str = None) -> Dict[str, Any]:
         """
         Layer 1: Extract fields using Textract Queries
         """
-        try:
-            print(f"Running Textract queries: {len(queries)} queries")
-            
-            # Prepare queries for Textract
-            query_config = {
-                "Queries": [{"Text": q["Text"], "Alias": q["Alias"]} for q in queries]
-            }
-            
-            # Call Textract with queries
-            if s3_bucket and s3_key:
-                response = self.textract_client.analyze_document(
-                    Document={'S3Object': {'Bucket': s3_bucket, 'Name': s3_key}},
-                    FeatureTypes=['QUERIES'],
-                    QueriesConfig=query_config
-                )
-            else:
-                response = self.textract_client.analyze_document(
-                    Document={'Bytes': document_bytes},
-                    FeatureTypes=['QUERIES'],
-                    QueriesConfig=query_config
-                )
-            
-            # Parse query results - simplified approach
-            results = {}
-            query_map = {q['Alias']: q['Text'] for q in queries}
-            
-            for block in response.get('Blocks', []):
-                if block['BlockType'] == 'QUERY_RESULT':
-                    text = block.get('Text', '')
-                    confidence = block.get('Confidence', 0) / 100.0
-                    
-                    # Match result to query by finding the query that produced this result
-                    for alias, query_text in query_map.items():
-                        if alias not in results and text:  # First available result gets assigned
-                            results[alias] = {
-                                'value': self._parse_field_value(text, alias),
-                                'confidence': confidence,
-                                'source': 'textract_query',
-                                'raw_text': text
-                            }
-                            break
-            
-            print(f"Textract queries extracted {len(results)} fields")
-            return results
-            
-        except Exception as e:
-            print(f"Textract queries failed: {e}")
-            return {}
+        print(f"Running Textract queries: {len(queries)} queries")
+        
+        # Prepare queries for Textract
+        query_config = {
+            "Queries": [{"Text": q["Text"], "Alias": q["Alias"]} for q in queries]
+        }
+        
+        # Call Textract with queries
+        if s3_bucket and s3_key:
+            response = self.textract_client.analyze_document(
+                Document={'S3Object': {'Bucket': s3_bucket, 'Name': s3_key}},
+                FeatureTypes=['QUERIES'],
+                QueriesConfig=query_config
+            )
+        else:
+            response = self.textract_client.analyze_document(
+                Document={'Bytes': document_bytes},
+                FeatureTypes=['QUERIES'],
+                QueriesConfig=query_config
+            )
+        
+        # Parse query results
+        results = {}
+        query_map = {q['Alias']: q['Text'] for q in queries}
+        
+        for block in response.get('Blocks', []):
+            if block['BlockType'] == 'QUERY_RESULT':
+                text = block.get('Text', '')
+                confidence = block.get('Confidence', 0) / 100.0
+                
+                # Match result to query by finding the query that produced this result
+                for alias, query_text in query_map.items():
+                    if alias not in results and text:  # First available result gets assigned
+                        results[alias] = {
+                            'value': self._parse_field_value(text, alias),
+                            'confidence': confidence,
+                            'source': 'textract_query',
+                            'raw_text': text
+                        }
+                        break
+        
+        print(f"Textract queries extracted {len(results)} fields")
+        return results
     
     def _extract_with_claude_llm(self, document_bytes: bytes, document_type: str, prompt: str, textract_results: Dict) -> Dict[str, Any]:
         """
         Layer 2: Use Claude LLM for low-confidence or missing fields
         """
-        try:
-            # Identify fields that need LLM processing
-            low_confidence_fields = []
-            for field, data in textract_results.items():
-                if data['confidence'] < self.confidence_threshold:
-                    low_confidence_fields.append(field)
-            
-            if not low_confidence_fields:
-                print("All Textract fields have high confidence, skipping LLM")
-                return {}
-            
-            print(f"Using Claude LLM for {len(low_confidence_fields)} low-confidence fields")
-            
-            # Get document text for LLM
-            document_text = self._extract_document_text(document_bytes)
-            
-            # Construct enhanced prompt
-            enhanced_prompt = f"""
+        # Identify fields that need LLM processing
+        low_confidence_fields = []
+        for field, data in textract_results.items():
+            if data['confidence'] < self.confidence_threshold:
+                low_confidence_fields.append(field)
+        
+        if not low_confidence_fields:
+            print("All Textract fields have high confidence, skipping LLM")
+            return {}
+        
+        print(f"Using Claude LLM for {len(low_confidence_fields)} low-confidence fields")
+        
+        # Get document text for LLM
+        document_text = self._extract_document_text(document_bytes)
+        
+        # Construct enhanced prompt
+        enhanced_prompt = f"""
 {prompt}
 
 Document text:
@@ -128,48 +127,44 @@ Focus on these fields that need verification: {', '.join(low_confidence_fields)}
 
 Return only valid JSON with exact field names. Use null for missing values.
 """
+        
+        # Use Claude as primary model
+        payload = {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 1000,
+            "temperature": 0.1,
+            "messages": [{"role": "user", "content": enhanced_prompt}]
+        }
+        
+        response = self.bedrock_client.invoke_model(
+            modelId=self.claude_model_id,
+            body=json.dumps(payload)
+        )
+        
+        response_body = json.loads(response['body'].read())
+        llm_output = response_body['content'][0]['text']
+        
+        # Parse JSON from LLM response
+        json_start = llm_output.find('{')
+        json_end = llm_output.rfind('}') + 1
+        
+        if json_start >= 0 and json_end > json_start:
+            json_str = llm_output[json_start:json_end]
+            llm_fields = json.loads(json_str)
             
-            # Use Claude as primary model
-            payload = {
-                "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": 1000,
-                "temperature": 0.1,
-                "messages": [{"role": "user", "content": enhanced_prompt}]
-            }
+            # Format results with metadata
+            results = {}
+            for field, value in llm_fields.items():
+                if value is not None and value != "":
+                    results[field] = {
+                        'value': self._parse_field_value(str(value), field),
+                        'confidence': 0.85,  # Default LLM confidence
+                        'source': 'claude_llm',
+                        'raw_text': str(value)
+                    }
             
-            response = self.bedrock_client.invoke_model(
-                modelId=self.claude_model_id,
-                body=json.dumps(payload)
-            )
-            model_used = 'claude'
-            
-            response_body = json.loads(response['body'].read())
-            llm_output = response_body['content'][0]['text']
-            
-            # Parse JSON from LLM response
-            json_start = llm_output.find('{')
-            json_end = llm_output.rfind('}') + 1
-            
-            if json_start >= 0 and json_end > json_start:
-                json_str = llm_output[json_start:json_end]
-                llm_fields = json.loads(json_str)
-                
-                # Format results with metadata
-                results = {}
-                for field, value in llm_fields.items():
-                    if value is not None and value != "":
-                        results[field] = {
-                            'value': self._parse_field_value(str(value), field),
-                            'confidence': 0.85,  # Default LLM confidence
-                            'source': 'claude_llm',
-                            'raw_text': str(value)
-                        }
-                
-                print(f"Claude LLM extracted {len(results)} fields")
-                return results
-            
-        except Exception as e:
-            print(f"Claude LLM extraction failed: {e}")
+            print(f"Claude LLM extracted {len(results)} fields")
+            return results
         
         return {}
     
@@ -180,42 +175,37 @@ Return only valid JSON with exact field names. Use null for missing values.
         if not regex_patterns:
             return {}
         
-        try:
-            document_text = self._extract_document_text(document_bytes).lower()
-            
-            # Find fields still missing after Textract and LLM
-            missing_fields = []
-            for field in regex_patterns.keys():
-                if (field not in textract_results or textract_results[field]['confidence'] < 0.5) and \
-                   (field not in llm_results):
-                    missing_fields.append(field)
-            
-            if not missing_fields:
-                print("No fields need regex fallback")
-                return {}
-            
-            print(f"Using regex fallback for {len(missing_fields)} missing fields")
-            
-            results = {}
-            for field in missing_fields:
-                pattern = regex_patterns[field]
-                match = re.search(pattern, document_text, re.IGNORECASE | re.DOTALL)
-                
-                if match:
-                    value = match.group(1) if match.groups() else match.group(0)
-                    results[field] = {
-                        'value': self._parse_field_value(value, field),
-                        'confidence': 0.5,  # Low confidence for regex
-                        'source': 'regex_fallback',
-                        'raw_text': value
-                    }
-            
-            print(f"Regex fallback extracted {len(results)} fields")
-            return results
-            
-        except Exception as e:
-            print(f"Regex fallback failed: {e}")
+        document_text = self._extract_document_text(document_bytes).lower()
+        
+        # Find fields still missing after Textract and LLM
+        missing_fields = []
+        for field in regex_patterns.keys():
+            if (field not in textract_results or textract_results[field]['confidence'] < 0.5) and \
+               (field not in llm_results):
+                missing_fields.append(field)
+        
+        if not missing_fields:
+            print("No fields need regex fallback")
             return {}
+        
+        print(f"Using regex fallback for {len(missing_fields)} missing fields")
+        
+        results = {}
+        for field in missing_fields:
+            pattern = regex_patterns[field]
+            match = re.search(pattern, document_text, re.IGNORECASE | re.DOTALL)
+            
+            if match:
+                value = match.group(1) if match.groups() else match.group(0)
+                results[field] = {
+                    'value': self._parse_field_value(value, field),
+                    'confidence': 0.5,  # Low confidence for regex
+                    'source': 'regex_fallback',
+                    'raw_text': value
+                }
+        
+        print(f"Regex fallback extracted {len(results)} fields")
+        return results
     
     def _orchestrate_results(self, textract_results: Dict, llm_results: Dict, regex_results: Dict, document_type: str) -> Dict[str, Any]:
         """
@@ -286,21 +276,16 @@ Return only valid JSON with exact field names. Use null for missing values.
     
     def _extract_document_text(self, document_bytes: bytes) -> str:
         """Extract plain text from document for LLM processing"""
-        try:
-            response = self.textract_client.detect_document_text(
-                Document={'Bytes': document_bytes}
-            )
-            
-            text_lines = []
-            for block in response.get('Blocks', []):
-                if block['BlockType'] == 'LINE':
-                    text_lines.append(block['Text'])
-            
-            return '\n'.join(text_lines)
-            
-        except Exception as e:
-            print(f"Failed to extract document text: {e}")
-            return ""
+        response = self.textract_client.detect_document_text(
+            Document={'Bytes': document_bytes}
+        )
+        
+        text_lines = []
+        for block in response.get('Blocks', []):
+            if block['BlockType'] == 'LINE':
+                text_lines.append(block['Text'])
+        
+        return '\n'.join(text_lines)
     
     def _parse_field_value(self, text: str, field_name: str) -> Any:
         """Parse field value based on field type"""

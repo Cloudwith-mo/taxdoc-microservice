@@ -23,8 +23,27 @@ Globals:
         BEDROCK_MODEL_ID: 'us.anthropic.claude-sonnet-4-20250514-v1:0'
         ENABLE_BEDROCK_SUMMARY: 'true'
         ENABLE_W2_AI_EXTRACTION: 'true'
+        PROCESSING_QUEUE_URL: !Ref DocumentProcessingQueue
 
 Resources:
+  # SQS Queue for document processing
+  DocumentProcessingQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'DrDoc-Processing-${Environment}'
+      VisibilityTimeoutSeconds: 900
+      MessageRetentionPeriod: 1209600
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt DocumentProcessingDLQ.Arn
+        maxReceiveCount: 3
+
+  # Dead Letter Queue for failed processing
+  DocumentProcessingDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'DrDoc-Processing-DLQ-${Environment}'
+      MessageRetentionPeriod: 1209600
+
   # S3 Bucket for document uploads
   DocumentUploadBucket:
     Type: AWS::S3::Bucket
@@ -128,14 +147,56 @@ Resources:
                 - logs:PutLogEvents
               Resource: '*'
 
-  # Permission for S3 to invoke Lambda
-  S3InvokeLambdaPermission:
+  # S3 Ingest Lambda - queues documents for processing
+  S3IngestFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'DrDoc-S3Ingest-${Environment}'
+      CodeUri: ../src/
+      Handler: handlers.s3_ingest.lambda_handler
+      Environment:
+        Variables:
+          PROCESSING_QUEUE_URL: !Ref DocumentProcessingQueue
+      Policies:
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt DocumentProcessingQueue.QueueName
+
+  # SQS Processor Lambda - processes documents from queue
+  SQSProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'DrDoc-SQSProcessor-${Environment}'
+      CodeUri: ../src/
+      Handler: handlers.sqs_processor.lambda_handler
+      Timeout: 900
+      Events:
+        SQSEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt DocumentProcessingQueue.Arn
+            BatchSize: 1
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref DocumentUploadBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref DocumentsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - textract:AnalyzeDocument
+                - textract:StartDocumentAnalysis
+                - textract:GetDocumentAnalysis
+                - bedrock:InvokeModel
+              Resource: '*'
+
+  # Permission for S3 to invoke S3 Ingest Lambda
+  S3InvokeIngestPermission:
     Type: AWS::Lambda::Permission
     Properties:
-      FunctionName: !Ref ProcessDocumentFunction
+      FunctionName: !Ref S3IngestFunction
       Action: lambda:InvokeFunction
       Principal: s3.amazonaws.com
-      SourceArn: !Sub 'arn:aws:s3:::taxdoc-uploads-${Environment}-${AWS::AccountId}/*'
+      SourceArn: !Sub 'arn:aws:s3:::taxdoc-uploads-${Environment}-${AWS::AccountId}'
 
   # Lambda function for processing Textract results
   TextractResultProcessor:
@@ -194,13 +255,14 @@ Resources:
         AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
         AllowOrigin: "'*'"
 
-  # Lambda function for API processing
-  ApiProcessFunction:
+  # Enhanced API Lambda with three-layer processing
+  EnhancedApiFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub 'TaxDoc-ApiProcess-${Environment}'
+      FunctionName: !Sub 'DrDoc-EnhancedApi-${Environment}'
       CodeUri: ../src/
-      Handler: handlers.api_handler.lambda_handler
+      Handler: handlers.enhanced_api_handler.lambda_handler
+      Timeout: 300
       Events:
         ProcessDocument:
           Type: Api
@@ -214,8 +276,20 @@ Resources:
             RestApiId: !Ref DocumentProcessingApi
             Path: /result/{doc_id}
             Method: get
+        DownloadExcel:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DocumentProcessingApi
+            Path: /download-excel/{doc_id}
+            Method: get
+        Options:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DocumentProcessingApi
+            Path: /{proxy+}
+            Method: options
       Policies:
-        - S3ReadPolicy:
+        - S3FullAccessPolicy:
             BucketName: !Ref DocumentUploadBucket
         - DynamoDBCrudPolicy:
             TableName: !Ref DocumentsTable
@@ -224,46 +298,11 @@ Resources:
               Action:
                 - textract:DetectDocumentText
                 - textract:AnalyzeDocument
-                - textract:AnalyzeExpense
-                - textract:StartDocumentTextDetection
-                - textract:StartDocumentAnalysis
-                - textract:GetDocumentTextDetection
-                - textract:GetDocumentAnalysis
-              Resource: '*'
-            - Effect: Allow
-              Action:
-                - logs:CreateLogGroup
-                - logs:CreateLogStream
-                - logs:PutLogEvents
+                - bedrock:InvokeModel
+                - cloudwatch:PutMetricData
               Resource: '*'
 
-  # Lambda function for Excel generation
-  ExcelGeneratorFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: !Sub 'TaxDoc-ExcelGenerator-${Environment}'
-      CodeUri: ../src/
-      Handler: handlers.excel_generator.lambda_handler
-      Timeout: 60
-      Events:
-        DownloadExcel:
-          Type: Api
-          Properties:
-            RestApiId: !Ref DocumentProcessingApi
-            Path: /download-excel/{doc_id}
-            Method: get
-      Policies:
-        - S3FullAccessPolicy:
-            BucketName: !Ref DocumentUploadBucket
-        - DynamoDBReadPolicy:
-            TableName: !Ref DocumentsTable
-        - Statement:
-            - Effect: Allow
-              Action:
-                - logs:CreateLogGroup
-                - logs:CreateLogStream
-                - logs:PutLogEvents
-              Resource: '*'
+
 
 Outputs:
   UploadBucket:
@@ -289,3 +328,9 @@ Outputs:
     Value: !Ref TextractCompleteTopic
     Export:
       Name: !Sub '${AWS::StackName}-TextractSNSTopic'
+
+  ProcessingQueue:
+    Description: SQS queue for document processing
+    Value: !Ref DocumentProcessingQueue
+    Export:
+      Name: !Sub '${AWS::StackName}-ProcessingQueue'

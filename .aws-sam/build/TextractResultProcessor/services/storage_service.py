@@ -17,17 +17,26 @@ class StorageService:
             # Prepare item for DynamoDB
             item = {
                 'DocumentID': document_data['DocumentID'],
-                'DocumentType': document_data['DocumentType'],
-                'UploadDate': document_data['UploadDate'],
-                'S3Location': document_data['S3Location'],
-                'ProcessingStatus': document_data['ProcessingStatus'],
-                'Data': json.dumps(document_data['Data']),  # Store as JSON string
+                'DocumentType': document_data.get('DocumentType', 'Unknown'),
+                'UploadDate': document_data.get('UploadDate', datetime.utcnow().isoformat()),
+                'S3Location': document_data.get('S3Location', ''),
+                'ProcessingStatus': document_data.get('ProcessingStatus', 'Pending'),
                 'CreatedAt': datetime.utcnow().isoformat()
             }
+            
+            # Add data if present
+            if 'Data' in document_data:
+                item['Data'] = json.dumps(document_data['Data'])
+            
+            # Add job metadata
+            if 'TextractJobId' in document_data:
+                item['TextractJobId'] = document_data['TextractJobId']
             
             # Add error info if processing failed
             if 'Error' in document_data:
                 item['Error'] = document_data['Error']
+            if 'ErrorType' in document_data:
+                item['ErrorType'] = document_data['ErrorType']
             
             table.put_item(Item=item)
             
@@ -54,6 +63,32 @@ class StorageService:
         except Exception as e:
             print(f"Error retrieving from DynamoDB: {str(e)}")
             return {}
+    
+    def update_job_status(self, job_id: str, status_data: Dict[str, Any]) -> None:
+        """Update job status in DynamoDB"""
+        try:
+            table = self.dynamodb.Table(self.table_name)
+            
+            # Build update expression
+            update_expr = "SET "
+            expr_values = {}
+            
+            for key, value in status_data.items():
+                update_expr += f"{key} = :{key.lower()}, "
+                expr_values[f":{key.lower()}"] = value
+            
+            update_expr = update_expr.rstrip(", ")
+            update_expr += ", UpdatedAt = :updated"
+            expr_values[":updated"] = datetime.utcnow().isoformat()
+            
+            table.update_item(
+                Key={'DocumentID': job_id},
+                UpdateExpression=update_expr,
+                ExpressionAttributeValues=expr_values
+            )
+            
+        except Exception as e:
+            print(f"Error updating job status: {str(e)}")
     
     def _save_to_s3_fallback(self, document_data: Dict[str, Any]) -> None:
         """Fallback method to save results to S3 if DynamoDB fails"""
