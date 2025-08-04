@@ -20,8 +20,9 @@ Globals:
         TEXTRACT_ROLE_ARN: !GetAtt TextractSNSRole.Arn
         COMPREHEND_ENDPOINT: ''
         COMPREHEND_CONFIDENCE_THRESHOLD: '0.8'
-        BEDROCK_MODEL_ID: 'amazon.titan-text-premier-v1:0'
-        ENABLE_BEDROCK_SUMMARY: 'false'
+        BEDROCK_MODEL_ID: 'anthropic.claude-3-sonnet-20240229-v1:0'
+        ENABLE_BEDROCK_SUMMARY: 'true'
+        ENABLE_W2_AI_EXTRACTION: 'true'
 
 Resources:
   # S3 Bucket for document uploads
@@ -111,7 +112,10 @@ Resources:
               Action:
                 - comprehend:ClassifyDocument
                 - bedrock:InvokeModel
-              Resource: '*'
+                - bedrock:InvokeModelWithResponseStream
+              Resource: 
+                - 'arn:aws:bedrock:*::foundation-model/anthropic.claude*'
+                - 'arn:aws:bedrock:*::foundation-model/amazon.titan*'
             - Effect: Allow
               Action:
                 - logs:CreateLogGroup
@@ -152,7 +156,10 @@ Resources:
               Action:
                 - comprehend:ClassifyDocument
                 - bedrock:InvokeModel
-              Resource: '*'
+                - bedrock:InvokeModelWithResponseStream
+              Resource: 
+                - 'arn:aws:bedrock:*::foundation-model/anthropic.claude*'
+                - 'arn:aws:bedrock:*::foundation-model/amazon.titan*'
             - Effect: Allow
               Action:
                 - logs:CreateLogGroup

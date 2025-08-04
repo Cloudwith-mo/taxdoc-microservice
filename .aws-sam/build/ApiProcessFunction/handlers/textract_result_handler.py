@@ -65,7 +65,19 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 
                 # Extract key fields with regex + AI enhancement
                 print("Extracting key fields...")
-                extracted_data = extractor.extract_fields(textract_response, doc_type)
+                
+                # Get document bytes for AI processing if needed
+                document_bytes = None
+                if doc_type == "W-2 Tax Form":
+                    try:
+                        s3_client = boto3.client('s3')
+                        response = s3_client.get_object(Bucket=bucket, Key=key)
+                        document_bytes = response['Body'].read()
+                        print(f"Retrieved document bytes for AI processing: {len(document_bytes)} bytes")
+                    except Exception as e:
+                        print(f"Failed to retrieve document bytes: {e}")
+                
+                extracted_data = extractor.extract_fields(textract_response, doc_type, document_bytes)
                 
                 # Add AI-powered fuzzy fields
                 fuzzy_fields = bedrock.extract_fuzzy_fields(text, doc_type)
@@ -73,7 +85,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     extracted_data.update(fuzzy_fields)
                     print(f"Added fuzzy fields: {fuzzy_fields}")
                 
-                print(f"Final extracted data: {json.dumps(extracted_data)}")
+                print(f"Final extracted data: {json.dumps(extracted_data, default=str)}")
                 
                 # Generate summary if enabled
                 summary = bedrock.generate_summary(text, doc_type)

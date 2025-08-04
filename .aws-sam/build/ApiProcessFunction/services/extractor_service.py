@@ -1,9 +1,13 @@
 import re
 from typing import Dict, Any, Optional
 from decimal import Decimal
+from .w2_extractor_service import W2ExtractorService
 
 class ExtractorService:
-    def extract_fields(self, textract_response: Dict[str, Any], doc_type: str) -> Dict[str, Any]:
+    def __init__(self):
+        self.w2_extractor = W2ExtractorService()
+    
+    def extract_fields(self, textract_response: Dict[str, Any], doc_type: str, document_bytes: bytes = None) -> Dict[str, Any]:
         """Extract key fields based on document type"""
         
         if doc_type == "Receipt":
@@ -11,7 +15,7 @@ class ExtractorService:
         elif doc_type == "Invoice":
             return self._extract_invoice_fields(textract_response)
         elif doc_type == "W-2 Tax Form":
-            return self._extract_w2_fields(textract_response)
+            return self.w2_extractor.extract_w2_fields(textract_response, document_bytes)
         elif doc_type == "Bank Statement":
             return self._extract_bank_statement_fields(textract_response)
         else:
@@ -44,16 +48,10 @@ class ExtractorService:
         return self._extract_receipt_fields(response)  # Similar structure
     
     def _extract_w2_fields(self, response: Dict[str, Any]) -> Dict[str, Any]:
-        """Extract fields specific to W-2 forms"""
-        fields = {}
-        text = self._get_full_text(response)
-        
-        # Extract common W-2 fields using regex
-        fields['Wages'] = self._extract_currency_after_label(text, r'wages.*?tips.*?compensation')
-        fields['FederalTaxWithheld'] = self._extract_currency_after_label(text, r'federal.*?income.*?tax.*?withheld')
-        fields['SocialSecurityWages'] = self._extract_currency_after_label(text, r'social.*?security.*?wages')
-        
-        return {k: v for k, v in fields.items() if v is not None}
+        """Legacy W-2 extraction - now handled by W2ExtractorService"""
+        # This method is kept for backward compatibility but should not be called
+        # The new W2ExtractorService handles all W-2 processing
+        return self.w2_extractor.extract_w2_fields(response)
     
     def _extract_bank_statement_fields(self, response: Dict[str, Any]) -> Dict[str, Any]:
         """Extract fields specific to bank statements"""
