@@ -57,10 +57,20 @@ function App() {
     setError(null);
 
     try {
+      // Convert file to base64
+      const fileContent = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64 = reader.result.split(',')[1]; // Remove data:image/png;base64, prefix
+          resolve(base64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
       const response = await axios.post(`${API_BASE}/process-document`, {
         filename: file.name,
-        contentType: file.type,
-        size: file.size
+        file_content: fileContent
       });
 
       setResult(response.data);

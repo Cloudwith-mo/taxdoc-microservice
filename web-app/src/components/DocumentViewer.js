@@ -128,21 +128,21 @@ const DocumentViewer = ({ document }) => {
         <div className="extraction-summary">
           <div className="summary-stats">
             <div className="stat">
-              <span className="stat-label">Fields Extracted:</span>
-              <span className="stat-value">
-                {extractionMeta.total_fields || 0}
+              <span className="stat-label">Completeness:</span>
+              <span className="stat-value" style={getConfidenceStyle(extractionMeta.completeness_score || 0)}>
+                {((extractionMeta.completeness_score || 0) * 100).toFixed(0)}%
               </span>
             </div>
             <div className="stat">
-              <span className="stat-label">Overall Confidence:</span>
-              <span className="stat-value" style={getConfidenceStyle(extractionMeta.overall_confidence || 0)}>
-                {((extractionMeta.overall_confidence || 0) * 100).toFixed(0)}%
+              <span className="stat-label">Avg Confidence:</span>
+              <span className="stat-value" style={getConfidenceStyle(extractionMeta.average_confidence || 0)}>
+                {((extractionMeta.average_confidence || 0) * 100).toFixed(0)}%
               </span>
             </div>
             <div className="stat">
-              <span className="stat-label">Processing:</span>
+              <span className="stat-label">Layers Used:</span>
               <span className="stat-value">
-                {extractionMeta.textract_fields || 0} OCR, {extractionMeta.llm_fields || 0} AI, {extractionMeta.regex_fields || 0} Pattern
+                {(extractionMeta.layers_used || []).join(', ') || 'Unknown'}
               </span>
             </div>
           </div>
@@ -276,54 +276,6 @@ const DocumentViewer = ({ document }) => {
         }
 
         .value {
-          font-family: 'Monaco', 'Menlo', monospace;
-          background: #f8f9fa;
-          padding: 2px 6px;
-          border-radius: 3px;
-        }
-
-        .confidence-indicator {
-          font-size: 12px;
-        }
-
-        .source-indicator {
-          font-size: 11px;
-          color: #6c757d;
-          font-style: italic;
-        }
-
-        .conflicts-section {
-          background: #f8d7da;
-          border: 1px solid #f5c6cb;
-          border-radius: 8px;
-          padding: 15px;
-          margin-top: 20px;
-        }
-
-        .conflicts-section h3 {
-          margin-top: 0;
-          color: #721c24;
-        }
-
-        .conflict-item {
-          margin-bottom: 10px;
-          padding: 8px;
-          background: white;
-          border-radius: 4px;
-        }
-
-        .no-document {
-          text-align: center;
-          color: #6c757d;
-          padding: 40px;
-          font-style: italic;
-        }
-      `}</style>
-    </div>
-  );
-};
-
-export default DocumentViewer;{
           font-family: 'Monaco', 'Menlo', monospace;
           background: #f8f9fa;
           padding: 2px 6px;
