@@ -9,7 +9,7 @@ class W2ExtractorService:
     def __init__(self):
         self.multi_form_extractor = MultiFormExtractor()
         self.bedrock_client = boto3.client('bedrock-runtime', region_name='us-east-1')
-        self.claude_model_id = 'anthropic.claude-3-sonnet-20240229-v1:0'
+        self.claude_model_id = 'anthropic.claude-sonnet-4-20250514-v1:0'
         
     def extract_w2_fields(self, textract_response: Dict[str, Any], document_bytes: bytes = None, s3_bucket: str = None, s3_key: str = None) -> Dict[str, Any]:
         """Enhanced W-2 extraction using multi-form three-layer approach"""

@@ -2,15 +2,12 @@
   "DocumentType": "Bank Statement",
   "ExtractionMetadata": {
     "textract_fields": 5,
-    "llm_fields": 0,
+    "llm_fields": 5,
     "regex_fields": 0,
     "total_fields": 5,
-    "overall_confidence": 0.866,
+    "overall_confidence": 0.932,
     "needs_review": false
   },
-  "StatementPeriod": "2003-10-09 to 2003-11-08",
-  "StatementPeriod_confidence": 0.94,
-  "StatementPeriod_source": "textract",
   "AccountHolder": "JOHN JONES",
   "AccountHolder_confidence": 0.98,
   "AccountHolder_source": "textract",
@@ -20,7 +17,10 @@
   "AccountNumber": "00005- 123-456-7",
   "AccountNumber_confidence": 0.96,
   "AccountNumber_source": "textract",
-  "EndingBalance": 1442.61,
-  "EndingBalance_confidence": 0.52,
-  "EndingBalance_source": "textract_low"
+  "EndingBalance": 72.47,
+  "EndingBalance_confidence": 0.85,
+  "EndingBalance_source": "llm",
+  "StatementPeriod": "2003-10-09 to 2003-11-08",
+  "StatementPeriod_confidence": 0.94,
+  "StatementPeriod_source": "textract"
 }

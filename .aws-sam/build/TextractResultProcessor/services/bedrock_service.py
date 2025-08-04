@@ -8,7 +8,7 @@ class BedrockService:
         self.client = boto3.client('bedrock-runtime', region_name='us-east-1')
         self.model_id = os.environ.get('BEDROCK_MODEL_ID', 'anthropic.claude-3-sonnet-20240229-v1:0')
         self.enabled = os.environ.get('ENABLE_BEDROCK_SUMMARY', 'true').lower() == 'true'
-        self.claude_model_id = 'anthropic.claude-3-sonnet-20240229-v1:0'
+        self.claude_model_id = 'anthropic.claude-sonnet-4-20250514-v1:0'
     
     def generate_summary(self, document_text: str, doc_type: str) -> Optional[str]:
         """Generate document summary using Bedrock LLM"""
