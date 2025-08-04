@@ -17,7 +17,20 @@ class ThreeLayerOrchestrator:
         """Main extraction method using three-layer approach"""
         
         if document_type not in DOCUMENT_CONFIGS:
-            raise ValueError(f"Unsupported document type: {document_type}")
+            # Return basic extraction for unsupported types
+            return {
+                'DocumentType': document_type,
+                'error': f'Unsupported document type: {document_type}',
+                'ExtractionMetadata': {
+                    'textract_fields': 0,
+                    'llm_fields': 0,
+                    'regex_fields': 0,
+                    'processing_layers': [],
+                    'total_fields': 0,
+                    'overall_confidence': 0.0,
+                    'needs_review': True
+                }
+            }
         
         config = DOCUMENT_CONFIGS[document_type]
         

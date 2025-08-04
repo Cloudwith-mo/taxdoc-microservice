@@ -68,32 +68,7 @@ Resources:
             ExpirationInDays: 30
             Prefix: uploads/
 
-  # S3 Bucket Policy for security
-  DocumentUploadBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref DocumentUploadBucket
-      PolicyDocument:
-        Statement:
-          - Sid: RestrictToAPIGateway
-            Effect: Allow
-            Principal:
-              Service: apigateway.amazonaws.com
-            Action: s3:PutObject
-            Resource: !Sub '${DocumentUploadBucket}/uploads/*'
-            Condition:
-              StringEquals:
-                'aws:SourceArn': !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${DocumentProcessingApi}/*'
-          - Sid: AllowLambdaAccess
-            Effect: Allow
-            Principal:
-              AWS: 
-                - !GetAtt EnhancedApiFunctionRole.Arn
-                - !GetAtt SQSProcessorFunctionRole.Arn
-            Action: 
-              - s3:GetObject
-              - s3:PutObject
-            Resource: !Sub '${DocumentUploadBucket}/*'
+
 
   # DynamoDB table for document metadata
   DocumentsTable:
@@ -209,7 +184,6 @@ Resources:
       CodeUri: ../src/
       Handler: handlers.sqs_processor.lambda_handler
       Timeout: 900
-      ReservedConcurrencyLimit: 10
       Tracing: Active
       Events:
         SQSEvent:
@@ -248,7 +222,6 @@ Resources:
       CodeUri: ../src/
       Handler: handlers.textract_result_handler.lambda_handler
       Timeout: 600
-      ReservedConcurrencyLimit: 15
       Tracing: Active
       Policies:
         - S3ReadPolicy:
@@ -298,9 +271,6 @@ Resources:
         AllowMethods: "'POST, GET, OPTIONS'"
         AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
         AllowOrigin: "'*'"
-      ThrottleConfig:
-        BurstLimit: 100
-        RateLimit: 20
       MethodSettings:
         - ResourcePath: '/*'
           HttpMethod: '*'
@@ -347,7 +317,6 @@ Resources:
       CodeUri: ../src/
       Handler: handlers.enhanced_api_handler.lambda_handler
       Timeout: 300
-      ReservedConcurrencyLimit: 20
       Tracing: Active
       Events:
         ProcessDocument:
@@ -367,6 +336,12 @@ Resources:
           Properties:
             RestApiId: !Ref DocumentProcessingApi
             Path: /download-excel/{doc_id}
+            Method: get
+        SupportedTypes:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DocumentProcessingApi
+            Path: /supported-types
             Method: get
         Options:
           Type: Api

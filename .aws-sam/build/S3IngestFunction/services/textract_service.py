@@ -5,6 +5,16 @@ class TextractService:
     def __init__(self):
         self.client = boto3.client('textract')
     
+    def detect_document_text(self, bucket: str, key: str) -> Dict[str, Any]:
+        """Extract text from S3 document using Textract"""
+        try:
+            return self.client.detect_document_text(
+                Document={'S3Object': {'Bucket': bucket, 'Name': key}}
+            )
+        except Exception as e:
+            print(f"Textract detect_document_text failed: {e}")
+            return {'Blocks': []}
+    
     def detect_document_text_bytes(self, document_bytes: bytes) -> Dict[str, Any]:
         """Extract text from document bytes using Textract"""
         try:

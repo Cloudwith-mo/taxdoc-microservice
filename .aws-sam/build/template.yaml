@@ -32,6 +32,10 @@ Globals:
         ENABLE_W2_AI_EXTRACTION: 'true'
         PROCESSING_QUEUE_URL:
           Ref: DocumentProcessingQueue
+        CLAUDE_DAILY_LIMIT: '50'
+        TEXTRACT_DAILY_LIMIT: '30'
+        _X_AMZN_TRACE_ID:
+          Ref: AWS::NoValue
 Resources:
   DocumentProcessingQueue:
     Type: AWS::SQS::Queue
@@ -62,6 +66,16 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+        - Id: AbortIncompleteMultipartUploads
+          Status: Enabled
+          AbortIncompleteMultipartUpload:
+            DaysAfterInitiation: 1
+        - Id: DeleteOriginalDocuments
+          Status: Enabled
+          ExpirationInDays: 30
+          Prefix: uploads/
   DocumentsTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -182,6 +196,7 @@ Resources:
       CodeUri: SQSProcessorFunction
       Handler: handlers.sqs_processor.lambda_handler
       Timeout: 900
+      Tracing: Active
       Events:
         SQSEvent:
           Type: SQS
@@ -216,7 +231,7 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: s3.amazonaws.com
       SourceArn:
-        Fn::Sub: arn:aws:s3:::taxdoc-uploads-${Environment}-${AWS::AccountId}
+        Fn::Sub: arn:aws:s3:::drdoc-uploads-${Environment}-${AWS::AccountId}
   TextractResultProcessor:
     Type: AWS::Serverless::Function
     Properties:
@@ -225,6 +240,7 @@ Resources:
       CodeUri: TextractResultProcessor
       Handler: handlers.textract_result_handler.lambda_handler
       Timeout: 600
+      Tracing: Active
       Policies:
       - S3ReadPolicy:
           BucketName:
@@ -275,6 +291,43 @@ Resources:
         AllowMethods: '''POST, GET, OPTIONS'''
         AllowHeaders: '''Content-Type,X-Amz-Date,Authorization,X-Api-Key'''
         AllowOrigin: '''*'''
+      MethodSettings:
+      - ResourcePath: /*
+        HttpMethod: '*'
+        ThrottlingBurstLimit: 100
+        ThrottlingRateLimit: 20
+  ApiUsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    Properties:
+      UsagePlanName:
+        Fn::Sub: DrDoc-UsagePlan-${Environment}
+      Description: Usage plan for Dr.Doc API
+      Throttle:
+        BurstLimit: 100
+        RateLimit: 20
+      Quota:
+        Limit: 5000
+        Period: DAY
+      ApiStages:
+      - ApiId:
+          Ref: DocumentProcessingApi
+        Stage:
+          Ref: Environment
+  ApiKey:
+    Type: AWS::ApiGateway::ApiKey
+    Properties:
+      Name:
+        Fn::Sub: DrDoc-ApiKey-${Environment}
+      Description: API Key for Dr.Doc
+      Enabled: true
+  UsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    Properties:
+      KeyId:
+        Ref: ApiKey
+      KeyType: API_KEY
+      UsagePlanId:
+        Ref: ApiUsagePlan
   EnhancedApiFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -283,6 +336,7 @@ Resources:
       CodeUri: EnhancedApiFunction
       Handler: handlers.enhanced_api_handler.lambda_handler
       Timeout: 300
+      Tracing: Active
       Events:
         ProcessDocument:
           Type: Api
@@ -305,6 +359,13 @@ Resources:
               Ref: DocumentProcessingApi
             Path: /download-excel/{doc_id}
             Method: get
+        SupportedTypes:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: DocumentProcessingApi
+            Path: /supported-types
+            Method: get
         Options:
           Type: Api
           Properties:
@@ -326,6 +387,8 @@ Resources:
           - textract:AnalyzeDocument
           - bedrock:InvokeModel
           - cloudwatch:PutMetricData
+          - xray:PutTraceSegments
+          - xray:PutTelemetryRecords
           Resource: '*'
     Metadata:
       SamResourceId: EnhancedApiFunction
@@ -365,3 +428,17 @@ Outputs:
     Export:
       Name:
         Fn::Sub: ${AWS::StackName}-ProcessingQueue
+  ApiKey:
+    Description: API Gateway API Key
+    Value:
+      Ref: ApiKey
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-ApiKey
+  UsagePlan:
+    Description: API Gateway Usage Plan
+    Value:
+      Ref: ApiUsagePlan
+    Export:
+      Name:
+        Fn::Sub: ${AWS::StackName}-UsagePlan

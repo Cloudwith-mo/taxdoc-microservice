@@ -44,6 +44,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         elif http_method == 'GET' and '/download-excel/' in path:
             doc_id = event['pathParameters']['doc_id']
             return generate_excel_download(doc_id, cors_headers)
+        elif http_method == 'GET' and path == '/supported-types':
+            return get_supported_types(cors_headers)
         else:
             return {
                 'statusCode': 404,
@@ -94,7 +96,12 @@ def process_document_enhanced(event: Dict[str, Any], cors_headers: Dict[str, str
             textract_basic = boto3.client('textract').detect_document_text(
                 Document={'Bytes': document_bytes}
             )
-            doc_type, confidence = classifier.classify_document(textract_basic)
+            
+            classification_result = classifier.classify_document(textract_basic)
+            if isinstance(classification_result, tuple) and len(classification_result) == 2:
+                doc_type, confidence = classification_result
+            else:
+                doc_type, confidence = "Other Document", 0.5
             
             xray_recorder.put_metadata('classification', {
                 'document_type': doc_type,
@@ -109,7 +116,12 @@ def process_document_enhanced(event: Dict[str, Any], cors_headers: Dict[str, str
             })
             
             orchestrator = ThreeLayerOrchestrator()
-            extraction_result = orchestrator.extract_document_fields(document_bytes, doc_type)
+            try:
+                extraction_result = orchestrator.extract_document_fields(document_bytes, doc_type)
+                if not isinstance(extraction_result, dict):
+                    extraction_result = {'error': 'Invalid extraction result format'}
+            except Exception as e:
+                extraction_result = {'error': f'Extraction failed: {str(e)}'}
         
         # Step 3: Format result
         processing_time = time.time() - start_time
@@ -135,7 +147,7 @@ def process_document_enhanced(event: Dict[str, Any], cors_headers: Dict[str, str
         metrics = CloudWatchMetrics()
         cost_control = CostControlService()
         
-        metadata = extraction_result.get('ExtractionMetadata', {})
+        metadata = extraction_result.get('ExtractionMetadata', {}) if isinstance(extraction_result, dict) else {}
         metrics.put_document_processed(
             doc_type, 
             processing_time, 
@@ -212,6 +224,20 @@ def get_processing_result(doc_id: str, cors_headers: Dict[str, str]) -> Dict[str
             'headers': cors_headers,
             'body': json.dumps({'error': str(e)})
         }
+
+def get_supported_types(cors_headers: Dict[str, str]) -> Dict[str, Any]:
+    """Return list of supported document types"""
+    
+    supported_types = [
+        'W-2', '1099-NEC', '1099-INT', '1099-DIV', '1099-MISC',
+        '1098-E', '1098', '1095-A', '1040', 'Bank Statement', 'Receipt'
+    ]
+    
+    return {
+        'statusCode': 200,
+        'headers': cors_headers,
+        'body': json.dumps({'supported_types': supported_types})
+    }
 
 def generate_excel_download(doc_id: str, cors_headers: Dict[str, str]) -> Dict[str, Any]:
     """Generate Excel download for document results"""

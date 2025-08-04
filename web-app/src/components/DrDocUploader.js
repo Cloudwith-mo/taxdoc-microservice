@@ -161,28 +161,27 @@ const DrDocUploader = ({ onResults }) => {
       setProgress(progressUpdate);
 
       // Process files individually for better error handling
-      const results = [];
+      const batchResults = [];
       for (const fileData of files) {
         try {
           const response = await axios.post(`${API_BASE}/process-document`, {
             filename: fileData.file.name,
             file_content: await fileToBase64(fileData.file)
           });
-          results.push(response.data);
+          batchResults.push(response.data);
         } catch (error) {
-          results.push({ error: error.response?.data?.error || 'Processing failed' });
+          batchResults.push({ error: error.response?.data?.error || 'Processing failed' });
         }
       }
 
       // Update files with results
-      const results = response.data.results;
-      setFiles(prev => prev.map(f => {
-        const result = results.find(r => r.batch_id === f.id);
+      setFiles(prev => prev.map((f, index) => {
+        const result = batchResults[index];
         return {
           ...f,
-          status: result ? 'completed' : 'error',
-          result: result || null,
-          error: result ? null : 'No result returned'
+          status: result && !result.error ? 'completed' : 'error',
+          result: result && !result.error ? result : null,
+          error: result && result.error ? result.error : null
         };
       }));
 
@@ -191,7 +190,7 @@ const DrDocUploader = ({ onResults }) => {
       files.forEach(f => finalProgress[f.id] = 'completed');
       setProgress(finalProgress);
 
-      onResults(results);
+      onResults(batchResults);
 
     } catch (error) {
       // Mark all as error
