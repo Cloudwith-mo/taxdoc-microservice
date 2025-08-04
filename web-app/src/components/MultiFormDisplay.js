@@ -1,10 +1,12 @@
 import React from 'react';
 
 const MultiFormDisplay = ({ result }) => {
-  if (!result || !result.Data) return null;
+  if (!result) return null;
 
-  const { Data, DocumentType } = result;
-  const metadata = Data.ExtractionMetadata || {};
+  // Handle both old format (result.Data) and new format (result directly contains fields)
+  const data = result.Data || result;
+  const documentType = result.DocumentType || data.DocumentType || 'Unknown';
+  const metadata = data.ExtractionMetadata || {};
 
   // Get confidence level styling
   const getConfidenceStyle = (confidence) => {
@@ -25,7 +27,7 @@ const MultiFormDisplay = ({ result }) => {
 
   // Render field with confidence and source
   const renderField = (key, value) => {
-    if (key === 'DocumentType' || key === 'ExtractionMetadata' || 
+    if (key === 'DocumentType' || key === 'ExtractionMetadata' || key === 'DocumentID' || key === 'ProcessingStatus' ||
         key.endsWith('_confidence') || key.endsWith('_source') || 
         key.endsWith('_cross_validated')) {
       return null;
@@ -33,9 +35,9 @@ const MultiFormDisplay = ({ result }) => {
 
     const confidenceKey = `${key}_confidence`;
     const sourceKey = `${key}_source`;
-    const confidence = Data[confidenceKey];
-    const source = Data[sourceKey];
-    const crossValidated = Data[`${key}_cross_validated`];
+    const confidence = data[confidenceKey];
+    const source = data[sourceKey];
+    const crossValidated = data[`${key}_cross_validated`];
 
     return (
       <div key={key} className="field-row">
@@ -66,29 +68,31 @@ const MultiFormDisplay = ({ result }) => {
 
   // Group fields by document type for better display
   const getFieldGroups = () => {
-    const fields = Object.keys(Data).filter(key => 
+    const fields = Object.keys(data).filter(key => 
       !key.endsWith('_confidence') && 
       !key.endsWith('_source') && 
       !key.endsWith('_cross_validated') &&
       key !== 'DocumentType' && 
-      key !== 'ExtractionMetadata'
+      key !== 'ExtractionMetadata' &&
+      key !== 'DocumentID' &&
+      key !== 'ProcessingStatus'
     );
 
-    if (DocumentType === 'W-2') {
+    if (documentType === 'W-2') {
       return {
         'Employee Information': fields.filter(f => f.includes('Employee')),
         'Employer Information': fields.filter(f => f.includes('Employer')),
         'Tax Information': fields.filter(f => f.startsWith('Box')),
         'Other': fields.filter(f => !f.includes('Employee') && !f.includes('Employer') && !f.startsWith('Box'))
       };
-    } else if (DocumentType.startsWith('1099')) {
+    } else if (documentType.startsWith('1099') || documentType.includes('1099')) {
       return {
         'Payer Information': fields.filter(f => f.includes('Payer')),
         'Recipient Information': fields.filter(f => f.includes('Recipient')),
         'Tax Information': fields.filter(f => f.startsWith('Box')),
         'Other': fields.filter(f => !f.includes('Payer') && !f.includes('Recipient') && !f.startsWith('Box'))
       };
-    } else if (DocumentType === 'Bank Statement') {
+    } else if (documentType === 'Bank Statement') {
       return {
         'Account Information': fields.filter(f => f.includes('Account')),
         'Balance Information': fields.filter(f => f.includes('Balance')),
@@ -102,9 +106,13 @@ const MultiFormDisplay = ({ result }) => {
   const fieldGroups = getFieldGroups();
 
   return (
-    <div className="multi-form-display">
+    <div className="multi-form-display" data-doc-type={documentType}>
       <div className="document-header">
-        <h3>📄 {DocumentType} - Extraction Results</h3>
+        <h3>✅ Processing Complete</h3>
+        <div><strong>Document ID:</strong> {result.DocumentID || 'N/A'}</div>
+        <div><strong>Type:</strong> {documentType}</div>
+        <div><strong>Status:</strong> {result.ProcessingStatus || 'Completed'}</div>
+        <h4>📄 {documentType} - Extraction Results</h4>
         <div className="extraction-summary">
           <div className="summary-item">
             <span className="label">Overall Confidence:</span>
@@ -151,7 +159,7 @@ const MultiFormDisplay = ({ result }) => {
             <div key={groupName} className="field-group">
               <h4 className="group-title">{groupName}</h4>
               <div className="fields-list">
-                {groupFields.map(field => renderField(field, Data[field]))}
+                {groupFields.map(field => renderField(field, data[field]))}
               </div>
             </div>
           );

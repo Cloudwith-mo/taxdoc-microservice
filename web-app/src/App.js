@@ -124,21 +124,7 @@ function App() {
 
       {result && (
         <div className="results">
-          <h3>✅ Processing Complete</h3>
-          <div><strong>Document ID:</strong> {result.DocumentID}</div>
-          <div><strong>Type:</strong> {result.DocumentType}</div>
-          <div><strong>Status:</strong> {result.ProcessingStatus}</div>
-          
           <MultiFormDisplay result={result} />
-
-          {result.Summary && (
-            <div>
-              <h4>AI Summary:</h4>
-              <p style={{ background: '#e3f2fd', padding: '10px', borderRadius: '5px' }}>
-                {result.Summary}
-              </p>
-            </div>
-          )}
 
           <div style={{ marginTop: '20px' }}>
             <button className="btn" onClick={downloadExcel}>
