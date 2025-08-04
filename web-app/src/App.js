@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 
-const API_BASE = 'https://yjj6ifqqxi.execute-api.us-east-1.amazonaws.com/dev';
+const API_BASE = 'https://n82datyqse.execute-api.us-east-1.amazonaws.com/prod';
 
 function App() {
   const [file, setFile] = useState(null);
