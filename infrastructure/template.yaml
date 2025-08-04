@@ -48,7 +48,7 @@ Resources:
   DocumentUploadBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub 'taxdoc-uploads-${Environment}-${AWS::AccountId}'
+      BucketName: !Sub 'drdoc-uploads-${Environment}-${AWS::AccountId}'
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -59,7 +59,7 @@ Resources:
   DocumentsTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Sub 'TaxDocuments-${Environment}'
+      TableName: !Sub 'DrDocDocuments-${Environment}'
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: DocumentID
