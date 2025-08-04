@@ -5,6 +5,11 @@ import time
 from typing import Dict, Any
 import sys
 import os
+from aws_xray_sdk.core import xray_recorder
+from aws_xray_sdk.core import patch_all
+
+# Patch AWS SDK calls for X-Ray tracing
+patch_all()
 
 # Add the src directory to the path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
@@ -53,11 +58,18 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'body': json.dumps({'error': str(e)})
         }
 
+@xray_recorder.capture('process_document_enhanced')
 def process_document_enhanced(event: Dict[str, Any], cors_headers: Dict[str, str]) -> Dict[str, Any]:
     """Process document using enhanced three-layer pipeline"""
     
     start_time = time.time()
     monitoring = MonitoringService()
+    
+    # Add X-Ray metadata
+    xray_recorder.put_metadata('request', {
+        'filename': event.get('body', {}).get('filename', 'unknown'),
+        'processing_start': start_time
+    })
     
     try:
         # Parse request
@@ -75,17 +87,29 @@ def process_document_enhanced(event: Dict[str, Any], cors_headers: Dict[str, str
         # Decode file
         document_bytes = base64.b64decode(file_content)
         
-        # Step 1: Classify document
-        classifier = EnhancedClassifier()
-        # First get basic text for classification
-        textract_basic = boto3.client('textract').detect_document_text(
-            Document={'Bytes': document_bytes}
-        )
-        doc_type, confidence = classifier.classify_document(textract_basic)
+        # Step 1: Classify document with X-Ray tracing
+        with xray_recorder.in_subsegment('document_classification'):
+            classifier = EnhancedClassifier()
+            # First get basic text for classification
+            textract_basic = boto3.client('textract').detect_document_text(
+                Document={'Bytes': document_bytes}
+            )
+            doc_type, confidence = classifier.classify_document(textract_basic)
+            
+            xray_recorder.put_metadata('classification', {
+                'document_type': doc_type,
+                'confidence': confidence
+            })
         
-        # Step 2: Three-layer extraction
-        orchestrator = ThreeLayerOrchestrator()
-        extraction_result = orchestrator.extract_document_fields(document_bytes, doc_type)
+        # Step 2: Three-layer extraction with X-Ray tracing
+        with xray_recorder.in_subsegment('three_layer_extraction'):
+            xray_recorder.put_metadata('extraction', {
+                'document_type': doc_type,
+                'classification_confidence': confidence
+            })
+            
+            orchestrator = ThreeLayerOrchestrator()
+            extraction_result = orchestrator.extract_document_fields(document_bytes, doc_type)
         
         # Step 3: Format result
         processing_time = time.time() - start_time
@@ -104,9 +128,12 @@ def process_document_enhanced(event: Dict[str, Any], cors_headers: Dict[str, str
         storage = StorageService()
         storage.save_document_metadata(result)
         
-        # Step 5: Log enhanced metrics
+        # Step 5: Log enhanced metrics and cost tracking
         from services.cloudwatch_metrics import CloudWatchMetrics
+        from services.cost_control import CostControlService
+        
         metrics = CloudWatchMetrics()
+        cost_control = CostControlService()
         
         metadata = extraction_result.get('ExtractionMetadata', {})
         metrics.put_document_processed(
@@ -119,6 +146,15 @@ def process_document_enhanced(event: Dict[str, Any], cors_headers: Dict[str, str
             doc_type
         )
         
+        # Track costs
+        if 'claude' in metadata.get('processing_layers', []):
+            # Estimate tokens used (rough calculation)
+            tokens_used = len(document_bytes) // 4  # ~4 bytes per token
+            cost_control.track_claude_usage(tokens_used, doc_type)
+        
+        # Track Textract usage
+        cost_control.track_textract_usage(1, doc_type, ['QUERIES'])
+        
         return {
             'statusCode': 200,
             'headers': cors_headers,
@@ -129,8 +165,17 @@ def process_document_enhanced(event: Dict[str, Any], cors_headers: Dict[str, str
         processing_time = time.time() - start_time
         
         from services.cloudwatch_metrics import CloudWatchMetrics
+        from services.cost_control import CostControlService
+        
         metrics = CloudWatchMetrics()
+        cost_control = CostControlService()
+        
         metrics.put_error_metric(type(e).__name__, 'EnhancedApiFunction')
+        
+        # Check if we're hitting cost limits
+        limits = cost_control.check_daily_limits()
+        if limits['claude_limit_exceeded'] or limits['textract_limit_exceeded']:
+            print(f"WARNING: Daily cost limits exceeded - Claude: {limits['claude_limit_exceeded']}, Textract: {limits['textract_limit_exceeded']}")
         
         return {
             'statusCode': 500,

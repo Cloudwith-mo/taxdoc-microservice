@@ -24,6 +24,9 @@ Globals:
         ENABLE_BEDROCK_SUMMARY: 'true'
         ENABLE_W2_AI_EXTRACTION: 'true'
         PROCESSING_QUEUE_URL: !Ref DocumentProcessingQueue
+        CLAUDE_DAILY_LIMIT: '50'
+        TEXTRACT_DAILY_LIMIT: '30'
+        _X_AMZN_TRACE_ID: !Ref 'AWS::NoValue'
 
 Resources:
   # SQS Queue for document processing
@@ -54,6 +57,43 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: AbortIncompleteMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+          - Id: DeleteOriginalDocuments
+            Status: Enabled
+            ExpirationInDays: 30
+            Prefix: uploads/
+
+  # S3 Bucket Policy for security
+  DocumentUploadBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref DocumentUploadBucket
+      PolicyDocument:
+        Statement:
+          - Sid: RestrictToAPIGateway
+            Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${DocumentUploadBucket}/uploads/*'
+            Condition:
+              StringEquals:
+                'aws:SourceArn': !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${DocumentProcessingApi}/*'
+          - Sid: AllowLambdaAccess
+            Effect: Allow
+            Principal:
+              AWS: 
+                - !GetAtt EnhancedApiFunctionRole.Arn
+                - !GetAtt SQSProcessorFunctionRole.Arn
+            Action: 
+              - s3:GetObject
+              - s3:PutObject
+            Resource: !Sub '${DocumentUploadBucket}/*'
 
   # DynamoDB table for document metadata
   DocumentsTable:
@@ -169,6 +209,8 @@ Resources:
       CodeUri: ../src/
       Handler: handlers.sqs_processor.lambda_handler
       Timeout: 900
+      ReservedConcurrencyLimit: 10
+      Tracing: Active
       Events:
         SQSEvent:
           Type: SQS
@@ -196,7 +238,7 @@ Resources:
       FunctionName: !Ref S3IngestFunction
       Action: lambda:InvokeFunction
       Principal: s3.amazonaws.com
-      SourceArn: !Sub 'arn:aws:s3:::taxdoc-uploads-${Environment}-${AWS::AccountId}'
+      SourceArn: !Sub 'arn:aws:s3:::drdoc-uploads-${Environment}-${AWS::AccountId}'
 
   # Lambda function for processing Textract results
   TextractResultProcessor:
@@ -206,6 +248,8 @@ Resources:
       CodeUri: ../src/
       Handler: handlers.textract_result_handler.lambda_handler
       Timeout: 600
+      ReservedConcurrencyLimit: 15
+      Tracing: Active
       Policies:
         - S3ReadPolicy:
             BucketName: !Ref DocumentUploadBucket
@@ -303,6 +347,8 @@ Resources:
       CodeUri: ../src/
       Handler: handlers.enhanced_api_handler.lambda_handler
       Timeout: 300
+      ReservedConcurrencyLimit: 20
+      Tracing: Active
       Events:
         ProcessDocument:
           Type: Api
@@ -340,6 +386,8 @@ Resources:
                 - textract:AnalyzeDocument
                 - bedrock:InvokeModel
                 - cloudwatch:PutMetricData
+                - xray:PutTraceSegments
+                - xray:PutTelemetryRecords
               Resource: '*'
 
 

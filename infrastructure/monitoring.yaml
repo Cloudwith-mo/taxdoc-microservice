@@ -152,6 +152,38 @@ Resources:
       AlarmActions:
         - !Ref AlertTopic
 
+  # Claude Cost Alarm
+  ClaudeCostAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'DrDoc-Claude-Cost-${Environment}'
+      AlarmDescription: 'Claude daily cost limit exceeded'
+      MetricName: ClaudeEstimatedCost
+      Namespace: DrDoc/CostControl
+      Statistic: Sum
+      Period: 86400
+      EvaluationPeriods: 1
+      Threshold: 50
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref AlertTopic
+
+  # Textract Cost Alarm
+  TextractCostAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'DrDoc-Textract-Cost-${Environment}'
+      AlarmDescription: 'Textract daily cost limit exceeded'
+      MetricName: TextractEstimatedCost
+      Namespace: DrDoc/CostControl
+      Statistic: Sum
+      Period: 86400
+      EvaluationPeriods: 1
+      Threshold: 30
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref AlertTopic
+
 Outputs:
   DashboardURL:
     Description: CloudWatch Dashboard URL
