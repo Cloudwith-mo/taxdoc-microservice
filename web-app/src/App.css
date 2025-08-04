@@ -1,0 +1,120 @@
+/* Document preview and results container */
+.document-container {
+  display: flex;
+  gap: 20px;
+  margin-top: 30px;
+  align-items: flex-start;
+}
+
+.document-preview {
+  flex: 1;
+  max-width: 500px;
+}
+
+.document-preview h3 {
+  margin-bottom: 15px;
+  color: #495057;
+  font-size: 18px;
+}
+
+.preview-image {
+  border: 2px solid #dee2e6;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f8f9fa;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.preview-image img {
+  width: 100%;
+  height: auto;
+  max-height: 600px;
+  object-fit: contain;
+  display: block;
+}
+
+.extraction-results {
+  flex: 1;
+  min-width: 400px;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .document-container {
+    flex-direction: column;
+  }
+  
+  .document-preview {
+    max-width: 100%;
+  }
+  
+  .extraction-results {
+    min-width: auto;
+  }
+  
+  .preview-image img {
+    max-height: 400px;
+  }
+}
+
+/* Existing styles */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.upload-area {
+  border: 2px dashed #dee2e6;
+  border-radius: 8px;
+  padding: 40px;
+  text-align: center;
+  margin: 20px 0;
+  transition: all 0.3s ease;
+  background: #f8f9fa;
+}
+
+.upload-area:hover {
+  border-color: #007bff;
+  background: #e3f2fd;
+}
+
+.upload-area.has-file {
+  border-color: #28a745;
+  background: #d4edda;
+}
+
+.btn {
+  background: #007bff;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  margin: 10px;
+  transition: background 0.3s ease;
+}
+
+.btn:hover:not(:disabled) {
+  background: #0056b3;
+}
+
+.btn:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+}
+
+.status {
+  padding: 15px;
+  border-radius: 6px;
+  margin: 20px 0;
+  text-align: center;
+}
+
+.status.error {
+  background: #f8d7da;
+  border: 1px solid #f5c6cb;
+  color: #721c24;
+}

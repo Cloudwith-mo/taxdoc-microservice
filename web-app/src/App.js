@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import MultiFormDisplay from './components/MultiFormDisplay';
 import './components/MultiFormDisplay.css';
+import './App.css';
 
 const API_BASE = 'https://n82datyqse.execute-api.us-east-1.amazonaws.com/prod';
 
 function App() {
   const [file, setFile] = useState(null);
+  const [filePreview, setFilePreview] = useState(null);
   const [processing, setProcessing] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -16,6 +18,15 @@ function App() {
     setFile(selectedFile);
     setResult(null);
     setError(null);
+    
+    // Create preview for images
+    if (selectedFile && selectedFile.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (e) => setFilePreview(e.target.result);
+      reader.readAsDataURL(selectedFile);
+    } else {
+      setFilePreview(null);
+    }
   };
 
   const handleDrop = (event) => {
@@ -24,6 +35,15 @@ function App() {
     setFile(droppedFile);
     setResult(null);
     setError(null);
+    
+    // Create preview for images
+    if (droppedFile && droppedFile.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (e) => setFilePreview(e.target.result);
+      reader.readAsDataURL(droppedFile);
+    } else {
+      setFilePreview(null);
+    }
   };
 
   const handleDragOver = (event) => {
@@ -122,15 +142,28 @@ function App() {
         </div>
       )}
 
-      {result && (
-        <div className="results">
-          <MultiFormDisplay result={result} />
-
-          <div style={{ marginTop: '20px' }}>
-            <button className="btn" onClick={downloadExcel}>
-              📊 Download Excel Report
-            </button>
-          </div>
+      {(filePreview || result) && (
+        <div className="document-container">
+          {filePreview && (
+            <div className="document-preview">
+              <h3>📄 Document Preview</h3>
+              <div className="preview-image">
+                <img src={filePreview} alt="Document preview" />
+              </div>
+            </div>
+          )}
+          
+          {result && (
+            <div className="extraction-results">
+              <MultiFormDisplay result={result} />
+              
+              <div style={{ marginTop: '20px' }}>
+                <button className="btn" onClick={downloadExcel}>
+                  📊 Download Excel Report
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
