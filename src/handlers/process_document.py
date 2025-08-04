@@ -8,8 +8,8 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from services.textract_service import TextractService
-from services.classifier_service import ClassifierService
-from services.extractor_service import ExtractorService
+from services.enhanced_classifier import EnhancedClassifier
+from services.multi_form_extractor import MultiFormExtractor
 from services.storage_service import StorageService
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
@@ -27,8 +27,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         
         # Initialize services
         textract = TextractService()
-        classifier = ClassifierService()
-        extractor = ExtractorService()
+        classifier = EnhancedClassifier()
+        extractor = MultiFormExtractor()
         storage = StorageService()
         
         # Step 1: Determine if async processing needed
@@ -60,34 +60,40 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         
             # Step 2: Classify document type
             print("Classifying document type...")
-            doc_type = classifier.classify_document(textract_response)
-            print(f"Document classified as: {doc_type}")
+            doc_type, confidence = classifier.classify_document(textract_response)
+            print(f"Document classified as: {doc_type} (confidence: {confidence:.2f})")
             
-            # Step 3: Extract key fields based on document type
-            print("Extracting key fields...")
+            # Step 3: Extract key fields using multi-form extractor
+            print("Extracting key fields using 3-layer approach...")
             
-            # Get document bytes for AI processing if needed
+            # Get document bytes for AI processing
             document_bytes = None
-            if doc_type == "W-2 Tax Form":
-                try:
-                    s3_client = boto3.client('s3')
-                    response = s3_client.get_object(Bucket=bucket, Key=key)
-                    document_bytes = response['Body'].read()
-                    print(f"Retrieved document bytes for AI processing: {len(document_bytes)} bytes")
-                except Exception as e:
-                    print(f"Failed to retrieve document bytes: {e}")
+            try:
+                s3_client = boto3.client('s3')
+                response = s3_client.get_object(Bucket=bucket, Key=key)
+                document_bytes = response['Body'].read()
+                print(f"Retrieved document bytes for processing: {len(document_bytes)} bytes")
+            except Exception as e:
+                print(f"Failed to retrieve document bytes: {e}")
             
-            extracted_data = extractor.extract_fields(textract_response, doc_type, document_bytes)
-            print(f"Extracted data: {json.dumps(extracted_data, default=str)}")
+            extracted_data = extractor.extract_document_fields(
+                document_bytes=document_bytes,
+                document_type=doc_type,
+                s3_bucket=bucket,
+                s3_key=key
+            )
+            print(f"Multi-form extraction completed with {len(extracted_data)} fields")
             
             # Step 4: Structure the output
             result = {
                 "DocumentID": key.split('/')[-1],
                 "DocumentType": doc_type,
+                "ClassificationConfidence": confidence,
                 "UploadDate": record['eventTime'],
                 "S3Location": f"s3://{bucket}/{key}",
                 "Data": extracted_data,
-                "ProcessingStatus": "Completed"
+                "ProcessingStatus": "Completed",
+                "ExtractionMetadata": extracted_data.get('_extraction_metadata', {})
             }
             
             # Step 5: Store results
@@ -108,7 +114,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         error_result = {
             "DocumentID": key.split('/')[-1] if 'key' in locals() else "unknown",
             "ProcessingStatus": "Failed",
-            "Error": str(e)
+            "Error": str(e),
+            "ErrorType": type(e).__name__
         }
         
         # Try to store error result

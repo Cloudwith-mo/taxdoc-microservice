@@ -3,17 +3,34 @@ import re
 import boto3
 from typing import Dict, Any, Optional, Tuple
 from decimal import Decimal
+from .multi_form_extractor import MultiFormExtractor
 
 class W2ExtractorService:
     def __init__(self):
+        self.multi_form_extractor = MultiFormExtractor()
         self.bedrock_client = boto3.client('bedrock-runtime', region_name='us-east-1')
         self.claude_model_id = 'anthropic.claude-3-sonnet-20240229-v1:0'
         
-    def extract_w2_fields(self, textract_response: Dict[str, Any], document_bytes: bytes = None) -> Dict[str, Any]:
-        """Enhanced W-2 extraction using AI + rule-based hybrid approach"""
+    def extract_w2_fields(self, textract_response: Dict[str, Any], document_bytes: bytes = None, s3_bucket: str = None, s3_key: str = None) -> Dict[str, Any]:
+        """Enhanced W-2 extraction using multi-form three-layer approach"""
+        
+        # Use the new multi-form extractor for W-2 documents
+        if document_bytes:
+            return self.multi_form_extractor.extract_document_fields(
+                document_bytes=document_bytes,
+                document_type="W-2",
+                s3_bucket=s3_bucket,
+                s3_key=s3_key
+            )
+        
+        # Fallback to legacy extraction if no document bytes
+        return self._legacy_extract_w2_fields(textract_response)
+    
+    def _legacy_extract_w2_fields(self, textract_response: Dict[str, Any]) -> Dict[str, Any]:
+        """Legacy W-2 extraction for backward compatibility"""
         
         # Primary: AI-enhanced extraction
-        ai_fields = self._extract_with_claude(textract_response, document_bytes)
+        ai_fields = self._extract_with_claude(textract_response, None)
         
         # Secondary: Rule-based fallback
         rule_fields = self._extract_with_rules(textract_response)

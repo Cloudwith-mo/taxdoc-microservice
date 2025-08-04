@@ -9,8 +9,8 @@ from datetime import datetime
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from services.textract_service import TextractService
-from services.classifier_service import ClassifierService
-from services.extractor_service import ExtractorService
+from services.enhanced_classifier import EnhancedClassifier
+from services.multi_form_extractor import MultiFormExtractor
 from services.storage_service import StorageService
 from services.comprehend_service import ComprehendService
 from services.bedrock_service import BedrockService
@@ -34,8 +34,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             
             # Initialize services
             textract = TextractService()
-            classifier = ClassifierService()
-            extractor = ExtractorService()
+            classifier = EnhancedClassifier()
+            extractor = MultiFormExtractor()
             storage = StorageService()
             comprehend = ComprehendService()
             bedrock = BedrockService()
@@ -52,38 +52,51 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 text = textract.get_text_from_response(textract_response)
                 print(f"Extracted {len(text)} characters of text")
                 
-                # Classify document type with ML + fallback
+                # Classify document type with enhanced classifier
                 print("Classifying document type...")
-                ml_prediction, ml_confidence = comprehend.classify_document(text)
+                doc_type, classification_confidence = classifier.classify_document(textract_response)
+                print(f"Document classified as: {doc_type} (confidence: {classification_confidence:.2f})")
                 
-                if ml_prediction and comprehend.should_use_ml_result(ml_confidence):
-                    doc_type = ml_prediction
-                    print(f"Using ML classification: {doc_type} (confidence: {ml_confidence:.3f})")
-                else:
-                    doc_type = classifier.classify_document(textract_response)
-                    print(f"Using fallback classification: {doc_type}")
+                # Optional: Use ML classification as additional validation
+                ml_prediction, ml_confidence = None, 0.0
+                try:
+                    ml_prediction, ml_confidence = comprehend.classify_document(text)
+                    if ml_prediction and ml_prediction != doc_type:
+                        print(f"ML classification differs: {ml_prediction} (confidence: {ml_confidence:.3f})")
+except Exception as e:
+                    print(f"ML classification failed: {e}")
                 
-                # Extract key fields with regex + AI enhancement
-                print("Extracting key fields...")
+                # Extract key fields using multi-form extractor
+                print("Extracting key fields using 3-layer approach...")
                 
-                # Get document bytes for AI processing if needed
+                # Get document bytes for AI processing
                 document_bytes = None
-                if doc_type == "W-2 Tax Form":
-                    try:
-                        s3_client = boto3.client('s3')
-                        response = s3_client.get_object(Bucket=bucket, Key=key)
-                        document_bytes = response['Body'].read()
-                        print(f"Retrieved document bytes for AI processing: {len(document_bytes)} bytes")
-                    except Exception as e:
-                        print(f"Failed to retrieve document bytes: {e}")
+                try:
+                    s3_client = boto3.client('s3')
+                    response = s3_client.get_object(Bucket=bucket, Key=key)
+                    document_bytes = response['Body'].read()
+                    print(f"Retrieved document bytes for processing: {len(document_bytes)} bytes")
+                except Exception as e:
+                    print(f"Failed to retrieve document bytes: {e}")
                 
-                extracted_data = extractor.extract_fields(textract_response, doc_type, document_bytes)
+                extracted_data = extractor.extract_document_fields(
+                    textract_response=textract_response,
+                    document_type=doc_type,
+                    document_bytes=document_bytes,
+                    s3_bucket=bucket,
+                    s3_key=key
+                )
                 
-                # Add AI-powered fuzzy fields
-                fuzzy_fields = bedrock.extract_fuzzy_fields(text, doc_type)
-                if fuzzy_fields:
-                    extracted_data.update(fuzzy_fields)
-                    print(f"Added fuzzy fields: {fuzzy_fields}")
+                # Add AI-powered fuzzy fields as fallback
+                try:
+                    fuzzy_fields = bedrock.extract_fuzzy_fields(text, doc_type)
+                    if fuzzy_fields:
+                        for field, value in fuzzy_fields.items():
+                            if field not in extracted_data or not extracted_data[field]:
+                                extracted_data[field] = value
+                        print(f"Added fuzzy fields: {fuzzy_fields}")
+                except Exception as e:
+                    print(f"Fuzzy field extraction failed: {e}")
                 
                 print(f"Final extracted data: {json.dumps(extracted_data, default=str)}")
                 
@@ -96,13 +109,15 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 result = {
                     "DocumentID": doc_id,
                     "DocumentType": doc_type,
+                    "ClassificationConfidence": classification_confidence,
                     "UploadDate": message.get('Timestamp', datetime.utcnow().isoformat()),
                     "S3Location": f"s3://{bucket}/{key}",
                     "Data": extracted_data,
                     "ProcessingStatus": "Completed",
                     "JobId": job_id,
-                    "MLClassificationUsed": bool(ml_prediction and comprehend.should_use_ml_result(ml_confidence)),
-                    "MLConfidence": ml_confidence if ml_prediction else 0.0
+                    "ExtractionMetadata": extracted_data.get('_extraction_metadata', {}),
+                    "MLClassificationUsed": bool(ml_prediction),
+                    "MLConfidence": ml_confidence
                 }
                 
                 # Add summary if generated

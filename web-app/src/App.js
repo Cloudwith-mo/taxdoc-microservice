@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import MultiFormDisplay from './components/MultiFormDisplay';
+import './components/MultiFormDisplay.css';
 
 const API_BASE = 'https://n82datyqse.execute-api.us-east-1.amazonaws.com/prod';
 
@@ -127,14 +129,7 @@ function App() {
           <div><strong>Type:</strong> {result.DocumentType}</div>
           <div><strong>Status:</strong> {result.ProcessingStatus}</div>
           
-          {result.Data && (
-            <div>
-              <h4>Extracted Data:</h4>
-              <pre style={{ background: '#f8f9fa', padding: '10px', borderRadius: '5px' }}>
-                {JSON.stringify(result.Data, null, 2)}
-              </pre>
-            </div>
-          )}
+          <MultiFormDisplay result={result} />
 
           {result.Summary && (
             <div>

@@ -113,9 +113,14 @@ Resources:
                 - comprehend:ClassifyDocument
                 - bedrock:InvokeModel
                 - bedrock:InvokeModelWithResponseStream
+                - bedrock:ListFoundationModels
+                - bedrock:GetFoundationModel
               Resource: 
                 - 'arn:aws:bedrock:*::foundation-model/anthropic.claude*'
                 - 'arn:aws:bedrock:*::foundation-model/amazon.titan*'
+                - 'arn:aws:bedrock:*:*:foundation-model/*'
+                - 'arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0'
+                - 'arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0'
             - Effect: Allow
               Action:
                 - logs:CreateLogGroup
@@ -157,9 +162,14 @@ Resources:
                 - comprehend:ClassifyDocument
                 - bedrock:InvokeModel
                 - bedrock:InvokeModelWithResponseStream
+                - bedrock:ListFoundationModels
+                - bedrock:GetFoundationModel
               Resource: 
                 - 'arn:aws:bedrock:*::foundation-model/anthropic.claude*'
                 - 'arn:aws:bedrock:*::foundation-model/amazon.titan*'
+                - 'arn:aws:bedrock:*:*:foundation-model/*'
+                - 'arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0'
+                - 'arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0'
             - Effect: Allow
               Action:
                 - logs:CreateLogGroup

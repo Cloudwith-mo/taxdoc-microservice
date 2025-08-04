@@ -118,9 +118,12 @@ Resources:
           - comprehend:ClassifyDocument
           - bedrock:InvokeModel
           - bedrock:InvokeModelWithResponseStream
+          - bedrock:ListFoundationModels
+          - bedrock:GetFoundationModel
           Resource:
           - arn:aws:bedrock:*::foundation-model/anthropic.claude*
           - arn:aws:bedrock:*::foundation-model/amazon.titan*
+          - arn:aws:bedrock:*:*:foundation-model/*
         - Effect: Allow
           Action:
           - logs:CreateLogGroup
@@ -165,9 +168,12 @@ Resources:
           - comprehend:ClassifyDocument
           - bedrock:InvokeModel
           - bedrock:InvokeModelWithResponseStream
+          - bedrock:ListFoundationModels
+          - bedrock:GetFoundationModel
           Resource:
           - arn:aws:bedrock:*::foundation-model/anthropic.claude*
           - arn:aws:bedrock:*::foundation-model/amazon.titan*
+          - arn:aws:bedrock:*:*:foundation-model/*
         - Effect: Allow
           Action:
           - logs:CreateLogGroup
