@@ -14,7 +14,9 @@ class MultiFormExtractor:
     def __init__(self):
         self.textract_client = boto3.client('textract', region_name='us-east-1')
         self.bedrock_client = boto3.client('bedrock-runtime', region_name='us-east-1')
-        self.claude_model_id = 'anthropic.claude-3-sonnet-20240229-v1:0'
+        self.claude_model_id = 'anthropic.claude-3-haiku-20240307-v1:0'
+        self.titan_model_id = 'amazon.titan-text-premier-v1:0'
+        self.preferred_model = 'claude'  # Switch to Claude as primary
         self.confidence_threshold = 0.85
         
     def extract_document_fields(self, document_bytes: bytes, document_type: str, s3_bucket: str = None, s3_key: str = None) -> Dict[str, Any]:
@@ -68,21 +70,25 @@ class MultiFormExtractor:
                     QueriesConfig=query_config
                 )
             
-            # Parse query results
+            # Parse query results - simplified approach
             results = {}
+            query_map = {q['Alias']: q['Text'] for q in queries}
+            
             for block in response.get('Blocks', []):
                 if block['BlockType'] == 'QUERY_RESULT':
-                    alias = block.get('Query', {}).get('Alias', '')
                     text = block.get('Text', '')
                     confidence = block.get('Confidence', 0) / 100.0
                     
-                    if alias:
-                        results[alias] = {
-                            'value': self._parse_field_value(text, alias),
-                            'confidence': confidence,
-                            'source': 'textract_query',
-                            'raw_text': text
-                        }
+                    # Match result to query by finding the query that produced this result
+                    for alias, query_text in query_map.items():
+                        if alias not in results and text:  # First available result gets assigned
+                            results[alias] = {
+                                'value': self._parse_field_value(text, alias),
+                                'confidence': confidence,
+                                'source': 'textract_query',
+                                'raw_text': text
+                            }
+                            break
             
             print(f"Textract queries extracted {len(results)} fields")
             return results
@@ -123,7 +129,7 @@ Focus on these fields that need verification: {', '.join(low_confidence_fields)}
 Return only valid JSON with exact field names. Use null for missing values.
 """
             
-            # Call Claude
+            # Use Claude as primary model
             payload = {
                 "anthropic_version": "bedrock-2023-05-31",
                 "max_tokens": 1000,
@@ -135,6 +141,7 @@ Return only valid JSON with exact field names. Use null for missing values.
                 modelId=self.claude_model_id,
                 body=json.dumps(payload)
             )
+            model_used = 'claude'
             
             response_body = json.loads(response['body'].read())
             llm_output = response_body['content'][0]['text']

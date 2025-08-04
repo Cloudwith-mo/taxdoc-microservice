@@ -14,7 +14,7 @@ class MultiFormExtractor:
     def __init__(self):
         self.textract_client = boto3.client('textract', region_name='us-east-1')
         self.bedrock_client = boto3.client('bedrock-runtime', region_name='us-east-1')
-        self.claude_model_id = 'anthropic.claude-3-sonnet-20240229-v1:0'
+        self.claude_model_id = 'anthropic.claude-3-haiku-20240307-v1:0'
         self.titan_model_id = 'amazon.titan-text-premier-v1:0'
         self.preferred_model = 'claude'  # Switch to Claude as primary
         self.confidence_threshold = 0.85
