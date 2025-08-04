@@ -31,7 +31,7 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: !Sub 'DrDoc-Processing-${Environment}'
-      VisibilityTimeoutSeconds: 900
+      VisibilityTimeout: 900
       MessageRetentionPeriod: 1209600
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt DocumentProcessingDLQ.Arn
@@ -108,7 +108,7 @@ Resources:
   ProcessDocumentFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub 'TaxDoc-ProcessDocument-${Environment}'
+      FunctionName: !Sub 'DrDoc-ProcessDocument-${Environment}'
       CodeUri: ../src/
       Handler: handlers.process_document.lambda_handler
       Policies:
@@ -202,7 +202,7 @@ Resources:
   TextractResultProcessor:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub 'TaxDoc-TextractResult-${Environment}'
+      FunctionName: !Sub 'DrDoc-TextractResult-${Environment}'
       CodeUri: ../src/
       Handler: handlers.textract_result_handler.lambda_handler
       Timeout: 600
@@ -254,6 +254,46 @@ Resources:
         AllowMethods: "'POST, GET, OPTIONS'"
         AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
         AllowOrigin: "'*'"
+      ThrottleConfig:
+        BurstLimit: 100
+        RateLimit: 20
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          ThrottlingBurstLimit: 100
+          ThrottlingRateLimit: 20
+
+  # API Gateway Usage Plan
+  ApiUsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    Properties:
+      UsagePlanName: !Sub 'DrDoc-UsagePlan-${Environment}'
+      Description: 'Usage plan for Dr.Doc API'
+      Throttle:
+        BurstLimit: 100
+        RateLimit: 20
+      Quota:
+        Limit: 5000
+        Period: DAY
+      ApiStages:
+        - ApiId: !Ref DocumentProcessingApi
+          Stage: !Ref Environment
+
+  # API Key
+  ApiKey:
+    Type: AWS::ApiGateway::ApiKey
+    Properties:
+      Name: !Sub 'DrDoc-ApiKey-${Environment}'
+      Description: 'API Key for Dr.Doc'
+      Enabled: true
+
+  # Usage Plan Key
+  UsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    Properties:
+      KeyId: !Ref ApiKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref ApiUsagePlan
 
   # Enhanced API Lambda with three-layer processing
   EnhancedApiFunction:
@@ -334,3 +374,15 @@ Outputs:
     Value: !Ref DocumentProcessingQueue
     Export:
       Name: !Sub '${AWS::StackName}-ProcessingQueue'
+
+  ApiKey:
+    Description: API Gateway API Key
+    Value: !Ref ApiKey
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiKey'
+
+  UsagePlan:
+    Description: API Gateway Usage Plan
+    Value: !Ref ApiUsagePlan
+    Export:
+      Name: !Sub '${AWS::StackName}-UsagePlan'

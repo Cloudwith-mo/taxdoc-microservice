@@ -104,12 +104,19 @@ def process_document_enhanced(event: Dict[str, Any], cors_headers: Dict[str, str
         storage = StorageService()
         storage.save_document_metadata(result)
         
-        # Step 5: Log metrics
-        monitoring.log_processing_metrics(
-            doc_type,
-            processing_time,
-            extraction_result.get('ExtractionMetadata', {}).get('overall_confidence', 0),
-            extraction_result.get('ExtractionMetadata', {}).get('processing_layers', [])
+        # Step 5: Log enhanced metrics
+        from services.cloudwatch_metrics import CloudWatchMetrics
+        metrics = CloudWatchMetrics()
+        
+        metadata = extraction_result.get('ExtractionMetadata', {})
+        metrics.put_document_processed(
+            doc_type, 
+            processing_time, 
+            metadata.get('overall_confidence', 0)
+        )
+        metrics.put_layer_usage(
+            metadata.get('processing_layers', []), 
+            doc_type
         )
         
         return {
@@ -120,7 +127,10 @@ def process_document_enhanced(event: Dict[str, Any], cors_headers: Dict[str, str
         
     except Exception as e:
         processing_time = time.time() - start_time
-        monitoring.log_error_metric(type(e).__name__)
+        
+        from services.cloudwatch_metrics import CloudWatchMetrics
+        metrics = CloudWatchMetrics()
+        metrics.put_error_metric(type(e).__name__, 'EnhancedApiFunction')
         
         return {
             'statusCode': 500,

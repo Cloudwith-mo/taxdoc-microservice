@@ -268,6 +268,12 @@ const AnyDocResults = ({ results }) => {
           >
             📊 Download CSV
           </button>
+          <button 
+            className="btn download-btn"
+            onClick={() => window.open(`${process.env.REACT_APP_API_BASE}/download-excel/${currentResult.DocumentID}`, '_blank')}
+          >
+            📊 Download Excel
+          </button>
           {currentResult.QualityMetrics?.needs_human_review && (
             <button className="btn review-btn">
               👁️ Request Human Review

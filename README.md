@@ -7,20 +7,20 @@ An advanced AWS-based microservice that automatically processes 11+ document typ
 ### **Web Application**
 🌐 **Frontend**: http://taxdoc-web-app-prod-1754284862.s3-website-us-east-1.amazonaws.com/
 
-### **API Endpoints**
-🔗 **Base URL**: https://n82datyqse.execute-api.us-east-1.amazonaws.com/prod
+### **Enhanced API Endpoints**
+🔗 **Base URL**: https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod
 
 **Available Endpoints:**
-- **Process Document**: `POST /process-document`
+- **Process Document**: `POST /process-document` (Three-layer AI extraction)
 - **Get Results**: `GET /result/{doc_id}`
 - **Download Excel**: `GET /download-excel/{doc_id}`
 
 **Direct API Usage:**
 ```bash
-# Upload and process a document
-curl -X POST "https://n82datyqse.execute-api.us-east-1.amazonaws.com/prod/process-document" \
+# Upload and process a document with enhanced three-layer pipeline
+curl -X POST "https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod/process-document" \
   -H "Content-Type: application/json" \
-  -d '{"filename": "document.pdf", "contentType": "application/pdf"}'
+  -d '{"filename": "document.pdf", "file_content": "<base64_encoded_content>"}'
 ```
 
 ## 🎯 Three-Layer AI Extraction Pipeline
@@ -61,16 +61,37 @@ curl -X POST "https://n82datyqse.execute-api.us-east-1.amazonaws.com/prod/proces
 - Receipts
 - Invoices
 
-## 🏗️ Architecture Overview
+## 🏗️ Enhanced Architecture Overview
 
-**Event-driven, serverless pipeline using AWS managed services:**
+**Three-layer AI extraction pipeline with event-driven serverless architecture:**
+
+### **Processing Pipeline**
+```
+S3 Upload → SQS Queue → Lambda Processor → Three-Layer Extraction → DynamoDB Storage
+                                    ↓
+                            CloudWatch Monitoring
+```
+
+### **AWS Services Integration**
 - **S3** → Document storage with event triggers
-- **Lambda** → Multi-function processing orchestration
-- **Textract** → OCR with natural language queries
-- **Bedrock** → Claude 4 LLM integration
+- **SQS** → Asynchronous processing queue with DLQ
+- **Lambda** → 5 specialized functions for processing orchestration
+- **Textract** → OCR with natural language queries (Layer 1)
+- **Bedrock** → Claude 4 LLM integration (Layer 2)
+- **Regex Engine** → Pattern-based safety net (Layer 3)
 - **DynamoDB** → Structured data storage with confidence scoring
-- **API Gateway** → RESTful endpoints
+- **API Gateway** → RESTful endpoints with CORS
+- **CloudWatch** → Monitoring, metrics, and alerting
 - **React/Amplify** → Dynamic multi-form frontend
+
+### **Infrastructure Stack**
+- **Main Stack**: `DrDoc-Enhanced-Final-prod`
+- **Monitoring Stack**: `DrDoc-Monitoring-prod`
+- **S3 Bucket**: `drdoc-uploads-prod-995805900737`
+- **DynamoDB Table**: `DrDocDocuments-prod`
+- **SQS Queue**: `DrDoc-Processing-prod`
+- **API Gateway**: With throttling (100 burst, 20/sec rate)
+- **CloudWatch**: Dashboard and automated alerts
 
 ## 🔄 Processing Flow
 
@@ -187,11 +208,14 @@ python3 scripts/test_all_images.py
 
 **Production Deployment:**
 ```bash
-# Deploy complete system
-./scripts/deploy_multi_form_enhancement.sh prod
+# Deploy complete system with monitoring
+./scripts/deploy_complete_system.sh prod your-email@domain.com
 
-# Deploy with frontend
-./scripts/deploy_multi_form_enhancement.sh prod --with-frontend
+# Deploy enhanced backend only
+./scripts/deploy_enhanced_backend.sh prod
+
+# Deploy legacy system
+./scripts/deploy_multi_form_enhancement.sh prod
 ```
 
 **Current Status:**
@@ -201,19 +225,31 @@ python3 scripts/test_all_images.py
 - ✅ 11 document types: Supported
 - ✅ High accuracy: 87-99% confidence
 
-## 📈 Monitoring & Analytics
+## 📈 Enhanced Monitoring & Analytics
 
-**CloudWatch Integration:**
-- Lambda execution logs and metrics
-- Processing success rates by document type
-- Confidence score distributions
-- Performance and cost tracking
+**CloudWatch Dashboard:**
+- Real-time document processing metrics
+- SQS queue health and backlog monitoring
+- Lambda function error rates and performance
+- Confidence score trends and quality metrics
+
+**Automated Alerts:**
+- SQS message age > 5 minutes (processing delays)
+- Lambda errors > 0 (immediate failure notification)
+- Processing errors > 5 per 5-minute period
+- Email notifications via SNS
+
+**API Gateway Monitoring:**
+- Request throttling (100 burst, 20/sec sustained)
+- Usage quotas (5,000 requests/day)
+- API key management and tracking
+- CORS-enabled for web app integration
 
 **Quality Metrics:**
 - Extraction accuracy per document type
 - Layer utilization (Textract vs LLM vs Regex)
 - Cross-validation success rates
-- User review requirements
+- Cost optimization tracking (60-80% LLM savings)
 
 ## 🔐 Security & Compliance
 
@@ -229,7 +265,7 @@ python3 scripts/test_all_images.py
 - DynamoDB encryption
 - CloudWatch audit logging
 
-## 💰 Cost Optimization
+## 💰 Cost Optimization & Performance
 
 **Intelligent Processing:**
 - Skip LLM layer when Textract confidence is high (saves 60-80% of LLM costs)
@@ -239,9 +275,16 @@ python3 scripts/test_all_images.py
 
 **Performance Optimization:**
 - Sub-second response times for most documents
-- Auto-scaling Lambda functions
+- Auto-scaling Lambda functions (5 specialized functions)
 - DynamoDB on-demand pricing
-- Efficient three-layer processing pipeline
+- SQS-based async processing with DLQ
+- API Gateway throttling prevents overload
+
+**Operational Excellence:**
+- CloudWatch dashboards for real-time monitoring
+- Automated alerting for failures and delays
+- Dead letter queues for failed message handling
+- Comprehensive error tracking and metrics
 
 ## 🗺️ Roadmap
 
@@ -284,7 +327,7 @@ MIT License - see LICENSE file for details
 
 **Live System:**
 - 🌐 Web App: http://taxdoc-web-app-prod-1754284862.s3-website-us-east-1.amazonaws.com/
-- 🔗 API: https://n82datyqse.execute-api.us-east-1.amazonaws.com/prod
+- 🔗 Enhanced API: https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod
 
 **Documentation:**
 - 📋 Technical Architecture: [TECHNICAL_ARCHITECTURE.md](TECHNICAL_ARCHITECTURE.md)

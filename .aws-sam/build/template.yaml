@@ -38,7 +38,7 @@ Resources:
     Properties:
       QueueName:
         Fn::Sub: DrDoc-Processing-${Environment}
-      VisibilityTimeoutSeconds: 900
+      VisibilityTimeout: 900
       MessageRetentionPeriod: 1209600
       RedrivePolicy:
         deadLetterTargetArn:
@@ -56,7 +56,7 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName:
-        Fn::Sub: taxdoc-uploads-${Environment}-${AWS::AccountId}
+        Fn::Sub: drdoc-uploads-${Environment}-${AWS::AccountId}
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -66,7 +66,7 @@ Resources:
     Type: AWS::DynamoDB::Table
     Properties:
       TableName:
-        Fn::Sub: TaxDocuments-${Environment}
+        Fn::Sub: DrDocDocuments-${Environment}
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
       - AttributeName: DocumentID
@@ -113,7 +113,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName:
-        Fn::Sub: TaxDoc-ProcessDocument-${Environment}
+        Fn::Sub: DrDoc-ProcessDocument-${Environment}
       CodeUri: ProcessDocumentFunction
       Handler: handlers.process_document.lambda_handler
       Policies:
@@ -221,7 +221,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName:
-        Fn::Sub: TaxDoc-TextractResult-${Environment}
+        Fn::Sub: DrDoc-TextractResult-${Environment}
       CodeUri: TextractResultProcessor
       Handler: handlers.textract_result_handler.lambda_handler
       Timeout: 600

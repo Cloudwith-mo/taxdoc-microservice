@@ -3,7 +3,7 @@ import { useDropzone } from 'react-dropzone';
 import axios from 'axios';
 import './DrDocUploader.css';
 
-const API_BASE = 'https://n82datyqse.execute-api.us-east-1.amazonaws.com/prod';
+const API_BASE = process.env.REACT_APP_API_BASE || 'https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod';
 
 const DrDocUploader = ({ onResults }) => {
   const [files, setFiles] = useState([]);
@@ -84,14 +84,11 @@ const DrDocUploader = ({ onResults }) => {
         file_content: fileContent
       });
 
-      setFiles(prev => prev.map(f => 
-        f.id === fileData.id 
-          ? { ...f, status: 'completed', result: response.data }
-          : f
-      ));
-
-      setProgress({ [fileData.id]: 'completed' });
-      onResults([response.data]);
+      // Store job_id for polling
+      const jobId = response.data.DocumentID;
+      
+      // Start polling for results
+      await pollForResults(fileData.id, jobId);
 
     } catch (error) {
       setFiles(prev => prev.map(f => 
@@ -101,6 +98,50 @@ const DrDocUploader = ({ onResults }) => {
       ));
       setProgress({ [fileData.id]: 'error' });
     }
+  };
+
+  const pollForResults = async (fileId, docId) => {
+    const maxAttempts = 30; // 2.5 minutes max
+    let attempts = 0;
+    
+    const poll = async () => {
+      try {
+        const response = await axios.get(`${API_BASE}/result/${docId}`);
+        
+        if (response.data.ProcessingStatus === 'Completed') {
+          setFiles(prev => prev.map(f => 
+            f.id === fileId 
+              ? { ...f, status: 'completed', result: response.data }
+              : f
+          ));
+          setProgress({ [fileId]: 'completed' });
+          onResults([response.data]);
+          return;
+        }
+        
+        if (response.data.ProcessingStatus === 'Failed') {
+          throw new Error(response.data.Error || 'Processing failed');
+        }
+        
+        // Still processing, continue polling
+        attempts++;
+        if (attempts < maxAttempts) {
+          setTimeout(poll, 5000); // Poll every 5 seconds
+        } else {
+          throw new Error('Processing timeout');
+        }
+        
+      } catch (error) {
+        setFiles(prev => prev.map(f => 
+          f.id === fileId 
+            ? { ...f, status: 'error', error: error.response?.data?.error || error.message }
+            : f
+        ));
+        setProgress({ [fileId]: 'error' });
+      }
+    };
+    
+    poll();
   };
 
   const processBatchFiles = async () => {
@@ -119,9 +160,19 @@ const DrDocUploader = ({ onResults }) => {
       files.forEach(f => progressUpdate[f.id] = 'processing');
       setProgress(progressUpdate);
 
-      const response = await axios.post(`${API_BASE}/process-batch`, {
-        files: batchData
-      });
+      // Process files individually for better error handling
+      const results = [];
+      for (const fileData of files) {
+        try {
+          const response = await axios.post(`${API_BASE}/process-document`, {
+            filename: fileData.file.name,
+            file_content: await fileToBase64(fileData.file)
+          });
+          results.push(response.data);
+        } catch (error) {
+          results.push({ error: error.response?.data?.error || 'Processing failed' });
+        }
+      }
 
       // Update files with results
       const results = response.data.results;

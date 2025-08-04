@@ -4,7 +4,7 @@ export const awsConfig = {
     endpoints: [
       {
         name: "TaxDocAPI",
-        endpoint: "https://n82datyqse.execute-api.us-east-1.amazonaws.com/prod",
+        endpoint: "https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod",
         region: "us-east-1"
       }
     ]

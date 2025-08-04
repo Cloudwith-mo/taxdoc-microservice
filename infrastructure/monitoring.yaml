@@ -1,0 +1,162 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudWatch monitoring for Dr.Doc Enhanced Backend
+
+Parameters:
+  Environment:
+    Type: String
+    Default: prod
+  StackName:
+    Type: String
+    Default: DrDoc-Enhanced-Final-prod
+  NotificationEmail:
+    Type: String
+    Description: Email for alarm notifications
+
+Resources:
+  # SNS Topic for Alerts
+  AlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'DrDoc-Alerts-${Environment}'
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref NotificationEmail
+
+  # CloudWatch Dashboard
+  DrDocDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub 'DrDoc-${Environment}-Dashboard'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "DrDoc/Processing", "DocumentsProcessed", { "stat": "Sum" } ]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "us-east-1",
+                "title": "Documents Processed"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/SQS", "ApproximateAgeOfOldestMessage", "QueueName", "DrDoc-Processing-${Environment}" ],
+                  [ ".", "ApproximateNumberOfMessages", ".", "." ]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "us-east-1",
+                "title": "SQS Queue Metrics"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 6,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/Lambda", "Errors", "FunctionName", "DrDoc-EnhancedApi-${Environment}" ],
+                  [ ".", ".", ".", "DrDoc-SQSProcessor-${Environment}" ],
+                  [ ".", ".", ".", "DrDoc-TextractResult-${Environment}" ]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "us-east-1",
+                "title": "Lambda Errors"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 6,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "DrDoc/Processing", "ConfidenceScore", { "stat": "Average" } ],
+                  [ ".", "ProcessingTime", { "stat": "Average" } ]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "us-east-1",
+                "title": "Processing Quality"
+              }
+            }
+          ]
+        }
+
+  # SQS Age Alarm
+  SQSAgeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'DrDoc-SQS-Age-${Environment}'
+      AlarmDescription: 'SQS messages are aging'
+      MetricName: ApproximateAgeOfOldestMessage
+      Namespace: AWS/SQS
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 300
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !Sub 'DrDoc-Processing-${Environment}'
+      AlarmActions:
+        - !Ref AlertTopic
+
+  # Lambda Error Alarm
+  LambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'DrDoc-Lambda-Errors-${Environment}'
+      AlarmDescription: 'Lambda functions are failing'
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref AlertTopic
+
+  # Processing Error Alarm
+  ProcessingErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'DrDoc-Processing-Errors-${Environment}'
+      AlarmDescription: 'Document processing errors detected'
+      MetricName: ProcessingErrors
+      Namespace: DrDoc/Processing
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref AlertTopic
+
+Outputs:
+  DashboardURL:
+    Description: CloudWatch Dashboard URL
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=${DrDocDashboard}'
+  
+  AlertTopicArn:
+    Description: SNS Topic for alerts
+    Value: !Ref AlertTopic
