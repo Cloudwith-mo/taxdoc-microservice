@@ -15,6 +15,7 @@ class MultiFormExtractor:
         self.textract_client = boto3.client('textract', region_name='us-east-1')
         self.bedrock_client = boto3.client('bedrock-runtime', region_name='us-east-1')
         self.claude_model_id = 'anthropic.claude-3-sonnet-20240229-v1:0'
+        self.titan_model_id = 'amazon.titan-text-premier-v1:0'
         self.confidence_threshold = 0.85
         
     def extract_document_fields(self, document_bytes: bytes, document_type: str, s3_bucket: str = None, s3_key: str = None) -> Dict[str, Any]:
@@ -68,21 +69,25 @@ class MultiFormExtractor:
                     QueriesConfig=query_config
                 )
             
-            # Parse query results
+            # Parse query results - simplified approach
             results = {}
+            query_map = {q['Alias']: q['Text'] for q in queries}
+            
             for block in response.get('Blocks', []):
                 if block['BlockType'] == 'QUERY_RESULT':
-                    alias = block.get('Query', {}).get('Alias', '')
                     text = block.get('Text', '')
                     confidence = block.get('Confidence', 0) / 100.0
                     
-                    if alias:
-                        results[alias] = {
-                            'value': self._parse_field_value(text, alias),
-                            'confidence': confidence,
-                            'source': 'textract_query',
-                            'raw_text': text
-                        }
+                    # Match result to query by finding the query that produced this result
+                    for alias, query_text in query_map.items():
+                        if alias not in results and text:  # First available result gets assigned
+                            results[alias] = {
+                                'value': self._parse_field_value(text, alias),
+                                'confidence': confidence,
+                                'source': 'textract_query',
+                                'raw_text': text
+                            }
+                            break
             
             print(f"Textract queries extracted {len(results)} fields")
             return results
@@ -123,21 +128,43 @@ Focus on these fields that need verification: {', '.join(low_confidence_fields)}
 Return only valid JSON with exact field names. Use null for missing values.
 """
             
-            # Call Claude
-            payload = {
-                "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": 1000,
-                "temperature": 0.1,
-                "messages": [{"role": "user", "content": enhanced_prompt}]
-            }
-            
-            response = self.bedrock_client.invoke_model(
-                modelId=self.claude_model_id,
-                body=json.dumps(payload)
-            )
+            # Try Claude first, fallback to Titan
+            try:
+                payload = {
+                    "anthropic_version": "bedrock-2023-05-31",
+                    "max_tokens": 1000,
+                    "temperature": 0.1,
+                    "messages": [{"role": "user", "content": enhanced_prompt}]
+                }
+                
+                response = self.bedrock_client.invoke_model(
+                    modelId=self.claude_model_id,
+                    body=json.dumps(payload)
+                )
+                model_used = 'claude'
+                
+            except Exception as claude_error:
+                print(f"Claude unavailable, using Titan: {claude_error}")
+                payload = {
+                    "inputText": enhanced_prompt,
+                    "textGenerationConfig": {
+                        "maxTokenCount": 1000,
+                        "temperature": 0.1
+                    }
+                }
+                
+                response = self.bedrock_client.invoke_model(
+                    modelId=self.titan_model_id,
+                    body=json.dumps(payload)
+                )
+                model_used = 'titan'
             
             response_body = json.loads(response['body'].read())
-            llm_output = response_body['content'][0]['text']
+            
+            if model_used == 'claude':
+                llm_output = response_body['content'][0]['text']
+            else:  # titan
+                llm_output = response_body['results'][0]['outputText']
             
             # Parse JSON from LLM response
             json_start = llm_output.find('{')

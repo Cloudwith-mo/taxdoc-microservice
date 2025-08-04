@@ -77,9 +77,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 print(f"Failed to retrieve document bytes: {e}")
             
             extracted_data = extractor.extract_document_fields(
-                textract_response=textract_response,
-                document_type=doc_type,
                 document_bytes=document_bytes,
+                document_type=doc_type,
                 s3_bucket=bucket,
                 s3_key=key
             )

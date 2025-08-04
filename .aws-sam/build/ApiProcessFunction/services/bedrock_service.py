@@ -1,13 +1,14 @@
 import boto3
 import json
 import os
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 class BedrockService:
     def __init__(self):
         self.client = boto3.client('bedrock-runtime', region_name='us-east-1')
-        self.model_id = os.environ.get('BEDROCK_MODEL_ID', 'amazon.titan-text-premier-v1:0')
-        self.enabled = os.environ.get('ENABLE_BEDROCK_SUMMARY', 'false').lower() == 'true'
+        self.model_id = os.environ.get('BEDROCK_MODEL_ID', 'anthropic.claude-3-sonnet-20240229-v1:0')
+        self.enabled = os.environ.get('ENABLE_BEDROCK_SUMMARY', 'true').lower() == 'true'
+        self.claude_model_id = 'anthropic.claude-3-sonnet-20240229-v1:0'
     
     def generate_summary(self, document_text: str, doc_type: str) -> Optional[str]:
         """Generate document summary using Bedrock LLM"""
@@ -36,10 +37,17 @@ class BedrockService:
                     }
                 }
             elif self.model_id.startswith('anthropic.claude'):
+                # Use new Claude 3 message format
                 payload = {
-                    "prompt": f"\n\nHuman: {prompt}\n\nAssistant:",
-                    "max_tokens_to_sample": 200,
-                    "temperature": 0.2
+                    "anthropic_version": "bedrock-2023-05-31",
+                    "max_tokens": 200,
+                    "temperature": 0.2,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ]
                 }
             else:
                 payload = {"inputText": prompt}
@@ -56,7 +64,11 @@ class BedrockService:
             if self.model_id.startswith('amazon.titan'):
                 summary_text = model_response["results"][0]["outputText"]
             elif self.model_id.startswith('anthropic.claude'):
-                summary_text = model_response.get("completion", "")
+                # Handle new Claude 3 response format
+                if 'content' in model_response and model_response['content']:
+                    summary_text = model_response['content'][0]['text']
+                else:
+                    summary_text = model_response.get("completion", "")
             else:
                 summary_text = str(model_response)
             
@@ -114,5 +126,56 @@ class BedrockService:
             
         except Exception as e:
             print(f"Bedrock field extraction failed: {e}")
+            
+        return {}
+    
+    def extract_structured_fields(self, document_text: str, document_type: str, field_list: List[str]) -> Dict[str, Any]:
+        """Extract structured fields using Claude for any document type"""
+        if not self.enabled:
+            return {}
+        
+        try:
+            # Construct field extraction prompt
+            fields_str = ', '.join(field_list)
+            prompt = f"""Extract the following fields from this {document_type} document: {fields_str}
+
+Document text:
+{document_text[:4000]}
+
+Return only valid JSON with the exact field names listed above. Use null for missing values. Do not include explanatory text."""
+            
+            # Use Claude 3 format
+            payload = {
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 1000,
+                "temperature": 0.1,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ]
+            }
+            
+            response = self.client.invoke_model(
+                modelId=self.claude_model_id,
+                body=json.dumps(payload)
+            )
+            
+            model_response = json.loads(response['body'].read())
+            
+            if 'content' in model_response and model_response['content']:
+                extracted_text = model_response['content'][0]['text']
+                
+                # Parse JSON from response
+                json_start = extracted_text.find('{')
+                json_end = extracted_text.rfind('}') + 1
+                
+                if json_start >= 0 and json_end > json_start:
+                    json_str = extracted_text[json_start:json_end]
+                    return json.loads(json_str)
+            
+        except Exception as e:
+            print(f"Bedrock structured field extraction failed: {e}")
             
         return {}
