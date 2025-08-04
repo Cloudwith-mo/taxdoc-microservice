@@ -20,7 +20,7 @@ Globals:
         TEXTRACT_ROLE_ARN: !GetAtt TextractSNSRole.Arn
         COMPREHEND_ENDPOINT: ''
         COMPREHEND_CONFIDENCE_THRESHOLD: '0.8'
-        BEDROCK_MODEL_ID: 'anthropic.claude-3-sonnet-20240229-v1:0'
+        BEDROCK_MODEL_ID: 'anthropic.claude-sonnet-4-20250514-v1:0'
         ENABLE_BEDROCK_SUMMARY: 'true'
         ENABLE_W2_AI_EXTRACTION: 'true'
 
