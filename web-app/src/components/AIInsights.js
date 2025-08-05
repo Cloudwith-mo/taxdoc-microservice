@@ -40,6 +40,7 @@ const AIInsights = ({ insights }) => {
 
   const renderSentiment = () => {
     const sentiment = insights.sentiment_analysis;
+    if (!sentiment) return <p>No sentiment analysis available</p>;
     
     const getSentimentColor = (sent) => {
       switch (sent) {
@@ -50,35 +51,9 @@ const AIInsights = ({ insights }) => {
       }
     };
 
-    if (!sentiment) {
-      return (
-        <div className="insight-section">
-          <div className="universal-sentiment">
-            <h4>😊 Universal Sentiment Analysis</h4>
-            <p>Works on complaint letters, HR reports - beyond templates</p>
-            <div className="sentiment-features">
-              <div className="feature-item">✓ Any document type supported</div>
-              <div className="feature-item">✓ Emotional context detection</div>
-              <div className="feature-item">✓ Confidence scoring</div>
-              <div className="feature-item">✓ Multi-language support</div>
-            </div>
-            <div className="feature-badge live">LIVE</div>
-            <div className="demo-sentiment">
-              <div className="sentiment-badge" style={{ backgroundColor: '#27ae60' }}>NEUTRAL</div>
-              <span className="sentiment-confidence">85% confidence</span>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
     return (
       <div className="insight-section">
         <div className="sentiment-overview">
-          <div className="universal-sentiment">
-            <h4>😊 Universal Sentiment Analysis</h4>
-            <div className="feature-badge live">LIVE</div>
-          </div>
           <div className="sentiment-main">
             <span 
               className="sentiment-badge"
@@ -171,38 +146,21 @@ const AIInsights = ({ insights }) => {
 
   const renderBusinessInsights = () => {
     const business = insights.business_insights;
-    if (!business) {
-      return (
-        <div className="insight-section">
-          <div className="so-what-insights">
-            <h4>🤖 AI Summary & Insights</h4>
-            <div className="insight-bullets">
-              <div className="bullet-point">📊 Document contains {Object.keys(insights.data || {}).length} extracted fields</div>
-              <div className="bullet-point">🎯 Processing completed with {((insights.confidence || 0) * 100).toFixed(0)}% confidence</div>
-              <div className="bullet-point">⚡ Ready for immediate business use and analysis</div>
-            </div>
-            <div className="feature-badge live">LIVE</div>
-          </div>
-        </div>
-      );
-    }
+    if (!business) return <p>No business insights available</p>;
 
     return (
       <div className="insight-section">
         <div className="business-insights">
-          <div className="so-what-section">
-            <h4>🤖 "So-What?" Management Insights</h4>
-            <div className="insight-bullets">
-              {business.key_insights?.slice(0, 3).map((insight, index) => (
-                <div key={index} className="bullet-point">• {insight}</div>
-              )) || [
-                <div key="1" className="bullet-point">• Document processed with high accuracy</div>,
-                <div key="2" className="bullet-point">• All critical fields successfully extracted</div>,
-                <div key="3" className="bullet-point">• Ready for downstream business processes</div>
-              ]}
+          {business.key_insights && business.key_insights.length > 0 && (
+            <div className="insight-group">
+              <h4>💡 Key Insights</h4>
+              <ul>
+                {business.key_insights.map((insight, index) => (
+                  <li key={index}>{insight}</li>
+                ))}
+              </ul>
             </div>
-            <div className="feature-badge live">LIVE</div>
-          </div>
+          )}
 
           {business.financial_highlights && business.financial_highlights.length > 0 && (
             <div className="insight-group">

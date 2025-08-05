@@ -30,9 +30,12 @@ function App() {
         <AnyDocResults results={results} />
       )}
       
-      <ChatbotQA documentData={results[0]} />
-      
-      <AnalyticsDashboard />
+      {results.length > 0 && (
+        <>
+          <ChatbotQA documentData={results[0]} />
+          <AnalyticsDashboard />
+        </>
+      )}
       
       <TemplateDesigner 
         documentUrl=""
