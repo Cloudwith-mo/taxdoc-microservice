@@ -98,6 +98,20 @@ def lambda_handler(event, context):
             ContentType='application/pdf'
         )
         
+        # Send message to SQS to trigger processing
+        sqs = boto3.client('sqs')
+        queue_url = 'https://sqs.us-east-1.amazonaws.com/995805900737/DrDoc-Processing-prod'
+        
+        sqs.send_message(
+            QueueUrl=queue_url,
+            MessageBody=json.dumps({
+                'DocumentID': doc_id,
+                'S3Bucket': bucket,
+                'S3Key': f"{doc_id}/{filename}",
+                'FileName': filename
+            })
+        )
+        
         # Store metadata in DynamoDB
         dynamodb = boto3.resource('dynamodb')
         table = dynamodb.Table('DrDocDocuments-prod')
