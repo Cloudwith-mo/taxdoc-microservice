@@ -1,27 +1,28 @@
 .app {
   min-height: 100vh;
-  background: #ffffff;
+  background: var(--bg-primary, #F6F7F9);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
 }
 
 .app-header {
   text-align: center;
   padding: 40px 20px;
-  color: #2c3e50;
-  border-bottom: 1px solid #ecf0f1;
+  color: var(--text-primary, #111418);
+  border-bottom: 1px solid var(--border-light, #E2E8F0);
+  background: var(--bg-secondary, #FFFFFF);
 }
 
 .app-header h1 {
   margin: 0 0 15px 0;
   font-size: 3em;
   font-weight: 300;
-  color: #2c3e50;
+  color: var(--text-primary, #111418);
 }
 
 .app-header p {
   margin: 0;
   font-size: 1.3em;
-  color: #7f8c8d;
+  color: var(--text-secondary, #475569);
   font-weight: 300;
 }
 
@@ -37,11 +38,11 @@ body {
 }
 
 .btn {
-  background: #2c3e50;
-  color: white;
+  background: var(--primary, #14B8A6);
+  color: var(--text-inverse, #FFFFFF);
   border: none;
   padding: 12px 24px;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 1em;
   font-weight: 500;
   cursor: pointer;
@@ -50,12 +51,13 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  box-shadow: var(--shadow-sm, 0 1px 2px 0 rgba(0, 0, 0, 0.05));
 }
 
 .btn:hover:not(:disabled) {
-  background: #34495e;
+  background: var(--primary-hover, #2DD4BF);
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(44, 62, 80, 0.2);
+  box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1));
 }
 
 .btn:disabled {

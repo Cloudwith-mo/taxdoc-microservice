@@ -1,0 +1,55 @@
+/* New Color System - Better than Parseur */
+:root {
+  /* Primary Colors */
+  --gray-900: #111418;
+  --gray-50: #F6F7F9;
+  --slate-700: #334155;
+  --teal-500: #14B8A6;
+  --teal-400: #2DD4BF;
+  --amber-400: #FBBF24;
+  --rose-500: #F43F5E;
+  
+  /* Extended Palette */
+  --gray-100: #F1F5F9;
+  --gray-200: #E2E8F0;
+  --gray-300: #CBD5E1;
+  --gray-400: #94A3B8;
+  --gray-500: #64748B;
+  --gray-600: #475569;
+  --gray-700: #334155;
+  --gray-800: #1E293B;
+  
+  --teal-50: #F0FDFA;
+  --teal-100: #CCFBF1;
+  --teal-200: #99F6E4;
+  --teal-300: #5EEAD4;
+  --teal-600: #0D9488;
+  --teal-700: #0F766E;
+  --teal-800: #115E59;
+  --teal-900: #134E4A;
+  
+  /* Semantic Colors */
+  --primary: var(--teal-500);
+  --primary-hover: var(--teal-400);
+  --secondary: var(--slate-700);
+  --success: var(--teal-500);
+  --warning: var(--amber-400);
+  --error: var(--rose-500);
+  
+  /* Background Colors */
+  --bg-primary: var(--gray-50);
+  --bg-secondary: #FFFFFF;
+  --bg-tertiary: var(--gray-100);
+  --bg-dark: var(--gray-900);
+  
+  /* Text Colors */
+  --text-primary: var(--gray-900);
+  --text-secondary: var(--gray-600);
+  --text-muted: var(--gray-500);
+  --text-inverse: #FFFFFF;
+  
+  /* Border Colors */
+  --border-light: var(--gray-200);
+  --border-medium: var(--gray-300);
+  --border-dark: var(--slate-700);
+}
