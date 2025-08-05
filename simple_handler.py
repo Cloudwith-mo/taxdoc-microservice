@@ -90,26 +90,12 @@ def lambda_handler(event, context):
         # Decode base64 content
         file_data = base64.b64decode(file_content)
         
-        # Upload to S3
+        # Upload to S3 (S3 event will trigger processing)
         s3.put_object(
             Bucket=bucket,
             Key=f"{doc_id}/{filename}",
             Body=file_data,
             ContentType='application/pdf'
-        )
-        
-        # Send message to SQS to trigger processing
-        sqs = boto3.client('sqs')
-        queue_url = 'https://sqs.us-east-1.amazonaws.com/995805900737/DrDoc-Processing-prod'
-        
-        sqs.send_message(
-            QueueUrl=queue_url,
-            MessageBody=json.dumps({
-                'DocumentID': doc_id,
-                'S3Bucket': bucket,
-                'S3Key': f"{doc_id}/{filename}",
-                'FileName': filename
-            })
         )
         
         # Store metadata in DynamoDB

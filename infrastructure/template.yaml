@@ -167,8 +167,8 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub 'DrDoc-S3Ingest-${Environment}'
-      CodeUri: s3://drdoc-tax-deployments-prod/w2-1099-minimal.zip
-      Handler: handlers.s3_ingest.lambda_handler
+      CodeUri: s3://drdoc-tax-deployments-prod/processing-handlers.zip
+      Handler: src.handlers.s3_ingest.lambda_handler
       Environment:
         Variables:
           PROCESSING_QUEUE_URL: !Ref DocumentProcessingQueue
@@ -181,8 +181,8 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub 'DrDoc-SQSProcessor-${Environment}'
-      CodeUri: s3://drdoc-tax-deployments-prod/w2-1099-minimal.zip
-      Handler: handlers.sqs_processor.lambda_handler
+      CodeUri: s3://drdoc-tax-deployments-prod/processing-handlers.zip
+      Handler: src.handlers.sqs_processor.lambda_handler
       Timeout: 900
       Tracing: Active
       Events:

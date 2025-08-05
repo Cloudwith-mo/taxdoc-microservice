@@ -1,60 +1,96 @@
 import json
 import boto3
-from typing import Dict, Any, List
-import sys
 import os
+from datetime import datetime
 
-# Add the src directory to the path
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-
-from services.textract_service import TextractService
-from services.enhanced_classifier import EnhancedClassifier
-from services.multi_form_extractor import MultiFormExtractor
-from services.storage_service import StorageService
-
-def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    """SQS processor for document processing jobs"""
+def lambda_handler(event, context):
+    """SQS processor - processes documents from queue"""
     
-    print(f"Processing SQS event: {json.dumps(event)}")
+    dynamodb = boto3.resource('dynamodb')
+    table = dynamodb.Table(os.environ['RESULTS_TABLE'])
+    textract = boto3.client('textract')
     
-    # Process each SQS record
-    for record in event.get('Records', []):
+    for record in event['Records']:
+        message = json.loads(record['body'])
+        doc_id = message['DocumentID']
+        bucket = message['S3Bucket']
+        key = message['S3Key']
+        
         try:
-            # Parse SQS message
-            message_body = json.loads(record['body'])
-            bucket = message_body['bucket']
-            key = message_body['key']
-            job_id = message_body.get('job_id', key.split('/')[-1])
+            # Update status to processing
+            table.update_item(
+                Key={'DocumentID': doc_id},
+                UpdateExpression='SET #status = :status',
+                ExpressionAttributeNames={'#status': 'Status'},
+                ExpressionAttributeValues={':status': 'processing'}
+            )
             
-            print(f"Processing job {job_id}: s3://{bucket}/{key}")
+            # Start Textract analysis
+            response = textract.analyze_document(
+                Document={'S3Object': {'Bucket': bucket, 'Name': key}},
+                FeatureTypes=['FORMS', 'TABLES']
+            )
             
-            # Initialize services
-            textract = TextractService()
-            classifier = EnhancedClassifier()
-            extractor = MultiFormExtractor()
-            storage = StorageService()
+            # Extract basic data
+            extracted_data = {}
+            for block in response.get('Blocks', []):
+                if block['BlockType'] == 'KEY_VALUE_SET' and 'KEY' in block.get('EntityTypes', []):
+                    key_text = ''
+                    value_text = ''
+                    
+                    # Get key text
+                    for relationship in block.get('Relationships', []):
+                        if relationship['Type'] == 'CHILD':
+                            for child_id in relationship['Ids']:
+                                child_block = next((b for b in response['Blocks'] if b['Id'] == child_id), None)
+                                if child_block and child_block['BlockType'] == 'WORD':
+                                    key_text += child_block['Text'] + ' '
+                    
+                    # Get value text
+                    for relationship in block.get('Relationships', []):
+                        if relationship['Type'] == 'VALUE':
+                            for value_id in relationship['Ids']:
+                                value_block = next((b for b in response['Blocks'] if b['Id'] == value_id), None)
+                                if value_block:
+                                    for val_rel in value_block.get('Relationships', []):
+                                        if val_rel['Type'] == 'CHILD':
+                                            for child_id in val_rel['Ids']:
+                                                child_block = next((b for b in response['Blocks'] if b['Id'] == child_id), None)
+                                                if child_block and child_block['BlockType'] == 'WORD':
+                                                    value_text += child_block['Text'] + ' '
+                    
+                    if key_text.strip() and value_text.strip():
+                        extracted_data[key_text.strip()] = value_text.strip()
             
-            # Start async Textract job
-            textract_job_id = textract.start_async_analysis(bucket, key)
+            # Update with results
+            table.update_item(
+                Key={'DocumentID': doc_id},
+                UpdateExpression='SET #status = :status, #data = :data, ProcessedAt = :processed_at',
+                ExpressionAttributeNames={
+                    '#status': 'Status',
+                    '#data': 'Data'
+                },
+                ExpressionAttributeValues={
+                    ':status': 'completed',
+                    ':data': extracted_data,
+                    ':processed_at': datetime.now().isoformat()
+                }
+            )
             
-            # Update job status
-            storage.update_job_status(job_id, {
-                'ProcessingStatus': 'TextractStarted',
-                'TextractJobId': textract_job_id
-            })
-            
-            print(f"Started Textract job {textract_job_id} for {job_id}")
+            print(f"Successfully processed document {doc_id}")
             
         except Exception as e:
-            print(f"Error processing SQS record: {str(e)}")
-            # Update job with error status
-            try:
-                storage = StorageService()
-                storage.update_job_status(job_id, {
-                    'ProcessingStatus': 'Failed',
-                    'Error': str(e)
-                })
-            except:
-                pass
+            print(f"Error processing document {doc_id}: {str(e)}")
+            
+            # Update status to failed
+            table.update_item(
+                Key={'DocumentID': doc_id},
+                UpdateExpression='SET #status = :status, ErrorMessage = :error',
+                ExpressionAttributeNames={'#status': 'Status'},
+                ExpressionAttributeValues={
+                    ':status': 'failed',
+                    ':error': str(e)
+                }
+            )
     
-    return {'statusCode': 200, 'body': 'Processed'}
+    return {'statusCode': 200}
