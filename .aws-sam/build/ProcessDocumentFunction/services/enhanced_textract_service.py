@@ -75,29 +75,39 @@ class EnhancedTextractService:
     def extract_query_answers(self, textract_response: Dict[str, Any]) -> Dict[str, Any]:
         """Extract query answers from Textract response"""
         
-        results = {}
-        
-        for block in textract_response.get('Blocks', []):
-            if block['BlockType'] == 'QUERY_RESULT':
-                # Find the corresponding query
-                query_alias = None
-                for relationship in block.get('Relationships', []):
-                    if relationship['Type'] == 'ANSWER':
-                        for id_ref in relationship['Ids']:
-                            # Find the query block
-                            query_block = self._find_block_by_id(textract_response, id_ref)
-                            if query_block and query_block['BlockType'] == 'QUERY':
-                                query_alias = query_block.get('Query', {}).get('Alias')
-                                break
-                
-                if query_alias:
-                    results[query_alias] = {
-                        'value': block.get('Text', ''),
-                        'confidence': block.get('Confidence', 0) / 100.0,
-                        'source': 'textract_query'
-                    }
-        
-        return results
+        try:
+            results = {}
+            
+            # Validate input
+            if not isinstance(textract_response, dict):
+                print(f"ERROR: textract_response is not a dict: {type(textract_response)}")
+                return {}
+            
+            for block in textract_response.get('Blocks', []):
+                if block['BlockType'] == 'QUERY_RESULT':
+                    # Find the corresponding query
+                    query_alias = None
+                    for relationship in block.get('Relationships', []):
+                        if relationship['Type'] == 'ANSWER':
+                            for id_ref in relationship['Ids']:
+                                # Find the query block
+                                query_block = self._find_block_by_id(textract_response, id_ref)
+                                if query_block and query_block['BlockType'] == 'QUERY':
+                                    query_alias = query_block.get('Query', {}).get('Alias')
+                                    break
+                    
+                    if query_alias:
+                        results[query_alias] = {
+                            'value': block.get('Text', ''),
+                            'confidence': block.get('Confidence', 0) / 100.0,
+                            'source': 'textract_query'
+                        }
+            
+            return results
+            
+        except Exception as e:
+            print(f"ERROR: Failed to extract query answers: {str(e)}")
+            return {}
     
     def _find_block_by_id(self, response: Dict[str, Any], block_id: str) -> Optional[Dict[str, Any]]:
         """Find a block by its ID"""

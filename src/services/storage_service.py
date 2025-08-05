@@ -12,11 +12,16 @@ class StorageService:
     def save_document_metadata(self, document_data: Dict[str, Any]) -> None:
         """Save document metadata to DynamoDB"""
         try:
+            # Validate input type
+            if not isinstance(document_data, dict):
+                print(f"ERROR: document_data is not a dict: {type(document_data)} - {document_data}")
+                return
+                
             table = self.dynamodb.Table(self.table_name)
             
             # Prepare item for DynamoDB
             item = {
-                'DocumentID': document_data['DocumentID'],
+                'DocumentID': document_data.get('DocumentID', 'unknown'),
                 'DocumentType': document_data.get('DocumentType', 'Unknown'),
                 'UploadDate': document_data.get('UploadDate', datetime.utcnow().isoformat()),
                 'S3Location': document_data.get('S3Location', ''),

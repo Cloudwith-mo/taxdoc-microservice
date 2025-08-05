@@ -17,10 +17,11 @@ class ThreeLayerOrchestrator:
         """Main extraction method using three-layer approach"""
         
         if document_type not in DOCUMENT_CONFIGS:
-            # Return basic extraction for unsupported types
+            # Return structured error for unsupported types
             return {
                 'DocumentType': document_type,
                 'error': f'Unsupported document type: {document_type}',
+                'ExtractedData': {},
                 'ExtractionMetadata': {
                     'textract_fields': 0,
                     'llm_fields': 0,
@@ -28,7 +29,13 @@ class ThreeLayerOrchestrator:
                     'processing_layers': [],
                     'total_fields': 0,
                     'overall_confidence': 0.0,
-                    'needs_review': True
+                    'needs_review': True,
+                    'processing_status': 'failed'
+                },
+                'QualityMetrics': {
+                    'overall_confidence': 0.0,
+                    'field_confidence_scores': {},
+                    'extraction_quality': 'poor'
                 }
             }
         
@@ -111,11 +118,18 @@ class ThreeLayerOrchestrator:
         
         final_results = {
             'DocumentType': document_type,
+            'ExtractedData': {},
             'ExtractionMetadata': {
                 'textract_fields': len(textract_results),
                 'llm_fields': len(llm_results),
                 'regex_fields': len(regex_results),
-                'processing_layers': []
+                'processing_layers': [],
+                'processing_status': 'completed'
+            },
+            'QualityMetrics': {
+                'overall_confidence': 0.0,
+                'field_confidence_scores': {},
+                'extraction_quality': 'good'
             }
         }
         
@@ -127,46 +141,63 @@ class ThreeLayerOrchestrator:
             if field in textract_results and textract_results[field]['confidence'] >= self.confidence_threshold:
                 # Use high-confidence Textract
                 result_data = textract_results[field]
-                final_results[field] = result_data['value']
-                final_results[f'{field}_confidence'] = result_data['confidence']
-                final_results[f'{field}_source'] = 'textract'
+                final_results['ExtractedData'][field] = result_data['value']
+                final_results['QualityMetrics']['field_confidence_scores'][field] = result_data['confidence']
+                final_results['ExtractedData'][f'{field}_source'] = 'textract'
                 confidence_scores.append(result_data['confidence'])
                 
             elif field in llm_results:
                 # Use LLM result
                 result_data = llm_results[field]
-                final_results[field] = result_data['value']
-                final_results[f'{field}_confidence'] = result_data['confidence']
-                final_results[f'{field}_source'] = 'claude'
+                final_results['ExtractedData'][field] = result_data['value']
+                final_results['QualityMetrics']['field_confidence_scores'][field] = result_data['confidence']
+                final_results['ExtractedData'][f'{field}_source'] = 'claude'
                 confidence_scores.append(result_data['confidence'])
                 
                 # Cross-validate with Textract if available
                 if field in textract_results:
                     if self._values_agree(textract_results[field]['value'], result_data['value']):
-                        final_results[f'{field}_confidence'] = min(0.95, result_data['confidence'] + 0.1)
-                        final_results[f'{field}_cross_validated'] = True
+                        final_results['QualityMetrics']['field_confidence_scores'][field] = min(0.95, result_data['confidence'] + 0.1)
+                        final_results['ExtractedData'][f'{field}_cross_validated'] = True
                 
             elif field in textract_results:
                 # Use low-confidence Textract
                 result_data = textract_results[field]
-                final_results[field] = result_data['value']
-                final_results[f'{field}_confidence'] = result_data['confidence']
-                final_results[f'{field}_source'] = 'textract_low'
+                final_results['ExtractedData'][field] = result_data['value']
+                final_results['QualityMetrics']['field_confidence_scores'][field] = result_data['confidence']
+                final_results['ExtractedData'][f'{field}_source'] = 'textract_low'
                 confidence_scores.append(result_data['confidence'])
                 
             elif field in regex_results:
                 # Use regex fallback
                 result_data = regex_results[field]
-                final_results[field] = result_data['value']
-                final_results[f'{field}_confidence'] = result_data['confidence']
-                final_results[f'{field}_source'] = 'regex'
+                final_results['ExtractedData'][field] = result_data['value']
+                final_results['QualityMetrics']['field_confidence_scores'][field] = result_data['confidence']
+                final_results['ExtractedData'][f'{field}_source'] = 'regex'
                 confidence_scores.append(result_data['confidence'])
         
         # Calculate overall metrics
         final_results['ExtractionMetadata']['total_fields'] = len(all_fields)
         if confidence_scores:
-            final_results['ExtractionMetadata']['overall_confidence'] = sum(confidence_scores) / len(confidence_scores)
-            final_results['ExtractionMetadata']['needs_review'] = final_results['ExtractionMetadata']['overall_confidence'] < 0.8
+            overall_confidence = sum(confidence_scores) / len(confidence_scores)
+            final_results['ExtractionMetadata']['overall_confidence'] = overall_confidence
+            final_results['QualityMetrics']['overall_confidence'] = overall_confidence
+            final_results['ExtractionMetadata']['needs_review'] = overall_confidence < 0.8
+            
+            # Set extraction quality based on confidence
+            if overall_confidence >= 0.9:
+                final_results['QualityMetrics']['extraction_quality'] = 'excellent'
+            elif overall_confidence >= 0.8:
+                final_results['QualityMetrics']['extraction_quality'] = 'good'
+            elif overall_confidence >= 0.6:
+                final_results['QualityMetrics']['extraction_quality'] = 'fair'
+            else:
+                final_results['QualityMetrics']['extraction_quality'] = 'poor'
+        else:
+            final_results['ExtractionMetadata']['overall_confidence'] = 0.0
+            final_results['QualityMetrics']['overall_confidence'] = 0.0
+            final_results['ExtractionMetadata']['needs_review'] = True
+            final_results['QualityMetrics']['extraction_quality'] = 'poor'
         
         # Track which layers were used
         if textract_results:
