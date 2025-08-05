@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import DrDocUploader from './components/DrDocUploader';
 import AnyDocResults from './components/AnyDocResults';
+import TemplateDesigner from './components/TemplateDesigner';
 import MarketingFeatures from './components/MarketingFeatures';
 import './styles/colors.css';
 import './App.css';
@@ -26,6 +27,11 @@ function App() {
       {results.length > 0 && (
         <AnyDocResults results={results} />
       )}
+      
+      <TemplateDesigner 
+        documentUrl=""
+        onSaveTemplate={(template) => console.log('Template saved:', template)}
+      />
       
       <MarketingFeatures />
     </div>

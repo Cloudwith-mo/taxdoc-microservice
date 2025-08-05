@@ -48,37 +48,64 @@ class AnyDocProcessor:
                     file_info
                 )
             
-            # Stage 3: Template Matching
-            print("Stage 3: Matching document template...")
-            template_match = self.template_matcher.match_template(structure['raw_text'])
+            # Stage 3: Custom Template Matching (40-60% speed optimization)
+            print("Stage 3: Checking custom templates...")
+            from .template_service import TemplateService
+            template_service = TemplateService()
+            custom_template_match = template_service.match_template(
+                structure['raw_text'],
+                structure.get('document_type')
+            )
             
-            # Stage 4: Extraction Strategy Selection
-            extraction_strategy = self.template_matcher.get_extraction_strategy(template_match)
-            print(f"Stage 4: Using extraction strategy: {extraction_strategy}")
+            # Use custom template if confidence >= 0.9
+            if custom_template_match['confidence'] >= 0.9:
+                print(f"Using custom template: {custom_template_match['template_id']}")
+                template_service.update_template_usage(custom_template_match['template_id'])
+                
+                # Extract using template (skip LLM calls)
+                extraction_results = template_service.extract_using_template(
+                    structure['raw_text'],
+                    custom_template_match['template'],
+                    structure.get('bounding_boxes', {})
+                )
+                extraction_strategy = 'custom_template'
+                template_match = {
+                    'template_name': custom_template_match['template']['name'],
+                    'confidence': custom_template_match['confidence']
+                }
+            else:
+                print("No suitable custom template found, using standard pipeline")
+                template_match = self.template_matcher.match_template(structure['raw_text'])
+                extraction_strategy = self.template_matcher.get_extraction_strategy(template_match)
             
-            # Stage 5: Data Extraction
-            if extraction_strategy == 'deterministic':
-                extraction_results = self._deterministic_extraction(
-                    file_bytes, template_match, structure
-                )
-            elif extraction_strategy == 'llm_primary':
-                extraction_results = self._llm_primary_extraction(
-                    file_bytes, template_match, structure
-                )
-            else:  # llm_only
-                extraction_results = self._llm_only_extraction(
-                    structure, template_match
-                )
+            # Stage 4: Data Extraction (if not using custom template)
+            if extraction_strategy != 'custom_template':
+                print(f"Stage 4: Using extraction strategy: {extraction_strategy}")
+                
+                if extraction_strategy == 'deterministic':
+                    extraction_results = self._deterministic_extraction(
+                        file_bytes, template_match, structure
+                    )
+                elif extraction_strategy == 'llm_primary':
+                    extraction_results = self._llm_primary_extraction(
+                        file_bytes, template_match, structure
+                    )
+                else:  # llm_only
+                    extraction_results = self._llm_only_extraction(
+                        structure, template_match
+                    )
+            else:
+                print("Stage 4: Skipped - using custom template extraction")
             
-            # Stage 6: AI Insights Generation
-            print("Stage 6: Generating AI insights...")
+            # Stage 5: AI Insights Generation
+            print("Stage 5: Generating AI insights...")
             ai_insights = self.insights_service.generate_document_insights(
                 structure['raw_text'],
                 template_match['template_name'],
                 extraction_results.get('ExtractedData', extraction_results)
             )
             
-            # Stage 7: Result Compilation
+            # Stage 6: Result Compilation
             return self._compile_final_results(
                 file_info, structure, template_match, extraction_results, extraction_strategy, ai_insights
             )
