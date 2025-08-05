@@ -84,11 +84,20 @@ const DrDocUploader = ({ onResults }) => {
         file_content: fileContent
       });
 
-      // Store job_id for polling
-      const jobId = response.data.DocumentID;
-      
-      // Start polling for results
-      await pollForResults(fileData.id, jobId);
+      // Handle immediate response (no polling needed)
+      if (response.data.ProcessingStatus === 'Completed' || response.data.ProcessingStatus === 'Failed') {
+        setFiles(prev => prev.map(f => 
+          f.id === fileData.id 
+            ? { ...f, status: response.data.ProcessingStatus === 'Completed' ? 'completed' : 'error', 
+                result: response.data.ProcessingStatus === 'Completed' ? response.data : null,
+                error: response.data.ProcessingStatus === 'Failed' ? response.data.Error : null }
+            : f
+        ));
+        setProgress({ [fileData.id]: response.data.ProcessingStatus === 'Completed' ? 'completed' : 'error' });
+        if (response.data.ProcessingStatus === 'Completed') {
+          onResults([response.data]);
+        }
+      }
 
     } catch (error) {
       setFiles(prev => prev.map(f => 
@@ -170,7 +179,10 @@ const DrDocUploader = ({ onResults }) => {
           });
           batchResults.push(response.data);
         } catch (error) {
-          batchResults.push({ error: error.response?.data?.error || 'Processing failed' });
+          batchResults.push({ 
+            error: error.response?.data?.error || 'Processing failed',
+            ProcessingStatus: 'Failed'
+          });
         }
       }
 

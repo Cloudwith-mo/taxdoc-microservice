@@ -9,7 +9,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from services.textract_service import TextractService
 from services.enhanced_classifier import EnhancedClassifier
-from services.multi_form_extractor import MultiFormExtractor
+from services.three_layer_orchestrator import ThreeLayerOrchestrator
 from services.storage_service import StorageService
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
@@ -28,7 +28,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Initialize services
         textract = TextractService()
         classifier = EnhancedClassifier()
-        extractor = MultiFormExtractor()
+        orchestrator = ThreeLayerOrchestrator()
         storage = StorageService()
         
         # Step 1: Determine if async processing needed
@@ -76,24 +76,46 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             except Exception as e:
                 print(f"Failed to retrieve document bytes: {e}")
             
-            extracted_data = extractor.extract_document_fields(
+            extracted_data = orchestrator.extract_document_fields(
                 document_bytes=document_bytes,
-                document_type=doc_type,
-                s3_bucket=bucket,
-                s3_key=key
+                document_type=doc_type
             )
             print(f"Multi-form extraction completed with {len(extracted_data)} fields")
             
-            # Step 4: Structure the output
+            # Step 4: Structure the output with frontend formatting
+            formatted_data = extracted_data.get('ExtractedData', {})
+            
+            # Format W-2 fields for frontend compatibility
+            if doc_type == "W-2":
+                field_mapping = {
+                    'EmployeeName': 'e Employee\'s first name and initial',
+                    'EmployeeSSN': 'a Employee\'s social security number', 
+                    'EmployerName': 'c Employer\'s name, address, and ZIP code',
+                    'EmployerEIN': 'b Employer identification number (EIN)',
+                    'Box1_Wages': '1 Wages, tips, other compensation',
+                    'Box2_FederalTaxWithheld': '2 Federal income tax withheld',
+                    'Box3_SocialSecurityWages': '3 Social security wages',
+                    'Box4_SocialSecurityTax': '4 Social security tax withheld',
+                    'Box5_MedicareWages': '5 Medicare wages and tips',
+                    'Box6_MedicareTax': '6 Medicare tax withheld',
+                    'TaxYear': 'Tax Year'
+                }
+                
+                frontend_data = {}
+                for internal_name, display_name in field_mapping.items():
+                    if internal_name in formatted_data:
+                        frontend_data[display_name] = str(formatted_data[internal_name])
+                formatted_data = frontend_data
+            
             result = {
                 "DocumentID": key.split('/')[-1],
                 "DocumentType": doc_type,
                 "ClassificationConfidence": confidence,
                 "UploadDate": record['eventTime'],
                 "S3Location": f"s3://{bucket}/{key}",
-                "Data": extracted_data,
+                "Data": formatted_data,
                 "ProcessingStatus": "Completed",
-                "ExtractionMetadata": extracted_data.get('_extraction_metadata', {})
+                "ExtractionMetadata": extracted_data.get('ExtractionMetadata', {})
             }
             
             # Step 5: Store results
