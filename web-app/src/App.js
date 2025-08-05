@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import DrDocUploader from './components/DrDocUploader';
 import AnyDocResults from './components/AnyDocResults';
+import MarketingFeatures from './components/MarketingFeatures';
 import './styles/colors.css';
 import './App.css';
 
@@ -25,6 +26,8 @@ function App() {
       {results.length > 0 && (
         <AnyDocResults results={results} />
       )}
+      
+      <MarketingFeatures />
     </div>
   );
 }

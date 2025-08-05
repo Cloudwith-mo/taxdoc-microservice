@@ -1,0 +1,13 @@
+{
+  "document_id": "sample-invoive.jpeg",
+  "document_type": "Invoice",
+  "ground_truth": {
+    "InvoiceNumber": "INV-2024-001",
+    "InvoiceDate": "2024-01-15",
+    "VendorName": "Tech Solutions Inc",
+    "TotalAmount": 1250.00,
+    "DueDate": "2024-02-15"
+  },
+  "expected_confidence": 0.85,
+  "critical_fields": ["InvoiceNumber", "VendorName", "TotalAmount"]
+}

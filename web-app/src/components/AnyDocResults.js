@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import AIInsights from './AIInsights';
+import DocumentPreview from './DocumentPreview';
 import './AnyDocResults.css';
 
 const AnyDocResults = ({ results }) => {
@@ -255,6 +256,12 @@ const AnyDocResults = ({ results }) => {
             renderExtractedData(currentResult.Data)
           )}
         </div>
+
+        <DocumentPreview 
+          documentUrl={`data:image/png;base64,${currentResult.DocumentID}`}
+          boundingBoxes={currentResult.ProcessingMetadata?.bounding_boxes || {}}
+          onEntityClick={(entityId) => console.log('Entity clicked:', entityId)}
+        />
 
         {currentResult.AIInsights && (
           <AIInsights insights={currentResult.AIInsights} />

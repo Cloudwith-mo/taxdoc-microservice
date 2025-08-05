@@ -1,0 +1,19 @@
+{
+  "document_id": "W2-sample.png",
+  "document_type": "W-2",
+  "ground_truth": {
+    "EmployeeName": "John Smith",
+    "EmployeeSSN": "123-45-6789",
+    "EmployerName": "ABC Corporation",
+    "EmployerEIN": "12-3456789",
+    "Box1_Wages": 50000.00,
+    "Box2_FederalTaxWithheld": 7500.00,
+    "Box3_SocialSecurityWages": 50000.00,
+    "Box4_SocialSecurityTax": 3100.00,
+    "Box5_MedicareWages": 50000.00,
+    "Box6_MedicareTax": 725.00,
+    "TaxYear": 2023
+  },
+  "expected_confidence": 0.95,
+  "critical_fields": ["EmployeeName", "EmployeeSSN", "Box1_Wages", "TaxYear"]
+}
