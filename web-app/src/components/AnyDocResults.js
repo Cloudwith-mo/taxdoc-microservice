@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import AIInsights from './AIInsights';
 import './AnyDocResults.css';
 
 const AnyDocResults = ({ results }) => {
@@ -254,6 +255,10 @@ const AnyDocResults = ({ results }) => {
             renderExtractedData(currentResult.Data)
           )}
         </div>
+
+        {currentResult.AIInsights && (
+          <AIInsights insights={currentResult.AIInsights} />
+        )}
 
         <div className="action-buttons">
           <button 

@@ -10,6 +10,7 @@ from .file_type_detector import FileTypeDetector
 from .document_structure_extractor import DocumentStructureExtractor
 from .template_matcher import TemplateMatcher
 from .multi_form_extractor import MultiFormExtractor
+from .comprehend_insights_service import ComprehendInsightsService
 
 class AnyDocProcessor:
     def __init__(self):
@@ -17,6 +18,7 @@ class AnyDocProcessor:
         self.structure_extractor = DocumentStructureExtractor()
         self.template_matcher = TemplateMatcher()
         self.form_extractor = MultiFormExtractor()
+        self.insights_service = ComprehendInsightsService()
         self.bedrock_client = boto3.client('bedrock-runtime', region_name='us-east-1')
         self.claude_model_id = 'us.anthropic.claude-sonnet-4-20250514-v1:0'
     
@@ -68,9 +70,17 @@ class AnyDocProcessor:
                     structure, template_match
                 )
             
-            # Stage 6: Result Compilation
+            # Stage 6: AI Insights Generation
+            print("Stage 6: Generating AI insights...")
+            ai_insights = self.insights_service.generate_document_insights(
+                structure['raw_text'],
+                template_match['template_name'],
+                extraction_results.get('ExtractedData', extraction_results)
+            )
+            
+            # Stage 7: Result Compilation
             return self._compile_final_results(
-                file_info, structure, template_match, extraction_results, extraction_strategy
+                file_info, structure, template_match, extraction_results, extraction_strategy, ai_insights
             )
             
         except Exception as e:
@@ -196,7 +206,7 @@ Return only valid JSON.
             }
     
     def _compile_final_results(self, file_info: Dict, structure: Dict, template_match: Dict, 
-                             extraction_results: Dict, extraction_strategy: str) -> Dict[str, Any]:
+                             extraction_results: Dict, extraction_strategy: str, ai_insights: Dict = None) -> Dict[str, Any]:
         """Compile comprehensive final results"""
         return {
             'ProcessingMetadata': {
@@ -214,6 +224,7 @@ Return only valid JSON.
             'DocumentType': extraction_results.get('DocumentType', template_match['template_name']),
             'ExtractedData': extraction_results.get('ExtractedData', extraction_results),
             'ExtractionMetadata': extraction_results.get('ExtractionMetadata', {}),
+            'AIInsights': ai_insights or {},
             'QualityMetrics': {
                 'overall_confidence': self._calculate_overall_confidence(
                     file_info, structure, template_match, extraction_results
