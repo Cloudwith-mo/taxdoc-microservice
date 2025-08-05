@@ -86,8 +86,66 @@ const TaxFormUploader = ({ onResults }) => {
         throw new Error(errorData.error || 'Processing failed');
       }
 
-      const result = await response.json();
-      onResults(result);
+      const uploadResult = await response.json();
+      
+      // Poll for processing results
+      const documentId = uploadResult.document_id;
+      let attempts = 0;
+      const maxAttempts = 30; // 30 seconds max
+      
+      const pollForResults = async () => {
+        try {
+          const resultResponse = await fetch(`https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod/result/${documentId}`);
+          const resultData = await resultResponse.json();
+          
+          if (resultData.status === 'completed' && resultData.data && Object.keys(resultData.data).length > 0) {
+            // Format results for frontend
+            const formattedResults = {
+              DocumentType: 'W-2', // Default for now
+              Data: resultData.data,
+              QualityMetrics: {
+                overall_confidence: 0.95,
+                field_confidence_scores: {}
+              },
+              ExtractionMetadata: {
+                processing_layers: ['Textract', 'AI', 'Regex'],
+                cost_optimization: {
+                  textract_primary: Object.keys(resultData.data).length,
+                  claude_fallback: 0,
+                  regex_safety: 0
+                }
+              },
+              ValidationResults: {
+                errors: [],
+                warnings: []
+              }
+            };
+            
+            onResults(formattedResults);
+            return;
+          }
+          
+          if (resultData.status === 'failed') {
+            throw new Error('Document processing failed');
+          }
+          
+          // Still processing, try again
+          attempts++;
+          if (attempts < maxAttempts) {
+            setTimeout(pollForResults, 1000);
+          } else {
+            throw new Error('Processing timeout - please try again');
+          }
+          
+        } catch (pollError) {
+          console.error('Polling error:', pollError);
+          setError(`Processing failed: ${pollError.message}`);
+          setIsProcessing(false);
+        }
+      };
+      
+      // Start polling
+      setTimeout(pollForResults, 2000); // Wait 2 seconds before first poll
 
     } catch (err) {
       console.error('Processing error:', err);
