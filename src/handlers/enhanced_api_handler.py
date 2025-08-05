@@ -14,7 +14,7 @@ patch_all()
 # Add the src directory to the path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from services.tax_orchestrator import TaxOrchestrator, UnsupportedTaxDocument
+from services.w2_1099_orchestrator import W21099Orchestrator, UnsupportedDocumentError
 from services.enhanced_classifier import EnhancedClassifier
 from services.storage_service import StorageService
 from services.monitoring_service import MonitoringService
@@ -182,8 +182,10 @@ def process_document_enhanced(event: Dict[str, Any], cors_headers: Dict[str, str
             })
             
             try:
-                orchestrator = TaxOrchestrator()
-                extraction_result = orchestrator.extract_tax_document(document_bytes, doc_type)
+                textract_service = boto3.client('textract')
+                claude_service = boto3.client('bedrock-runtime')
+                orchestrator = W21099Orchestrator(textract_service, claude_service)
+                extraction_result = orchestrator.process_document(document_bytes, filename)
                 
                 # Critical: Ensure we always have a dictionary
                 if not isinstance(extraction_result, dict):
@@ -201,7 +203,7 @@ def process_document_enhanced(event: Dict[str, Any], cors_headers: Dict[str, str
                         'QualityMetrics': {'overall_confidence': 0.0}
                     }
                     
-            except UnsupportedTaxDocument as e:
+            except UnsupportedDocumentError as e:
                 print(f"UNSUPPORTED TAX DOCUMENT: {str(e)}")
                 return {
                     'statusCode': 400,
@@ -209,7 +211,7 @@ def process_document_enhanced(event: Dict[str, Any], cors_headers: Dict[str, str
                     'body': json.dumps({
                         'error': 'Unsupported Document (Tax Edition)',
                         'message': 'Only federal tax forms supported. Email sales@taxflowsai.com',
-                        'supported_forms': ['1040', 'W-2', '1099-NEC', '1099-MISC', '1099-DIV', '1099-INT', 'K-1', '941']
+                        'supported_forms': ['W-2', '1099-NEC', '1099-MISC', '1099-DIV', '1099-INT']
                     })
                 }
             except Exception as e:
@@ -421,14 +423,14 @@ def get_processing_result(doc_id: str, cors_headers: Dict[str, str]) -> Dict[str
 def get_supported_types(cors_headers: Dict[str, str]) -> Dict[str, Any]:
     """Return list of supported tax document types only"""
     
-    from config.tax_document_config import SUPPORTED_TAX_FORMS
+    from config.w2_1099_focus_config import PHASE_1_FORMS
     
     return {
         'statusCode': 200,
         'headers': cors_headers,
         'body': json.dumps({
-            'supported_types': list(SUPPORTED_TAX_FORMS),
-            'message': 'Tax Edition - Federal tax forms only',
+            'supported_types': list(PHASE_1_FORMS),
+            'message': 'Phase 1: W-2 and 1099 forms only - highest accuracy focus',
             'contact': 'sales@taxflowsai.com'
         })
     }

@@ -8,15 +8,11 @@ const TaxFormUploader = ({ onResults }) => {
 
   const supportedForms = [
     'Auto',
-    '1040',
     'W-2', 
     '1099-NEC',
     '1099-MISC',
     '1099-DIV',
-    '1099-INT',
-    'K-1 (1065)',
-    'K-1 (1120S)',
-    '941'
+    '1099-INT'
   ];
 
   const handleFileSelect = (event) => {
@@ -104,7 +100,7 @@ const TaxFormUploader = ({ onResults }) => {
   return (
     <div className="tax-uploader-container">
       <div className="upload-section">
-        <h2>📄 Upload Federal Tax Form</h2>
+        <h2>📄 Upload W-2 or 1099 Form</h2>
         
         <div className="form-type-selector">
           <label htmlFor="form-type">Form Type:</label>
@@ -169,18 +165,19 @@ const TaxFormUploader = ({ onResults }) => {
       </div>
 
       <div className="tax-info-panel">
-        <h3>🎯 Tax Edition Features</h3>
+        <h3>🎯 Phase 1: W-2 & 1099 Focus</h3>
         <ul>
-          <li>✅ <strong>IRS Math Validation</strong> - Automatic error detection</li>
-          <li>✅ <strong>Cross-Form Validation</strong> - W-2 vs 1040 matching</li>
-          <li>✅ <strong>PII Protection</strong> - SSN/EIN masking</li>
-          <li>✅ <strong>CPA Ready</strong> - Professional formatting</li>
-          <li>✅ <strong>87-99% Accuracy</strong> - Three-layer AI extraction</li>
+          <li>✅ <strong>99% W-2 Accuracy</strong> - Wage and tax statement processing</li>
+          <li>✅ <strong>98% 1099 Accuracy</strong> - All major 1099 variants</li>
+          <li>✅ <strong>IRS Math Validation</strong> - Built-in error detection</li>
+          <li>✅ <strong>Three-Layer AI</strong> - Textract → Claude → Regex</li>
+          <li>✅ <strong>Cost Optimized</strong> - 60-80% LLM savings</li>
         </ul>
         
-        <div className="pricing-hint">
-          <p><strong>💰 Tax Season Pricing</strong></p>
-          <p>Yearly plans available - perfect for tax preparers!</p>
+        <div className="roadmap-hint">
+          <p><strong>🗺️ Coming Soon</strong></p>
+          <p>Phase 2: Receipt processing & Schedule C</p>
+          <p>Phase 3: Full 1040 preparation</p>
         </div>
       </div>
     </div>
