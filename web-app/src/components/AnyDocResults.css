@@ -47,8 +47,8 @@
 }
 
 .document-info {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 10px;
+  background: #2c3e50;
+  border-radius: 8px;
   padding: 0;
   overflow: hidden;
 }
@@ -88,9 +88,9 @@
 
 .processing-metadata, .quality-metrics {
   background: #f8f9fa;
-  border-radius: 10px;
+  border-radius: 8px;
   padding: 20px;
-  border-left: 4px solid #3498db;
+  border-left: 3px solid #2c3e50;
 }
 
 .processing-metadata h4, .quality-metrics h4 {
@@ -158,7 +158,7 @@
 
 .extracted-content {
   background: #f8f9fa;
-  border-radius: 10px;
+  border-radius: 8px;
   overflow: hidden;
 }
 
@@ -167,7 +167,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 20px;
-  background: linear-gradient(135deg, #56ab2f 0%, #a8e6cf 100%);
+  background: #2c3e50;
   color: white;
 }
 
@@ -198,7 +198,7 @@
 
 .view-btn.active {
   background: white;
-  color: #56ab2f;
+  color: #2c3e50;
   border-color: white;
 }
 
@@ -308,23 +308,25 @@
 }
 
 .download-btn {
-  background: linear-gradient(135deg, #3498db 0%, #74b9ff 100%);
+  background: #2c3e50;
   color: white;
 }
 
 .download-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+  background: #34495e;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(44, 62, 80, 0.2);
 }
 
 .review-btn {
-  background: linear-gradient(135deg, #f39c12 0%, #fdcb6e 100%);
+  background: #95a5a6;
   color: white;
 }
 
 .review-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(243, 156, 18, 0.3);
+  background: #7f8c8d;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(149, 165, 166, 0.2);
 }
 
 /* Responsive design */

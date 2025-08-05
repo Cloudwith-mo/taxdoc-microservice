@@ -241,7 +241,7 @@ const DrDocUploader = ({ onResults }) => {
   return (
     <div className="drdoc-uploader">
       <div className="upload-header">
-        <h2>🩺 Dr.Doc - Document Processing</h2>
+        <h2>📄 Dr.Doc - Document Processing</h2>
         <p>Drag & drop documents or click to browse. Supports batch processing!</p>
       </div>
 

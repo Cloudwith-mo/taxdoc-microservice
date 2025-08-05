@@ -15,7 +15,7 @@ function App() {
   return (
     <div className="app">
       <div className="app-header">
-        <h1>🩺 Dr.Doc - Universal Document AI</h1>
+        <h1>📄 Dr.Doc - Universal Document AI</h1>
         <p>Process any document type with advanced AI extraction</p>
       </div>
       
