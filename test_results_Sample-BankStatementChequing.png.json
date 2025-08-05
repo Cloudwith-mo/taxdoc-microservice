@@ -11,16 +11,16 @@
   "AccountHolder": "JOHN JONES",
   "AccountHolder_confidence": 0.98,
   "AccountHolder_source": "textract",
-  "BeginningBalance": 0.55,
-  "BeginningBalance_confidence": 0.93,
-  "BeginningBalance_source": "textract",
+  "StatementPeriod": "2003-10-09 to 2003-11-08",
+  "StatementPeriod_confidence": 0.94,
+  "StatementPeriod_source": "textract",
   "AccountNumber": "00005- 123-456-7",
   "AccountNumber_confidence": 0.96,
   "AccountNumber_source": "textract",
   "EndingBalance": 72.47,
   "EndingBalance_confidence": 0.85,
   "EndingBalance_source": "llm",
-  "StatementPeriod": "2003-10-09 to 2003-11-08",
-  "StatementPeriod_confidence": 0.94,
-  "StatementPeriod_source": "textract"
+  "BeginningBalance": 0.55,
+  "BeginningBalance_confidence": 0.93,
+  "BeginningBalance_source": "textract"
 }

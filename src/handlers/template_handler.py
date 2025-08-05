@@ -1,210 +1,210 @@
-"""
-Template Handler - API endpoints for template management
-"""
-
 import json
 import boto3
 from typing import Dict, Any
 import sys
 import os
 
-# Add src to path
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from services.template_service import TemplateService
+from services.advanced_template_matcher import AdvancedTemplateMatcher
 
-def lambda_handler(event: Dict[str, Any], context) -> Dict[str, Any]:
-    """Handle template-related API requests"""
+def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    """Template management API handler"""
+    
+    cors_headers = {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+    }
     
     try:
-        http_method = event.get('httpMethod', '')
+        http_method = event.get('httpMethod', 'GET')
         path = event.get('path', '')
+        path_params = event.get('pathParameters') or {}
+        
+        if http_method == 'OPTIONS':
+            return {'statusCode': 200, 'headers': cors_headers, 'body': ''}
         
         template_service = TemplateService()
         
-        if http_method == 'POST' and path == '/templates':
-            return create_template(event, template_service)
-        
-        elif http_method == 'GET' and path == '/templates':
-            return list_templates(event, template_service)
-        
-        elif http_method == 'GET' and '/templates/' in path:
-            template_id = path.split('/')[-1]
-            return get_template(template_id, template_service)
-        
-        elif http_method == 'PUT' and '/templates/' in path:
-            template_id = path.split('/')[-1]
-            return update_template(event, template_id, template_service)
-        
+        if http_method == 'GET' and path == '/templates':
+            return list_templates(template_service, event, cors_headers)
+        elif http_method == 'POST' and path == '/templates':
+            return create_template(template_service, event, cors_headers)
+        elif http_method == 'GET' and 'template_id' in path_params:
+            return get_template(template_service, path_params['template_id'], event, cors_headers)
+        elif http_method == 'PUT' and 'template_id' in path_params:
+            return update_template(template_service, path_params['template_id'], event, cors_headers)
+        elif http_method == 'POST' and '/rollback' in path:
+            return rollback_template(template_service, path_params['template_id'], event, cors_headers)
         else:
             return {
                 'statusCode': 404,
-                'headers': {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'
-                },
-                'body': json.dumps({
-                    'error': 'Endpoint not found',
-                    'method': http_method,
-                    'path': path
-                })
+                'headers': cors_headers,
+                'body': json.dumps({'error': 'Endpoint not found'})
             }
-    
+            
     except Exception as e:
         return {
             'statusCode': 500,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
-            },
-            'body': json.dumps({
-                'error': str(e),
-                'message': 'Internal server error'
-            })
+            'headers': cors_headers,
+            'body': json.dumps({'error': str(e)})
         }
 
-def create_template(event: Dict[str, Any], template_service: TemplateService) -> Dict[str, Any]:
-    """Create a new template"""
-    
-    try:
-        body = json.loads(event.get('body', '{}'))
-        
-        # Validate required fields
-        if not body.get('name'):
-            return {
-                'statusCode': 400,
-                'headers': {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'
-                },
-                'body': json.dumps({
-                    'error': 'Template name is required'
-                })
-            }
-        
-        if not body.get('fields'):
-            return {
-                'statusCode': 400,
-                'headers': {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'
-                },
-                'body': json.dumps({
-                    'error': 'Template fields are required'
-                })
-            }
-        
-        # Create template
-        result = template_service.create_template(body)
-        
-        status_code = 201 if result['success'] else 400
-        
-        return {
-            'statusCode': status_code,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
-            },
-            'body': json.dumps(result)
-        }
-    
-    except json.JSONDecodeError:
-        return {
-            'statusCode': 400,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
-            },
-            'body': json.dumps({
-                'error': 'Invalid JSON in request body'
-            })
-        }
-
-def list_templates(event: Dict[str, Any], template_service: TemplateService) -> Dict[str, Any]:
+def list_templates(service: TemplateService, event: Dict, headers: Dict) -> Dict:
     """List all templates"""
-    
     query_params = event.get('queryStringParameters') or {}
-    organization_id = query_params.get('organization_id', 'default')
+    document_type = query_params.get('document_type')
     
-    templates = template_service.list_templates(organization_id)
+    templates = service.list_templates(document_type)
     
     return {
         'statusCode': 200,
-        'headers': {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*'
-        },
+        'headers': headers,
         'body': json.dumps({
             'templates': templates,
             'count': len(templates)
         })
     }
 
-def get_template(template_id: str, template_service: TemplateService) -> Dict[str, Any]:
-    """Get a specific template"""
-    
-    template = template_service.get_template(template_id)
-    
-    if not template:
-        return {
-            'statusCode': 404,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
-            },
-            'body': json.dumps({
-                'error': 'Template not found'
-            })
-        }
-    
-    return {
-        'statusCode': 200,
-        'headers': {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*'
-        },
-        'body': json.dumps(template)
-    }
-
-def update_template(event: Dict[str, Any], template_id: str, template_service: TemplateService) -> Dict[str, Any]:
-    """Update a template (creates new version)"""
-    
+def create_template(service: TemplateService, event: Dict, headers: Dict) -> Dict:
+    """Create new template"""
     try:
         body = json.loads(event.get('body', '{}'))
+        document_type = body.get('document_type')
+        template_data = body.get('template_data')
+        created_by = body.get('created_by', 'api')
         
-        if not body.get('fields'):
+        if not document_type or not template_data:
             return {
                 'statusCode': 400,
-                'headers': {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*'
-                },
-                'body': json.dumps({
-                    'error': 'Updated fields are required'
-                })
+                'headers': headers,
+                'body': json.dumps({'error': 'document_type and template_data required'})
             }
         
-        result = template_service.create_template_version(template_id, body['fields'])
-        
-        status_code = 200 if result['success'] else 400
+        template_id = service.create_template(document_type, template_data, created_by)
         
         return {
-            'statusCode': status_code,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
-            },
-            'body': json.dumps(result)
+            'statusCode': 201,
+            'headers': headers,
+            'body': json.dumps({
+                'template_id': template_id,
+                'message': 'Template created successfully'
+            })
         }
-    
+        
     except json.JSONDecodeError:
         return {
             'statusCode': 400,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
-            },
+            'headers': headers,
+            'body': json.dumps({'error': 'Invalid JSON in request body'})
+        }
+
+def get_template(service: TemplateService, template_id: str, event: Dict, headers: Dict) -> Dict:
+    """Get specific template"""
+    query_params = event.get('queryStringParameters') or {}
+    version = query_params.get('version')
+    
+    if version:
+        try:
+            version = int(version)
+        except ValueError:
+            return {
+                'statusCode': 400,
+                'headers': headers,
+                'body': json.dumps({'error': 'Invalid version number'})
+            }
+    
+    template = service.get_template(template_id, version)
+    
+    if template:
+        return {
+            'statusCode': 200,
+            'headers': headers,
+            'body': json.dumps(template)
+        }
+    else:
+        return {
+            'statusCode': 404,
+            'headers': headers,
+            'body': json.dumps({'error': 'Template not found'})
+        }
+
+def update_template(service: TemplateService, template_id: str, event: Dict, headers: Dict) -> Dict:
+    """Update template (creates new version)"""
+    try:
+        body = json.loads(event.get('body', '{}'))
+        template_data = body.get('template_data')
+        updated_by = body.get('updated_by', 'api')
+        
+        if not template_data:
+            return {
+                'statusCode': 400,
+                'headers': headers,
+                'body': json.dumps({'error': 'template_data required'})
+            }
+        
+        new_version = service.update_template(template_id, template_data, updated_by)
+        
+        return {
+            'statusCode': 200,
+            'headers': headers,
             'body': json.dumps({
-                'error': 'Invalid JSON in request body'
+                'template_id': template_id,
+                'new_version': new_version,
+                'message': 'Template updated successfully'
             })
+        }
+        
+    except json.JSONDecodeError:
+        return {
+            'statusCode': 400,
+            'headers': headers,
+            'body': json.dumps({'error': 'Invalid JSON in request body'})
+        }
+    except ValueError as e:
+        return {
+            'statusCode': 404,
+            'headers': headers,
+            'body': json.dumps({'error': str(e)})
+        }
+
+def rollback_template(service: TemplateService, template_id: str, event: Dict, headers: Dict) -> Dict:
+    """Rollback template to previous version"""
+    try:
+        body = json.loads(event.get('body', '{}'))
+        target_version = body.get('target_version')
+        
+        if not target_version:
+            return {
+                'statusCode': 400,
+                'headers': headers,
+                'body': json.dumps({'error': 'target_version required'})
+            }
+        
+        new_version = service.rollback_template(template_id, int(target_version))
+        
+        return {
+            'statusCode': 200,
+            'headers': headers,
+            'body': json.dumps({
+                'template_id': template_id,
+                'rolled_back_to': target_version,
+                'new_version': new_version,
+                'message': 'Template rolled back successfully'
+            })
+        }
+        
+    except json.JSONDecodeError:
+        return {
+            'statusCode': 400,
+            'headers': headers,
+            'body': json.dumps({'error': 'Invalid JSON in request body'})
+        }
+    except ValueError as e:
+        return {
+            'statusCode': 404,
+            'headers': headers,
+            'body': json.dumps({'error': str(e)})
         }

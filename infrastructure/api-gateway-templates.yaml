@@ -1,0 +1,145 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'API Gateway endpoints for template management'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: prod
+  
+  ExistingApiId:
+    Type: String
+    Description: 'Existing API Gateway ID to add template endpoints'
+
+Resources:
+  # Template Management Resource
+  TemplatesResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ExistingApiId
+      ParentId: !GetAtt ExistingApiId.RootResourceId
+      PathPart: templates
+
+  # GET /templates - List all templates
+  TemplatesGetMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ExistingApiId
+      ResourceId: !Ref TemplatesResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${TemplateHandlerFunction.Arn}/invocations'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseHeaders:
+            Access-Control-Allow-Origin: "'*'"
+
+  # POST /templates - Create new template
+  TemplatesPostMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ExistingApiId
+      ResourceId: !Ref TemplatesResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${TemplateHandlerFunction.Arn}/invocations'
+
+  # Template by ID Resource
+  TemplateByIdResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ExistingApiId
+      ParentId: !Ref TemplatesResource
+      PathPart: '{template_id}'
+
+  # GET /templates/{id} - Get specific template
+  TemplateGetMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ExistingApiId
+      ResourceId: !Ref TemplateByIdResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${TemplateHandlerFunction.Arn}/invocations'
+
+  # PUT /templates/{id} - Update template
+  TemplatePutMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ExistingApiId
+      ResourceId: !Ref TemplateByIdResource
+      HttpMethod: PUT
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${TemplateHandlerFunction.Arn}/invocations'
+
+  # Template Handler Lambda Function
+  TemplateHandlerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'DrDoc-TemplateHandler-${Environment}'
+      Runtime: python3.9
+      Handler: template_handler.lambda_handler
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {
+                  'statusCode': 200,
+                  'body': '{"message": "Template handler placeholder"}'
+              }
+      Role: !GetAtt TemplateHandlerRole.Arn
+      Environment:
+        Variables:
+          TEMPLATES_TABLE: !Sub 'DrDocTemplates-${Environment}'
+
+  # IAM Role for Template Handler
+  TemplateHandlerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: TemplateTableAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/DrDocTemplates-${Environment}*'
+
+  # Lambda Permission for API Gateway
+  TemplateHandlerPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref TemplateHandlerFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:apigateway:${AWS::Region}::/restapis/${ExistingApiId}/*/*'
+
+Outputs:
+  TemplateHandlerFunctionArn:
+    Description: 'ARN of the template handler function'
+    Value: !GetAtt TemplateHandlerFunction.Arn

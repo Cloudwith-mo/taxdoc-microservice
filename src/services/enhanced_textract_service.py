@@ -83,30 +83,57 @@ class EnhancedTextractService:
                 print(f"ERROR: textract_response is not a dict: {type(textract_response)}")
                 return {}
             
+            # Create a mapping of block IDs to blocks for faster lookup
+            blocks_by_id = {block['Id']: block for block in textract_response.get('Blocks', [])}
+            
+            # Find all QUERY blocks first to get aliases
+            query_aliases = {}
+            for block in textract_response.get('Blocks', []):
+                if block['BlockType'] == 'QUERY':
+                    query_aliases[block['Id']] = block.get('Query', {}).get('Alias', '')
+            
+            # Now find QUERY_RESULT blocks and match them to queries
             for block in textract_response.get('Blocks', []):
                 if block['BlockType'] == 'QUERY_RESULT':
-                    # Find the corresponding query
+                    text = block.get('Text', '').strip()
+                    confidence = block.get('Confidence', 0) / 100.0
+                    
+                    # Find the corresponding query through relationships
                     query_alias = None
                     for relationship in block.get('Relationships', []):
                         if relationship['Type'] == 'ANSWER':
                             for id_ref in relationship['Ids']:
-                                # Find the query block
-                                query_block = self._find_block_by_id(textract_response, id_ref)
-                                if query_block and query_block['BlockType'] == 'QUERY':
-                                    query_alias = query_block.get('Query', {}).get('Alias')
+                                if id_ref in query_aliases:
+                                    query_alias = query_aliases[id_ref]
                                     break
+                            if query_alias:
+                                break
                     
-                    if query_alias:
+                    # If we couldn't find through relationships, try to match by position/content
+                    if not query_alias and text:
+                        # Use a simple heuristic - match to first available alias
+                        available_aliases = [alias for alias in query_aliases.values() if alias not in results]
+                        if available_aliases:
+                            query_alias = available_aliases[0]
+                    
+                    if query_alias and text:
+                        # Parse the value based on field type
+                        parsed_value = self._parse_field_value(text, query_alias)
+                        
                         results[query_alias] = {
-                            'value': block.get('Text', ''),
-                            'confidence': block.get('Confidence', 0) / 100.0,
-                            'source': 'textract_query'
+                            'value': parsed_value,
+                            'confidence': confidence,
+                            'source': 'textract_query',
+                            'raw_text': text
                         }
             
+            print(f"Extracted {len(results)} query results from Textract")
             return results
             
         except Exception as e:
             print(f"ERROR: Failed to extract query answers: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return {}
     
     def _find_block_by_id(self, response: Dict[str, Any], block_id: str) -> Optional[Dict[str, Any]]:
@@ -115,3 +142,37 @@ class EnhancedTextractService:
             if block.get('Id') == block_id:
                 return block
         return None
+    
+    def _parse_field_value(self, text: str, field_name: str) -> Any:
+        """Parse field value based on field type"""
+        if not text or text.lower() in ['null', 'none', 'n/a', '', 'not detected']:
+            return None
+        
+        import re
+        
+        # Monetary fields
+        if any(keyword in field_name.lower() for keyword in ['wages', 'tax', 'income', 'amount']):
+            # Remove currency symbols and parse as float
+            cleaned = re.sub(r'[^\d.]', '', text)
+            try:
+                return float(cleaned) if cleaned else None
+            except ValueError:
+                return text.strip()
+        
+        # SSN fields
+        if 'ssn' in field_name.lower():
+            ssn_match = re.search(r'(\d{3}-\d{2}-\d{4})', text)
+            return ssn_match.group(1) if ssn_match else text.strip()
+        
+        # EIN fields
+        if 'ein' in field_name.lower():
+            ein_match = re.search(r'(\d{2}-\d{7})', text)
+            return ein_match.group(1) if ein_match else text.strip()
+        
+        # Year fields
+        if 'year' in field_name.lower():
+            year_match = re.search(r'(20\d{2})', text)
+            return int(year_match.group(1)) if year_match else text.strip()
+        
+        # Default: return cleaned text
+        return text.strip()

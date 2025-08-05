@@ -237,6 +237,42 @@ def process_document_enhanced(event: Dict[str, Any], cors_headers: Dict[str, str
         overall_confidence = extraction_result.get('ExtractionMetadata', {}).get('overall_confidence', 0.0)
         processing_status = "Failed" if has_error or overall_confidence == 0.0 else "Completed"
         
+        # Extract the actual field data for frontend compatibility
+        extracted_data = extraction_result.get('ExtractedData', {})
+        
+        # Create W-2 compatible format
+        formatted_data = {}
+        if doc_type == "W-2":
+            # Map to expected W-2 field names
+            field_mapping = {
+                'EmployeeName': 'e Employee\'s first name and initial',
+                'EmployeeSSN': 'a Employee\'s social security number', 
+                'EmployerName': 'c Employer\'s name, address, and ZIP code',
+                'EmployerEIN': 'b Employer identification number (EIN)',
+                'Box1_Wages': '1 Wages, tips, other compensation',
+                'Box2_FederalTaxWithheld': '2 Federal income tax withheld',
+                'Box3_SocialSecurityWages': '3 Social security wages',
+                'Box4_SocialSecurityTax': '4 Social security tax withheld',
+                'Box5_MedicareWages': '5 Medicare wages and tips',
+                'Box6_MedicareTax': '6 Medicare tax withheld',
+                'TaxYear': 'Tax Year'
+            }
+            
+            for internal_name, display_name in field_mapping.items():
+                if internal_name in extracted_data:
+                    formatted_data[display_name] = str(extracted_data[internal_name])
+            
+            # Add additional fields if they exist
+            if 'Box15_State' in extracted_data:
+                formatted_data['15 State'] = str(extracted_data['Box15_State'])
+            if 'Box16_StateWages' in extracted_data:
+                formatted_data['16 State wages, tips, etc.'] = str(extracted_data['Box16_StateWages'])
+            if 'Box17_StateTaxWithheld' in extracted_data:
+                formatted_data['17 State income tax'] = str(extracted_data['Box17_StateTaxWithheld'])
+        else:
+            # For other document types, use extracted data as-is
+            formatted_data = extracted_data
+        
         result = {
             "DocumentID": filename,
             "DocumentType": extraction_result.get('DocumentType', doc_type),
@@ -244,7 +280,9 @@ def process_document_enhanced(event: Dict[str, Any], cors_headers: Dict[str, str
             "UploadDate": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "ProcessingStatus": processing_status,
             "ProcessingTime": processing_time,
-            "Data": extraction_result.get('ExtractedData', extraction_result),  # Fallback to full result if no ExtractedData
+            "Data": formatted_data,  # Use formatted data for frontend compatibility
+            "S3Location": "",  # Add for compatibility
+            "CreatedAt": time.strftime("%Y-%m-%dT%H:%M:%S.%f"),
             "ExtractionMetadata": extraction_result.get('ExtractionMetadata', {}),
             "QualityMetrics": extraction_result.get('QualityMetrics', {'overall_confidence': overall_confidence})
         }

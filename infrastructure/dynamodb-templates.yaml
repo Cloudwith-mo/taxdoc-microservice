@@ -1,0 +1,54 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'DynamoDB table for document templates with versioning'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: prod
+    AllowedValues: [dev, staging, prod]
+
+Resources:
+  DrDocTemplatesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'DrDocTemplates-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: TemplateID
+          AttributeType: S
+        - AttributeName: DocumentType
+          AttributeType: S
+        - AttributeName: Version
+          AttributeType: N
+      KeySchema:
+        - AttributeName: TemplateID
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: DocumentType-Version-Index
+          KeySchema:
+            - AttributeName: DocumentType
+              KeyType: HASH
+            - AttributeName: Version
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Service
+          Value: DrDoc-Templates
+
+Outputs:
+  TemplatesTableName:
+    Description: 'Name of the DynamoDB templates table'
+    Value: !Ref DrDocTemplatesTable
+    Export:
+      Name: !Sub '${AWS::StackName}-TemplatesTable'
+  
+  TemplatesTableArn:
+    Description: 'ARN of the DynamoDB templates table'
+    Value: !GetAtt DrDocTemplatesTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-TemplatesTableArn'
