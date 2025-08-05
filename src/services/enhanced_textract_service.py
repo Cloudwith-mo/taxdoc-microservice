@@ -176,3 +176,87 @@ class EnhancedTextractService:
         
         # Default: return cleaned text
         return text.strip()
+    
+    def analyze_document_forms(self, document_bytes: bytes) -> Dict[str, Any]:
+        """Analyze document for forms and tables"""
+        try:
+            response = self.client.analyze_document(
+                Document={'Bytes': document_bytes},
+                FeatureTypes=['FORMS', 'TABLES']
+            )
+            return response
+        except Exception as e:
+            print(f"Textract forms analysis failed: {e}")
+            return {'Blocks': []}
+    
+    def extract_form_fields(self, textract_response: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract form fields from Textract response"""
+        try:
+            results = {}
+            
+            if not isinstance(textract_response, dict):
+                return {}
+            
+            # Create block lookup
+            blocks_by_id = {block['Id']: block for block in textract_response.get('Blocks', [])}
+            
+            # Find KEY_VALUE_SET blocks
+            for block in textract_response.get('Blocks', []):
+                if block['BlockType'] == 'KEY_VALUE_SET' and block.get('EntityTypes') == ['KEY']:
+                    key_text = self._get_text_from_block(block, blocks_by_id)
+                    
+                    # Find corresponding VALUE
+                    value_text = None
+                    confidence = block.get('Confidence', 0) / 100.0
+                    
+                    for relationship in block.get('Relationships', []):
+                        if relationship['Type'] == 'VALUE':
+                            for value_id in relationship['Ids']:
+                                value_block = blocks_by_id.get(value_id)
+                                if value_block:
+                                    value_text = self._get_text_from_block(value_block, blocks_by_id)
+                                    break
+                    
+                    if key_text and value_text:
+                        # Clean up key name
+                        clean_key = self._clean_field_name(key_text)
+                        if clean_key:
+                            results[clean_key] = {
+                                'value': self._parse_field_value(value_text, clean_key),
+                                'confidence': confidence,
+                                'source': 'textract_form',
+                                'raw_text': value_text
+                            }
+            
+            return results
+            
+        except Exception as e:
+            print(f"ERROR: Failed to extract form fields: {str(e)}")
+            return {}
+    
+    def _get_text_from_block(self, block: Dict[str, Any], blocks_by_id: Dict[str, Any]) -> str:
+        """Get text content from a block and its children"""
+        text_parts = []
+        
+        for relationship in block.get('Relationships', []):
+            if relationship['Type'] == 'CHILD':
+                for child_id in relationship['Ids']:
+                    child_block = blocks_by_id.get(child_id)
+                    if child_block and child_block['BlockType'] == 'WORD':
+                        text_parts.append(child_block.get('Text', ''))
+        
+        return ' '.join(text_parts).strip()
+    
+    def _clean_field_name(self, field_name: str) -> str:
+        """Clean and normalize field names"""
+        import re
+        
+        # Remove common prefixes/suffixes
+        cleaned = re.sub(r'^(box|field|line)\s*\d*[:.\s]*', '', field_name.lower())
+        cleaned = re.sub(r'[:.\s]*$', '', cleaned)
+        
+        # Convert to snake_case
+        cleaned = re.sub(r'\s+', '_', cleaned)
+        cleaned = re.sub(r'[^a-z0-9_]', '', cleaned)
+        
+        return cleaned if len(cleaned) > 2 else None

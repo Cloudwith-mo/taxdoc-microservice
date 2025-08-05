@@ -14,7 +14,7 @@ patch_all()
 # Add the src directory to the path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-from services.three_layer_orchestrator import ThreeLayerOrchestrator
+from services.tax_orchestrator import TaxOrchestrator, UnsupportedTaxDocument
 from services.enhanced_classifier import EnhancedClassifier
 from services.storage_service import StorageService
 from services.monitoring_service import MonitoringService
@@ -182,8 +182,8 @@ def process_document_enhanced(event: Dict[str, Any], cors_headers: Dict[str, str
             })
             
             try:
-                orchestrator = ThreeLayerOrchestrator()
-                extraction_result = orchestrator.extract_document_fields(document_bytes, doc_type)
+                orchestrator = TaxOrchestrator()
+                extraction_result = orchestrator.extract_tax_document(document_bytes, doc_type)
                 
                 # Critical: Ensure we always have a dictionary
                 if not isinstance(extraction_result, dict):
@@ -201,6 +201,17 @@ def process_document_enhanced(event: Dict[str, Any], cors_headers: Dict[str, str
                         'QualityMetrics': {'overall_confidence': 0.0}
                     }
                     
+            except UnsupportedTaxDocument as e:
+                print(f"UNSUPPORTED TAX DOCUMENT: {str(e)}")
+                return {
+                    'statusCode': 400,
+                    'headers': cors_headers,
+                    'body': json.dumps({
+                        'error': 'Unsupported Document (Tax Edition)',
+                        'message': 'Only federal tax forms supported. Email sales@taxflowsai.com',
+                        'supported_forms': ['1040', 'W-2', '1099-NEC', '1099-MISC', '1099-DIV', '1099-INT', 'K-1', '941']
+                    })
+                }
             except Exception as e:
                 print(f"ERROR: Orchestrator exception: {str(e)}")
                 import traceback
@@ -408,17 +419,18 @@ def get_processing_result(doc_id: str, cors_headers: Dict[str, str]) -> Dict[str
         }
 
 def get_supported_types(cors_headers: Dict[str, str]) -> Dict[str, Any]:
-    """Return list of supported document types"""
+    """Return list of supported tax document types only"""
     
-    supported_types = [
-        'W-2', '1099-NEC', '1099-INT', '1099-DIV', '1099-MISC',
-        '1098-E', '1098', '1095-A', '1040', 'Bank Statement', 'Receipt'
-    ]
+    from config.tax_document_config import SUPPORTED_TAX_FORMS
     
     return {
         'statusCode': 200,
         'headers': cors_headers,
-        'body': json.dumps({'supported_types': supported_types})
+        'body': json.dumps({
+            'supported_types': list(SUPPORTED_TAX_FORMS),
+            'message': 'Tax Edition - Federal tax forms only',
+            'contact': 'sales@taxflowsai.com'
+        })
     }
 
 def generate_excel_download(doc_id: str, cors_headers: Dict[str, str]) -> Dict[str, Any]:

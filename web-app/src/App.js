@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
-import DrDocUploader from './components/DrDocUploader';
-import AnyDocResults from './components/AnyDocResults';
+import TaxFormUploader from './components/TaxFormUploader';
+import TaxFormResults from './components/TaxFormResults';
 import TemplateDesigner from './components/TemplateDesigner';
 import MarketingFeatures from './components/MarketingFeatures';
 import ChatbotQA from './components/ChatbotQA';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
 import './styles/colors.css';
+import './styles/tax-theme.css';
+import './styles/tax-components.css';
 import './App.css';
 
 
@@ -20,14 +22,17 @@ function App() {
   return (
     <div className="app">
       <div className="app-header">
-        <h1>📄 Dr.Doc - Universal Document AI</h1>
-        <p>Process any document type with advanced AI extraction</p>
+        <h1>🏛️ TaxDoc - Federal Tax Form Processor</h1>
+        <p>Turn IRS & SSA forms into clean, accurate data in seconds</p>
+        <div className="tax-badge">
+          <span>Tax Edition</span> • Federal Forms Only • CPA Ready
+        </div>
       </div>
       
-      <DrDocUploader onResults={handleResults} />
+      <TaxFormUploader onResults={handleResults} />
       
       {results.length > 0 && (
-        <AnyDocResults results={results} />
+        <TaxFormResults results={results[0]} />
       )}
       
       {results.length > 0 && (

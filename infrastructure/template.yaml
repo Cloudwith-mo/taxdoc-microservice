@@ -124,7 +124,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub 'DrDoc-ProcessDocument-${Environment}'
-      CodeUri: ../src/
+      CodeUri: s3://drdoc-tax-deployments-prod/tax-edition-fixed.zip
       Handler: handlers.process_document.lambda_handler
       Policies:
         - S3ReadPolicy:
@@ -167,7 +167,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub 'DrDoc-S3Ingest-${Environment}'
-      CodeUri: ../src/
+      CodeUri: s3://drdoc-tax-deployments-prod/tax-edition-fixed.zip
       Handler: handlers.s3_ingest.lambda_handler
       Environment:
         Variables:
@@ -181,7 +181,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub 'DrDoc-SQSProcessor-${Environment}'
-      CodeUri: ../src/
+      CodeUri: s3://drdoc-tax-deployments-prod/tax-edition-fixed.zip
       Handler: handlers.sqs_processor.lambda_handler
       Timeout: 900
       Tracing: Active
@@ -219,7 +219,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub 'DrDoc-TextractResult-${Environment}'
-      CodeUri: ../src/
+      CodeUri: s3://drdoc-tax-deployments-prod/tax-edition-fixed.zip
       Handler: handlers.textract_result_handler.lambda_handler
       Timeout: 600
       Tracing: Active
@@ -314,7 +314,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub 'DrDoc-EnhancedApi-${Environment}'
-      CodeUri: ../src/
+      CodeUri: s3://drdoc-tax-deployments-prod/tax-edition-fixed.zip
       Handler: handlers.enhanced_api_handler.lambda_handler
       Timeout: 300
       Tracing: Active

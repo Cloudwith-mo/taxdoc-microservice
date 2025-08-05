@@ -80,3 +80,80 @@ Example: {{"field1": "value1", "field2": null, "field3": "value3"}}
             print(f"Failed to parse LLM JSON response: {e}")
         
         return {}
+    
+    def extract_fields_json_mode(self, document_text: str, prompt: str, schema_fields: list) -> Dict[str, Any]:
+        """Extract fields using Claude with strict JSON mode"""
+        
+        enhanced_prompt = f"""{prompt}
+        
+Document text:
+{document_text[:4000]}
+
+IMPORTANT: Return ONLY valid JSON. No explanations or additional text.
+Schema: {{{', '.join([f'"{field}": null' for field in schema_fields])}}}
+"""
+        
+        payload = {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 1000,
+            "temperature": 0.0,  # More deterministic
+            "messages": [{"role": "user", "content": enhanced_prompt}]
+        }
+        
+        try:
+            response = self.client.invoke_model(
+                modelId=self.model_id,
+                body=json.dumps(payload)
+            )
+            
+            response_body = json.loads(response['body'].read())
+            llm_output = response_body['content'][0]['text']
+            
+            return self._parse_strict_json_response(llm_output)
+            
+        except Exception as e:
+            print(f"Claude JSON mode processing failed: {e}")
+            return {}
+    
+    def _parse_strict_json_response(self, llm_output: str) -> Dict[str, Any]:
+        """Parse strict JSON response from Claude"""
+        
+        try:
+            # Clean the response - remove any markdown or extra text
+            cleaned_output = llm_output.strip()
+            
+            # Remove markdown code blocks if present
+            if cleaned_output.startswith('```json'):
+                cleaned_output = cleaned_output[7:]
+            if cleaned_output.startswith('```'):
+                cleaned_output = cleaned_output[3:]
+            if cleaned_output.endswith('```'):
+                cleaned_output = cleaned_output[:-3]
+            
+            cleaned_output = cleaned_output.strip()
+            
+            # Find JSON boundaries
+            json_start = cleaned_output.find('{')
+            json_end = cleaned_output.rfind('}') + 1
+            
+            if json_start >= 0 and json_end > json_start:
+                json_str = cleaned_output[json_start:json_end]
+                parsed_data = json.loads(json_str)
+                
+                # Format with metadata and higher confidence for JSON mode
+                results = {}
+                for field, value in parsed_data.items():
+                    if value is not None and str(value).strip() != "":
+                        results[field] = {
+                            'value': value,
+                            'confidence': 0.88,  # Higher confidence for JSON mode
+                            'source': 'claude_json'
+                        }
+                
+                return results
+            
+        except json.JSONDecodeError as e:
+            print(f"Failed to parse strict JSON response: {e}")
+            print(f"Raw output: {llm_output[:500]}")
+        
+        return {}
