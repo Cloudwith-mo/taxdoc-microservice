@@ -3,6 +3,8 @@ import DrDocUploader from './components/DrDocUploader';
 import AnyDocResults from './components/AnyDocResults';
 import TemplateDesigner from './components/TemplateDesigner';
 import MarketingFeatures from './components/MarketingFeatures';
+import ChatbotQA from './components/ChatbotQA';
+import AnalyticsDashboard from './components/AnalyticsDashboard';
 import './styles/colors.css';
 import './App.css';
 
@@ -27,6 +29,10 @@ function App() {
       {results.length > 0 && (
         <AnyDocResults results={results} />
       )}
+      
+      <ChatbotQA documentData={results[0]} />
+      
+      <AnalyticsDashboard />
       
       <TemplateDesigner 
         documentUrl=""
