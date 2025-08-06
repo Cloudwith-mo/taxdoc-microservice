@@ -1,0 +1,153 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'TaxDoc V1 MVP - Simple tax document extraction for W-2 and 1099 forms'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: 'mvp'
+    Description: Environment name
+  ClaudeApiKey:
+    Type: String
+    NoEcho: true
+    Description: Anthropic Claude API key for LLM extraction
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 512
+    Runtime: python3.9
+    Environment:
+      Variables:
+        CLAUDE_API_KEY: !Ref ClaudeApiKey
+
+Resources:
+  # S3 Bucket for temporary file storage
+  TaxDocBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'taxdoc-uploads-${Environment}-${AWS::AccountId}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteTempFiles
+            Status: Enabled
+            ExpirationInDays: 1
+
+  # Lambda function for tax document processing
+  TaxProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'TaxDoc-Processor-${Environment}'
+      CodeUri: ../src/
+      Handler: handlers.tax_mvp_handler.lambda_handler
+      Policies:
+        - TextractPolicy: {}
+        - S3ReadPolicy:
+            BucketName: !Ref TaxDocBucket
+      Events:
+        ProcessDocument:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TaxDocApi
+            Path: /process-document
+            Method: post
+        OptionsRequest:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TaxDocApi
+            Path: /process-document
+            Method: options
+
+  # API Gateway
+  TaxDocApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub 'TaxDoc-API-${Environment}'
+      StageName: !Ref Environment
+      Cors:
+        AllowMethods: "'POST, OPTIONS'"
+        AllowHeaders: "'Content-Type, X-Amz-Date, Authorization, X-Api-Key, X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+      DefinitionBody:
+        swagger: '2.0'
+        info:
+          title: TaxDoc MVP API
+          version: '1.0'
+        paths:
+          /process-document:
+            post:
+              produces:
+                - application/json
+              responses:
+                '200':
+                  description: Success
+                  headers:
+                    Access-Control-Allow-Origin:
+                      type: string
+              x-amazon-apigateway-integration:
+                uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${TaxProcessorFunction.Arn}/invocations'
+                httpMethod: POST
+                type: aws_proxy
+            options:
+              consumes:
+                - application/json
+              produces:
+                - application/json
+              responses:
+                '200':
+                  description: Success
+                  headers:
+                    Access-Control-Allow-Origin:
+                      type: string
+                    Access-Control-Allow-Headers:
+                      type: string
+                    Access-Control-Allow-Methods:
+                      type: string
+              x-amazon-apigateway-integration:
+                uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${TaxProcessorFunction.Arn}/invocations'
+                httpMethod: POST
+                type: aws_proxy
+
+  # Lambda permission for API Gateway
+  ApiGatewayInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref TaxProcessorFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${TaxDocApi}/*/*'
+
+  # CloudWatch Log Group
+  TaxProcessorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/TaxDoc-Processor-${Environment}'
+      RetentionInDays: 7
+
+Outputs:
+  ApiEndpoint:
+    Description: 'API Gateway endpoint URL'
+    Value: !Sub 'https://${TaxDocApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiEndpoint'
+  
+  BucketName:
+    Description: 'S3 bucket for uploads'
+    Value: !Ref TaxDocBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-BucketName'
+  
+  FunctionName:
+    Description: 'Lambda function name'
+    Value: !Ref TaxProcessorFunction
+    Export:
+      Name: !Sub '${AWS::StackName}-FunctionName'

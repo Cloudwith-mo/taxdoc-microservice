@@ -1,0 +1,24 @@
+# TaxDoc V1 MVP Requirements
+# Minimal dependencies for tax document extraction
+
+# AWS SDK
+boto3==1.40.2
+botocore==1.40.2
+
+# HTTP requests for Claude API
+requests==2.32.4
+
+# JSON handling (built-in, but explicit for clarity)
+# json - built-in
+
+# Regular expressions (built-in)
+# re - built-in
+
+# Base64 encoding (built-in)
+# base64 - built-in
+
+# Logging (built-in)
+# logging - built-in
+
+# Type hints (built-in in Python 3.9+)
+# typing - built-in

@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaxDoc - Tax Document Extraction</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+        
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .content {
+            padding: 40px;
+        }
+        
+        .upload-area {
+            border: 3px dashed #ddd;
+            border-radius: 8px;
+            padding: 60px 20px;
+            text-align: center;
+            margin-bottom: 30px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .upload-area:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+        
+        .upload-area.dragover {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+        
+        .upload-icon {
+            font-size: 3em;
+            color: #ddd;
+            margin-bottom: 20px;
+        }
+        
+        .upload-text {
+            font-size: 1.2em;
+            color: #666;
+            margin-bottom: 15px;
+        }
+        
+        .upload-hint {
+            color: #999;
+            font-size: 0.9em;
+        }
+        
+        #fileInput {
+            display: none;
+        }
+        
+        .process-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.1em;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+            display: none;
+            margin: 20px auto;
+        }
+        
+        .process-btn:hover {
+            background: #5a6fd8;
+        }
+        
+        .process-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .results {
+            display: none;
+            margin-top: 30px;
+        }
+        
+        .results-header {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px 8px 0 0;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .results-body {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+        }
+        
+        .field-row {
+            display: flex;
+            padding: 15px 20px;
+            border-bottom: 1px solid #f1f3f4;
+        }
+        
+        .field-row:last-child {
+            border-bottom: none;
+        }
+        
+        .field-label {
+            font-weight: 600;
+            color: #495057;
+            width: 200px;
+            flex-shrink: 0;
+        }
+        
+        .field-value {
+            color: #212529;
+            flex: 1;
+        }
+        
+        .field-value.null {
+            color: #6c757d;
+            font-style: italic;
+        }
+        
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .success-badge {
+            background: #d4edda;
+            color: #155724;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            display: inline-block;
+        }
+        
+        .supported-docs {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 30px;
+        }
+        
+        .supported-docs h3 {
+            color: #495057;
+            margin-bottom: 15px;
+        }
+        
+        .doc-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .doc-tag {
+            background: #667eea;
+            color: white;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 0.9em;
+        }
+        
+        .reset-btn {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        
+        .reset-btn:hover {
+            background: #5a6268;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🛡️ TaxDoc</h1>
+            <p>Extract data from your tax documents instantly</p>
+        </div>
+        
+        <div class="content">
+            <div class="upload-section">
+                <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+                    <div class="upload-icon">📄</div>
+                    <div class="upload-text">Click to upload or drag & drop your tax document</div>
+                    <div class="upload-hint">Supports PDF and image files (W-2, 1099 forms)</div>
+                </div>
+                <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png" />
+                <button class="process-btn" id="processBtn">Process Document</button>
+            </div>
+            
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Processing your tax document...</p>
+            </div>
+            
+            <div class="results" id="results">
+                <div class="results-header">
+                    <h3>Extraction Results</h3>
+                    <span class="success-badge">✓ Processing Complete</span>
+                </div>
+                <div class="results-body" id="resultsBody">
+                    <!-- Results will be populated here -->
+                </div>
+                <button class="reset-btn" onclick="resetForm()">Process Another Document</button>
+            </div>
+            
+            <div class="error" id="error" style="display: none;">
+                <!-- Error messages will appear here -->
+            </div>
+            
+            <div class="supported-docs">
+                <h3>Supported Tax Documents</h3>
+                <div class="doc-list">
+                    <span class="doc-tag">W-2</span>
+                    <span class="doc-tag">1099-NEC</span>
+                    <span class="doc-tag">1099-MISC</span>
+                    <span class="doc-tag">1099-DIV</span>
+                    <span class="doc-tag">1099-INT</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedFile = null;
+        
+        // API endpoint - update this with your actual API Gateway URL
+        const API_ENDPOINT = 'https://your-api-gateway-url.amazonaws.com/prod/process-document';
+        
+        // File input handling
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            if (e.target.files.length > 0) {
+                selectedFile = e.target.files[0];
+                updateUploadArea();
+            }
+        });
+        
+        // Drag and drop handling
+        const uploadArea = document.querySelector('.upload-area');
+        
+        uploadArea.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+        
+        uploadArea.addEventListener('dragleave', function(e) {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+        });
+        
+        uploadArea.addEventListener('drop', function(e) {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            
+            if (e.dataTransfer.files.length > 0) {
+                selectedFile = e.dataTransfer.files[0];
+                updateUploadArea();
+            }
+        });
+        
+        function updateUploadArea() {
+            if (selectedFile) {
+                document.querySelector('.upload-text').textContent = `Selected: ${selectedFile.name}`;
+                document.querySelector('.upload-hint').textContent = `File size: ${(selectedFile.size / 1024 / 1024).toFixed(2)} MB`;
+                document.getElementById('processBtn').style.display = 'block';
+            }
+        }
+        
+        // Process document
+        document.getElementById('processBtn').addEventListener('click', processDocument);
+        
+        async function processDocument() {
+            if (!selectedFile) return;
+            
+            // Show loading
+            document.querySelector('.upload-section').style.display = 'none';
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('error').style.display = 'none';
+            document.getElementById('results').style.display = 'none';
+            
+            try {
+                // Convert file to base64
+                const base64Content = await fileToBase64(selectedFile);
+                
+                // Call API
+                const response = await fetch(API_ENDPOINT, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        filename: selectedFile.name,
+                        file_content: base64Content
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    displayResults(result);
+                } else {
+                    showError(result.error || 'Processing failed');
+                }
+                
+            } catch (error) {
+                console.error('Error:', error);
+                showError('Network error. Please try again.');
+            }
+            
+            // Hide loading
+            document.getElementById('loading').style.display = 'none';
+        }
+        
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => {
+                    // Remove data:image/jpeg;base64, prefix
+                    const base64 = reader.result.split(',')[1];
+                    resolve(base64);
+                };
+                reader.onerror = error => reject(error);
+            });
+        }
+        
+        function displayResults(result) {
+            const resultsBody = document.getElementById('resultsBody');
+            
+            // Clear previous results
+            resultsBody.innerHTML = '';
+            
+            // Add document type info
+            const docTypeRow = document.createElement('div');
+            docTypeRow.className = 'field-row';
+            docTypeRow.innerHTML = `
+                <div class="field-label">Document Type:</div>
+                <div class="field-value"><strong>${result.document_type}</strong></div>
+            `;
+            resultsBody.appendChild(docTypeRow);
+            
+            // Add extracted fields
+            const extractedData = result.extracted_data || {};
+            
+            for (const [key, value] of Object.entries(extractedData)) {
+                if (key === 'extraction_method') continue; // Skip meta fields
+                
+                const row = document.createElement('div');
+                row.className = 'field-row';
+                
+                const label = formatFieldLabel(key);
+                const displayValue = formatFieldValue(value);
+                
+                row.innerHTML = `
+                    <div class="field-label">${label}:</div>
+                    <div class="field-value ${value === null ? 'null' : ''}">${displayValue}</div>
+                `;
+                
+                resultsBody.appendChild(row);
+            }
+            
+            document.getElementById('results').style.display = 'block';
+        }
+        
+        function formatFieldLabel(key) {
+            const labels = {
+                'employee_ssn': 'Employee SSN',
+                'employer_ein': 'Employer EIN',
+                'employee_name': 'Employee Name',
+                'employer_name': 'Employer Name',
+                'wages_income': 'Wages & Income',
+                'federal_withheld': 'Federal Tax Withheld',
+                'social_security_wages': 'Social Security Wages',
+                'social_security_tax': 'Social Security Tax',
+                'medicare_wages': 'Medicare Wages',
+                'medicare_tax': 'Medicare Tax',
+                'payer_tin': 'Payer TIN',
+                'recipient_tin': 'Recipient TIN',
+                'payer_name': 'Payer Name',
+                'recipient_name': 'Recipient Name',
+                'nonemployee_compensation': 'Nonemployee Compensation',
+                'interest_income': 'Interest Income',
+                'ordinary_dividends': 'Ordinary Dividends',
+                'qualified_dividends': 'Qualified Dividends',
+                'rents': 'Rents',
+                'royalties': 'Royalties',
+                'other_income': 'Other Income'
+            };
+            
+            return labels[key] || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        }
+        
+        function formatFieldValue(value) {
+            if (value === null || value === undefined) {
+                return 'Not found';
+            }
+            
+            if (typeof value === 'number') {
+                return `$${value.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            }
+            
+            return value.toString();
+        }
+        
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.innerHTML = `<strong>Error:</strong> ${message}`;
+            errorDiv.style.display = 'block';
+            document.querySelector('.upload-section').style.display = 'block';
+        }
+        
+        function resetForm() {
+            selectedFile = null;
+            document.getElementById('fileInput').value = '';
+            document.querySelector('.upload-text').textContent = 'Click to upload or drag & drop your tax document';
+            document.querySelector('.upload-hint').textContent = 'Supports PDF and image files (W-2, 1099 forms)';
+            document.getElementById('processBtn').style.display = 'none';
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('error').style.display = 'none';
+            document.querySelector('.upload-section').style.display = 'block';
+        }
+    </script>
+</body>
+</html>
