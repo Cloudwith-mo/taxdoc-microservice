@@ -48,7 +48,7 @@ Resources:
     Properties:
       FunctionName: !Sub 'TaxDoc-Processor-${Environment}'
       CodeUri: ../src/
-      Handler: handlers.tax_mvp_handler.lambda_handler
+      Handler: handlers/tax_mvp_handler.lambda_handler
       Policies:
         - TextractPolicy: {}
         - S3ReadPolicy:
@@ -113,9 +113,16 @@ Resources:
                     Access-Control-Allow-Methods:
                       type: string
               x-amazon-apigateway-integration:
-                uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${TaxProcessorFunction.Arn}/invocations'
-                httpMethod: POST
-                type: aws_proxy
+                type: mock
+                requestTemplates:
+                  application/json: '{"statusCode": 200}'
+                responses:
+                  default:
+                    statusCode: 200
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+                      method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+                      method.response.header.Access-Control-Allow-Origin: "'*'"
 
   # Lambda permission for API Gateway
   ApiGatewayInvokePermission:

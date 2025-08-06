@@ -22,8 +22,8 @@ import sys
 sys.path.append('/opt/python')
 sys.path.append('/var/task')
 
-from src.services.tax_classifier import TaxClassifier
-from src.services.tax_extractor import TaxExtractor
+from services.tax_classifier import TaxClassifier
+from services.tax_extractor import TaxExtractor
 
 def lambda_handler(event, context):
     """
@@ -31,6 +31,18 @@ def lambda_handler(event, context):
     Expects: POST /process-document with JSON body containing filename and base64 content
     """
     try:
+        # Handle OPTIONS request for CORS
+        if event.get('httpMethod') == 'OPTIONS':
+            return {
+                'statusCode': 200,
+                'headers': {
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+                    'Access-Control-Allow-Headers': 'Content-Type, X-Amz-Date, Authorization, X-Api-Key, X-Amz-Security-Token'
+                },
+                'body': ''
+            }
+        
         # Parse request
         if 'body' in event:
             body = json.loads(event['body']) if isinstance(event['body'], str) else event['body']
@@ -139,7 +151,7 @@ def handle_options(event, context):
         'headers': {
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Methods': 'POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type'
+            'Access-Control-Allow-Headers': 'Content-Type, X-Amz-Date, Authorization, X-Api-Key, X-Amz-Security-Token'
         },
         'body': ''
     }

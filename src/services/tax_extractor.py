@@ -21,16 +21,36 @@ class TaxExtractor:
         # Field definitions for each form type
         self.form_fields = {
             "W-2": {
-                "employee_ssn": "Employee's Social Security Number",
-                "employer_ein": "Employer's EIN",
-                "employee_name": "Employee's Name",
-                "employer_name": "Employer's Name",
+                "employee_ssn": "Employee's Social Security Number (Box a)",
+                "employer_ein": "Employer identification number EIN (Box b)",
+                "control_number": "Control number (Box d)",
+                "employee_first_name": "Employee's first name and initial (Box e)",
+                "employee_last_name": "Employee's last name (Box f)",
+                "employee_address": "Employee's address and ZIP code (Box f)",
+                "employer_name": "Employer's name, address, and ZIP code (Box c)",
+                "employer_address": "Employer's address from Box c",
+                "employer_state_id": "Employer's state ID number",
                 "wages_income": "Wages, tips, other compensation (Box 1)",
                 "federal_withheld": "Federal income tax withheld (Box 2)",
                 "social_security_wages": "Social Security wages (Box 3)",
                 "social_security_tax": "Social Security tax withheld (Box 4)",
                 "medicare_wages": "Medicare wages and tips (Box 5)",
-                "medicare_tax": "Medicare tax withheld (Box 6)"
+                "medicare_tax": "Medicare tax withheld (Box 6)",
+                "social_security_tips": "Social Security tips (Box 7)",
+                "allocated_tips": "Allocated tips (Box 8)",
+                "dependent_care_benefits": "Dependent care benefits (Box 10)",
+                "nonqualified_plans": "Nonqualified plans (Box 11)",
+                "box12_codes": "Box 12 codes and amounts (multiple entries)",
+                "statutory_employee": "Statutory employee checkbox (Box 13)",
+                "retirement_plan": "Retirement plan checkbox (Box 13)",
+                "third_party_sick_pay": "Third-party sick pay checkbox (Box 13)",
+                "other_deductions": "Other deductions or info (Box 14)",
+                "state": "State (Box 15)",
+                "state_wages": "State wages, tips, etc. (Box 16)",
+                "state_income_tax": "State income tax (Box 17)",
+                "local_wages": "Local wages, tips, etc. (Box 18)",
+                "local_income_tax": "Local income tax (Box 19)",
+                "locality_name": "Locality name (Box 20)"
             },
             "1099-NEC": {
                 "payer_tin": "Payer's TIN",
@@ -109,17 +129,32 @@ class TaxExtractor:
         for field_key, field_desc in fields.items():
             field_descriptions.append(f"- {field_key}: {field_desc}")
         
-        prompt = f"""You are a tax document data extraction assistant. Extract the following fields from this {doc_type} tax form:
+        prompt = f"""You are an expert tax document data extraction assistant. Extract ALL available fields from this {doc_type} tax form with high accuracy.
 
+Extract these fields:
 {chr(10).join(field_descriptions)}
 
 Document text:
 {text_content}
 
-Return ONLY a valid JSON object with the extracted values. Use null for missing values. For currency amounts, return numeric values without dollar signs or commas. For SSN/EIN, keep the format with dashes.
+IMPORTANT INSTRUCTIONS:
+1. Return ONLY a valid JSON object with ALL extracted values
+2. Use null for missing/empty values
+3. For currency amounts: return numeric values without $ or commas (e.g., 50000.00)
+4. For SSN/EIN: keep dashes (e.g., "123-45-6789")
+5. For Box 12 codes: extract as array of objects with "code" and "amount" fields
+6. For addresses: include full address text
+7. For checkboxes: return true/false based on if checked
+8. Extract ALL visible text content, don't skip any fields
 
-Example format:
-{{"field_name": "value", "numeric_field": 1234.56, "missing_field": null}}"""
+Example JSON format:
+{{
+  "employee_ssn": "123-45-6789",
+  "wages_income": 50000.00,
+  "box12_codes": [{{"code": "D", "amount": 1500.00}}],
+  "state": "PA",
+  "missing_field": null
+}}"""
 
         try:
             headers = {
@@ -153,12 +188,13 @@ Example format:
                     logger.error("No JSON found in Claude response")
                     return self._fallback_extraction(text_content, doc_type)
             else:
-                logger.error(f"Claude API error: {response.status_code}")
+                logger.error(f"Claude API error: {response.status_code} - {response.text}")
                 return self._fallback_extraction(text_content, doc_type)
                 
         except Exception as e:
             logger.error(f"Claude extraction failed: {str(e)}")
-            return self._fallback_extraction(text_content, doc_type)
+            # Don't use fallback - let the error bubble up
+            raise Exception(f"Claude extraction failed: {str(e)}")
     
     def _fallback_extraction(self, text_content: str, doc_type: str) -> Dict[str, Any]:
         """Simple regex-based fallback extraction"""
@@ -239,8 +275,11 @@ Example format:
                 processed[key] = None
             elif key in ["wages_income", "federal_withheld", "social_security_wages", 
                         "social_security_tax", "medicare_wages", "medicare_tax",
-                        "nonemployee_compensation", "interest_income", "ordinary_dividends",
-                        "qualified_dividends", "rents", "royalties", "other_income"]:
+                        "social_security_tips", "allocated_tips", "dependent_care_benefits",
+                        "nonqualified_plans", "state_wages", "state_income_tax",
+                        "local_wages", "local_income_tax", "nonemployee_compensation", 
+                        "interest_income", "ordinary_dividends", "qualified_dividends", 
+                        "rents", "royalties", "other_income"]:
                 # Process currency fields
                 processed[key] = self._clean_currency(value)
             elif key in ["employee_ssn", "recipient_tin"]:
@@ -249,6 +288,12 @@ Example format:
             elif key in ["employer_ein", "payer_tin"]:
                 # Process EIN fields
                 processed[key] = self._clean_ein(value)
+            elif key == "box12_codes":
+                # Process Box 12 codes array
+                processed[key] = self._process_box12_codes(value)
+            elif key in ["statutory_employee", "retirement_plan", "third_party_sick_pay"]:
+                # Process checkbox fields
+                processed[key] = self._process_checkbox(value)
             else:
                 # Keep other fields as-is
                 processed[key] = value
@@ -295,3 +340,33 @@ Example format:
             return f"{digits[:2]}-{digits[2:]}"
         
         return None
+    
+    def _process_box12_codes(self, value) -> List[Dict[str, Any]]:
+        """Process Box 12 codes array"""
+        if not value:
+            return []
+        
+        if isinstance(value, list):
+            return value
+        
+        # If it's a string, try to parse it
+        if isinstance(value, str):
+            try:
+                return json.loads(value)
+            except:
+                return []
+        
+        return []
+    
+    def _process_checkbox(self, value) -> bool:
+        """Process checkbox field"""
+        if value is None:
+            return False
+        
+        if isinstance(value, bool):
+            return value
+        
+        if isinstance(value, str):
+            return value.lower() in ['true', 'yes', 'checked', 'x']
+        
+        return False

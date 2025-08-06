@@ -292,8 +292,8 @@
     <script>
         let selectedFile = null;
         
-        // API endpoint - update this with your actual API Gateway URL
-        const API_ENDPOINT = 'https://your-api-gateway-url.amazonaws.com/prod/process-document';
+        // API endpoint - deployed TaxDoc V1 MVP
+        const API_ENDPOINT = 'https://fzgyzpo535.execute-api.us-east-1.amazonaws.com/mvp/process-document';
         
         // File input handling
         document.getElementById('fileInput').addEventListener('change', function(e) {
@@ -432,16 +432,36 @@
         
         function formatFieldLabel(key) {
             const labels = {
-                'employee_ssn': 'Employee SSN',
-                'employer_ein': 'Employer EIN',
-                'employee_name': 'Employee Name',
-                'employer_name': 'Employer Name',
-                'wages_income': 'Wages & Income',
-                'federal_withheld': 'Federal Tax Withheld',
-                'social_security_wages': 'Social Security Wages',
-                'social_security_tax': 'Social Security Tax',
-                'medicare_wages': 'Medicare Wages',
-                'medicare_tax': 'Medicare Tax',
+                'employee_ssn': 'Employee SSN (Box a)',
+                'employer_ein': 'Employer EIN (Box b)',
+                'control_number': 'Control Number (Box d)',
+                'employee_first_name': 'Employee First Name (Box e)',
+                'employee_last_name': 'Employee Last Name',
+                'employee_address': 'Employee Address (Box f)',
+                'employer_name': 'Employer Name (Box c)',
+                'employer_address': 'Employer Address',
+                'employer_state_id': 'Employer State ID',
+                'wages_income': 'Wages & Income (Box 1)',
+                'federal_withheld': 'Federal Tax Withheld (Box 2)',
+                'social_security_wages': 'Social Security Wages (Box 3)',
+                'social_security_tax': 'Social Security Tax (Box 4)',
+                'medicare_wages': 'Medicare Wages (Box 5)',
+                'medicare_tax': 'Medicare Tax (Box 6)',
+                'social_security_tips': 'Social Security Tips (Box 7)',
+                'allocated_tips': 'Allocated Tips (Box 8)',
+                'dependent_care_benefits': 'Dependent Care Benefits (Box 10)',
+                'nonqualified_plans': 'Nonqualified Plans (Box 11)',
+                'box12_codes': 'Box 12 Codes & Amounts',
+                'statutory_employee': 'Statutory Employee',
+                'retirement_plan': 'Retirement Plan',
+                'third_party_sick_pay': 'Third-party Sick Pay',
+                'other_deductions': 'Other Deductions (Box 14)',
+                'state': 'State (Box 15)',
+                'state_wages': 'State Wages (Box 16)',
+                'state_income_tax': 'State Income Tax (Box 17)',
+                'local_wages': 'Local Wages (Box 18)',
+                'local_income_tax': 'Local Income Tax (Box 19)',
+                'locality_name': 'Locality Name (Box 20)',
                 'payer_tin': 'Payer TIN',
                 'recipient_tin': 'Recipient TIN',
                 'payer_name': 'Payer Name',
@@ -465,6 +485,21 @@
             
             if (typeof value === 'number') {
                 return `$${value.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            }
+            
+            if (typeof value === 'boolean') {
+                return value ? 'Yes' : 'No';
+            }
+            
+            if (Array.isArray(value)) {
+                // Handle Box 12 codes array
+                if (value.length === 0) return 'None';
+                return value.map(item => {
+                    if (item.code && item.amount) {
+                        return `Code ${item.code}: $${parseFloat(item.amount).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                    }
+                    return JSON.stringify(item);
+                }).join(', ');
             }
             
             return value.toString();

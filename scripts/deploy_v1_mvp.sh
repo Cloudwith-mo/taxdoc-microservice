@@ -20,12 +20,12 @@ NC='\033[0m' # No Color
 echo -e "${GREEN}🚀 TaxDoc V1 MVP Deployment${NC}"
 echo "=================================="
 
-# Check if Claude API key is provided
+# Check if Claude API key is provided (optional for testing)
 if [ -z "$CLAUDE_API_KEY" ]; then
-    echo -e "${RED}Error: CLAUDE_API_KEY environment variable is required${NC}"
-    echo "Please set your Claude API key:"
-    echo "export CLAUDE_API_KEY='your-api-key-here'"
-    exit 1
+    echo -e "${YELLOW}Warning: No CLAUDE_API_KEY provided${NC}"
+    echo "System will use regex fallback extraction (lower accuracy)"
+    echo "To use Claude LLM: export CLAUDE_API_KEY='your-api-key-here'"
+    CLAUDE_API_KEY="fallback-mode"
 fi
 
 # Check if AWS CLI is configured
@@ -48,16 +48,17 @@ cd src
 zip -r ../tax-mvp-deployment.zip . -x "*.pyc" "*/__pycache__/*" "*/.*"
 cd ..
 
-# Deploy CloudFormation stack
-echo -e "${YELLOW}☁️ Deploying CloudFormation stack...${NC}"
-aws cloudformation deploy \
+# Deploy using SAM CLI
+echo -e "${YELLOW}☁️ Deploying with SAM CLI...${NC}"
+sam deploy \
     --template-file $TEMPLATE_FILE \
     --stack-name $STACK_NAME \
     --parameter-overrides \
         Environment=$ENVIRONMENT \
         ClaudeApiKey=$CLAUDE_API_KEY \
     --capabilities CAPABILITY_IAM \
-    --region $REGION
+    --region $REGION \
+    --resolve-s3
 
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}✅ Stack deployed successfully!${NC}"
