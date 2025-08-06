@@ -1,434 +1,90 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: TaxDoc Document Ingestion Microservice
+Description: TaxDoc MVP - Simplified tax form processing
 Parameters:
   Environment:
     Type: String
-    Default: dev
-    AllowedValues:
-    - dev
-    - staging
-    - prod
+    Default: mvp
+    Description: Environment name
 Globals:
   Function:
-    Timeout: 300
+    Timeout: 30
     Runtime: python3.9
     Environment:
       Variables:
-        UPLOAD_BUCKET:
-          Ref: DocumentUploadBucket
-        RESULTS_TABLE:
-          Ref: DocumentsTable
-        TEXTRACT_SNS_TOPIC:
-          Ref: TextractCompleteTopic
-        TEXTRACT_ROLE_ARN:
-          Fn::GetAtt:
-          - TextractSNSRole
-          - Arn
-        COMPREHEND_ENDPOINT: ''
-        COMPREHEND_CONFIDENCE_THRESHOLD: '0.8'
-        BEDROCK_MODEL_ID: us.anthropic.claude-sonnet-4-20250514-v1:0
-        ENABLE_BEDROCK_SUMMARY: 'true'
-        ENABLE_W2_AI_EXTRACTION: 'true'
-        PROCESSING_QUEUE_URL:
-          Ref: DocumentProcessingQueue
-        CLAUDE_DAILY_LIMIT: '50'
-        TEXTRACT_DAILY_LIMIT: '30'
-        _X_AMZN_TRACE_ID:
-          Ref: AWS::NoValue
+        ENVIRONMENT:
+          Ref: Environment
 Resources:
-  DocumentProcessingQueue:
-    Type: AWS::SQS::Queue
-    Properties:
-      QueueName:
-        Fn::Sub: DrDoc-Processing-${Environment}
-      VisibilityTimeout: 900
-      MessageRetentionPeriod: 1209600
-      RedrivePolicy:
-        deadLetterTargetArn:
-          Fn::GetAtt:
-          - DocumentProcessingDLQ
-          - Arn
-        maxReceiveCount: 3
-  DocumentProcessingDLQ:
-    Type: AWS::SQS::Queue
-    Properties:
-      QueueName:
-        Fn::Sub: DrDoc-Processing-DLQ-${Environment}
-      MessageRetentionPeriod: 1209600
-  DocumentUploadBucket:
+  UploadBucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName:
-        Fn::Sub: drdoc-uploads-${Environment}-${AWS::AccountId}
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      LifecycleConfiguration:
-        Rules:
-        - Id: AbortIncompleteMultipartUploads
-          Status: Enabled
-          AbortIncompleteMultipartUpload:
-            DaysAfterInitiation: 1
-        - Id: DeleteOriginalDocuments
-          Status: Enabled
-          ExpirationInDays: 30
-          Prefix: uploads/
-  DocumentsTable:
-    Type: AWS::DynamoDB::Table
-    Properties:
-      TableName:
-        Fn::Sub: DrDocDocuments-${Environment}
-      BillingMode: PAY_PER_REQUEST
-      AttributeDefinitions:
-      - AttributeName: DocumentID
-        AttributeType: S
-      - AttributeName: DocumentType
-        AttributeType: S
-      KeySchema:
-      - AttributeName: DocumentID
-        KeyType: HASH
-      GlobalSecondaryIndexes:
-      - IndexName: DocumentTypeIndex
-        KeySchema:
-        - AttributeName: DocumentType
-          KeyType: HASH
-        Projection:
-          ProjectionType: ALL
-  TextractCompleteTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      TopicName:
-        Fn::Sub: ${AWS::StackName}-textract-complete
-  TextractSNSRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName:
-        Fn::Sub: ${AWS::StackName}-TextractSNSRole
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-        - Effect: Allow
-          Principal:
-            Service: textract.amazonaws.com
-          Action: sts:AssumeRole
-      Policies:
-      - PolicyName: SNSPublishPolicy
-        PolicyDocument:
-          Version: '2012-10-17'
-          Statement:
-          - Effect: Allow
-            Action: sns:Publish
-            Resource:
-              Ref: TextractCompleteTopic
-  ProcessDocumentFunction:
+        Fn::Sub: taxdoc-uploads-${Environment}-${AWS::AccountId}
+      CorsConfiguration:
+        CorsRules:
+        - AllowedHeaders:
+          - '*'
+          AllowedMethods:
+          - GET
+          - PUT
+          - POST
+          AllowedOrigins:
+          - '*'
+          MaxAge: 3000
+  ProcessTaxFormFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName:
-        Fn::Sub: DrDoc-ProcessDocument-${Environment}
-      CodeUri: s3://drdoc-tax-deployments-prod/w2-1099-minimal.zip
-      Handler: handlers.process_document.lambda_handler
+        Fn::Sub: TaxDoc-ProcessForm-${Environment}
+      CodeUri: ProcessTaxFormFunction
+      Handler: handlers.mvp_api_handler.lambda_handler
       Policies:
       - S3ReadPolicy:
           BucketName:
-            Ref: DocumentUploadBucket
-      - DynamoDBCrudPolicy:
-          TableName:
-            Ref: DocumentsTable
+            Ref: UploadBucket
       - Statement:
         - Effect: Allow
           Action:
           - textract:DetectDocumentText
           - textract:AnalyzeDocument
-          - textract:AnalyzeExpense
-          - textract:StartDocumentTextDetection
-          - textract:StartDocumentAnalysis
-          - textract:GetDocumentTextDetection
-          - textract:GetDocumentAnalysis
           Resource: '*'
         - Effect: Allow
           Action:
-          - comprehend:ClassifyDocument
           - bedrock:InvokeModel
-          - bedrock:InvokeModelWithResponseStream
-          - bedrock:ListFoundationModels
-          - bedrock:GetFoundationModel
-          Resource:
-          - arn:aws:bedrock:*::foundation-model/anthropic.claude*
-          - arn:aws:bedrock:*::foundation-model/amazon.titan*
-          - arn:aws:bedrock:*:*:foundation-model/*
-          - arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0
-          - arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0
-        - Effect: Allow
-          Action:
-          - logs:CreateLogGroup
-          - logs:CreateLogStream
-          - logs:PutLogEvents
-          Resource: '*'
-  S3IngestFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName:
-        Fn::Sub: DrDoc-S3Ingest-${Environment}
-      CodeUri: s3://drdoc-tax-deployments-prod/processing-handlers.zip
-      Handler: src.handlers.s3_ingest.lambda_handler
-      Environment:
-        Variables:
-          PROCESSING_QUEUE_URL:
-            Ref: DocumentProcessingQueue
-      Policies:
-      - SQSSendMessagePolicy:
-          QueueName:
-            Fn::GetAtt:
-            - DocumentProcessingQueue
-            - QueueName
-  SQSProcessorFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName:
-        Fn::Sub: DrDoc-SQSProcessor-${Environment}
-      CodeUri: s3://drdoc-tax-deployments-prod/processing-handlers.zip
-      Handler: src.handlers.sqs_processor.lambda_handler
-      Timeout: 900
-      Tracing: Active
+          Resource: arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0
       Events:
-        SQSEvent:
-          Type: SQS
+        ProcessApi:
+          Type: Api
           Properties:
-            Queue:
-              Fn::GetAtt:
-              - DocumentProcessingQueue
-              - Arn
-            BatchSize: 1
-      Policies:
-      - S3ReadPolicy:
-          BucketName:
-            Ref: DocumentUploadBucket
-      - DynamoDBCrudPolicy:
-          TableName:
-            Ref: DocumentsTable
-      - Statement:
-        - Effect: Allow
-          Action:
-          - textract:AnalyzeDocument
-          - textract:StartDocumentAnalysis
-          - textract:GetDocumentAnalysis
-          - bedrock:InvokeModel
-          Resource: '*'
-  S3InvokeIngestPermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName:
-        Ref: S3IngestFunction
-      Action: lambda:InvokeFunction
-      Principal: s3.amazonaws.com
-      SourceArn:
-        Fn::Sub: arn:aws:s3:::drdoc-uploads-${Environment}-${AWS::AccountId}
-  TextractResultProcessor:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName:
-        Fn::Sub: DrDoc-TextractResult-${Environment}
-      CodeUri: s3://drdoc-tax-deployments-prod/w2-1099-minimal.zip
-      Handler: handlers.textract_result_handler.lambda_handler
-      Timeout: 600
-      Tracing: Active
-      Policies:
-      - S3ReadPolicy:
-          BucketName:
-            Ref: DocumentUploadBucket
-      - DynamoDBCrudPolicy:
-          TableName:
-            Ref: DocumentsTable
-      - Statement:
-        - Effect: Allow
-          Action:
-          - textract:GetDocumentAnalysis
-          - textract:GetDocumentTextDetection
-          - textract:GetExpenseAnalysis
-          Resource: '*'
-        - Effect: Allow
-          Action:
-          - comprehend:ClassifyDocument
-          - bedrock:InvokeModel
-          - bedrock:InvokeModelWithResponseStream
-          - bedrock:ListFoundationModels
-          - bedrock:GetFoundationModel
-          Resource:
-          - arn:aws:bedrock:*::foundation-model/anthropic.claude*
-          - arn:aws:bedrock:*::foundation-model/amazon.titan*
-          - arn:aws:bedrock:*:*:foundation-model/*
-          - arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0
-          - arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0
-        - Effect: Allow
-          Action:
-          - logs:CreateLogGroup
-          - logs:CreateLogStream
-          - logs:PutLogEvents
-          Resource: '*'
-      Events:
-        SNSEvent:
-          Type: SNS
-          Properties:
-            Topic:
-              Ref: TextractCompleteTopic
-  DocumentProcessingApi:
+            RestApiId:
+              Ref: TaxDocApi
+            Path: /process-tax-form
+            Method: post
+    Metadata:
+      SamResourceId: ProcessTaxFormFunction
+  TaxDocApi:
     Type: AWS::Serverless::Api
     Properties:
+      Name:
+        Fn::Sub: TaxDoc-API-${Environment}
       StageName:
         Ref: Environment
       Cors:
-        AllowMethods: '''POST, GET, OPTIONS'''
-        AllowHeaders: '''Content-Type,X-Amz-Date,Authorization,X-Api-Key'''
+        AllowMethods: '''GET,POST,OPTIONS'''
+        AllowHeaders: '''Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'''
         AllowOrigin: '''*'''
-      MethodSettings:
-      - ResourcePath: /*
-        HttpMethod: '*'
-        ThrottlingBurstLimit: 100
-        ThrottlingRateLimit: 20
-  ApiUsagePlan:
-    Type: AWS::ApiGateway::UsagePlan
+  ProcessLogGroup:
+    Type: AWS::Logs::LogGroup
     Properties:
-      UsagePlanName:
-        Fn::Sub: DrDoc-UsagePlan-${Environment}
-      Description: Usage plan for Dr.Doc API
-      Throttle:
-        BurstLimit: 100
-        RateLimit: 20
-      Quota:
-        Limit: 5000
-        Period: DAY
-      ApiStages:
-      - ApiId:
-          Ref: DocumentProcessingApi
-        Stage:
-          Ref: Environment
-  ApiKey:
-    Type: AWS::ApiGateway::ApiKey
-    Properties:
-      Name:
-        Fn::Sub: DrDoc-ApiKey-${Environment}
-      Description: API Key for Dr.Doc
-      Enabled: true
-  UsagePlanKey:
-    Type: AWS::ApiGateway::UsagePlanKey
-    Properties:
-      KeyId:
-        Ref: ApiKey
-      KeyType: API_KEY
-      UsagePlanId:
-        Ref: ApiUsagePlan
-  EnhancedApiFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName:
-        Fn::Sub: DrDoc-EnhancedApi-${Environment}
-      CodeUri: s3://drdoc-tax-deployments-prod/w2-1099-simple.zip
-      Handler: handlers.simple_api_handler.lambda_handler
-      Timeout: 300
-      Tracing: Active
-      Events:
-        ProcessDocument:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: DocumentProcessingApi
-            Path: /process-document
-            Method: post
-        GetResult:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: DocumentProcessingApi
-            Path: /result/{doc_id}
-            Method: get
-        DownloadExcel:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: DocumentProcessingApi
-            Path: /download-excel/{doc_id}
-            Method: get
-        SupportedTypes:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: DocumentProcessingApi
-            Path: /supported-types
-            Method: get
-        Options:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: DocumentProcessingApi
-            Path: /{proxy+}
-            Method: options
-      Policies:
-      - S3FullAccessPolicy:
-          BucketName:
-            Ref: DocumentUploadBucket
-      - DynamoDBCrudPolicy:
-          TableName:
-            Ref: DocumentsTable
-      - Statement:
-        - Effect: Allow
-          Action:
-          - textract:DetectDocumentText
-          - textract:AnalyzeDocument
-          - bedrock:InvokeModel
-          - cloudwatch:PutMetricData
-          - xray:PutTraceSegments
-          - xray:PutTelemetryRecords
-          Resource: '*'
+      LogGroupName:
+        Fn::Sub: /aws/lambda/TaxDoc-ProcessForm-${Environment}
+      RetentionInDays: 14
 Outputs:
-  UploadBucket:
-    Description: S3 bucket for document uploads
-    Value:
-      Ref: DocumentUploadBucket
-    Export:
-      Name:
-        Fn::Sub: ${AWS::StackName}-UploadBucket
   ApiEndpoint:
     Description: API Gateway endpoint URL
     Value:
-      Fn::Sub: https://${DocumentProcessingApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
-    Export:
-      Name:
-        Fn::Sub: ${AWS::StackName}-ApiEndpoint
-  DocumentsTable:
-    Description: DynamoDB table for document metadata
+      Fn::Sub: https://${TaxDocApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
+  UploadBucket:
+    Description: S3 bucket for uploads
     Value:
-      Ref: DocumentsTable
-    Export:
-      Name:
-        Fn::Sub: ${AWS::StackName}-DocumentsTable
-  TextractSNSTopic:
-    Description: SNS topic for Textract completion notifications
-    Value:
-      Ref: TextractCompleteTopic
-    Export:
-      Name:
-        Fn::Sub: ${AWS::StackName}-TextractSNSTopic
-  ProcessingQueue:
-    Description: SQS queue for document processing
-    Value:
-      Ref: DocumentProcessingQueue
-    Export:
-      Name:
-        Fn::Sub: ${AWS::StackName}-ProcessingQueue
-  ApiKey:
-    Description: API Gateway API Key
-    Value:
-      Ref: ApiKey
-    Export:
-      Name:
-        Fn::Sub: ${AWS::StackName}-ApiKey
-  UsagePlan:
-    Description: API Gateway Usage Plan
-    Value:
-      Ref: ApiUsagePlan
-    Export:
-      Name:
-        Fn::Sub: ${AWS::StackName}-UsagePlan
+      Ref: UploadBucket

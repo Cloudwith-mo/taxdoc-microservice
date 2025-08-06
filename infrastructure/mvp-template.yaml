@@ -1,0 +1,85 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'TaxDoc MVP - Simplified tax form processing'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: mvp
+    Description: Environment name
+
+Globals:
+  Function:
+    Timeout: 30
+    Runtime: python3.9
+    Environment:
+      Variables:
+        ENVIRONMENT: !Ref Environment
+
+Resources:
+  # S3 Bucket for file uploads
+  UploadBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'taxdoc-uploads-${Environment}-${AWS::AccountId}'
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET, PUT, POST]
+            AllowedOrigins: ['*']
+            MaxAge: 3000
+
+  # Lambda function for processing
+  ProcessTaxFormFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'TaxDoc-ProcessForm-${Environment}'
+      CodeUri: ../src/
+      Handler: handlers.mvp_api_handler.lambda_handler
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref UploadBucket
+        - Statement:
+          - Effect: Allow
+            Action:
+              - textract:DetectDocumentText
+              - textract:AnalyzeDocument
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - bedrock:InvokeModel
+            Resource: 'arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0'
+      Events:
+        ProcessApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TaxDocApi
+            Path: /process-tax-form
+            Method: post
+
+  # API Gateway
+  TaxDocApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub 'TaxDoc-API-${Environment}'
+      StageName: !Ref Environment
+      Cors:
+        AllowMethods: "'GET,POST,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+
+  # CloudWatch Log Group
+  ProcessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/TaxDoc-ProcessForm-${Environment}'
+      RetentionInDays: 14
+
+Outputs:
+  ApiEndpoint:
+    Description: 'API Gateway endpoint URL'
+    Value: !Sub 'https://${TaxDocApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    
+  UploadBucket:
+    Description: 'S3 bucket for uploads'
+    Value: !Ref UploadBucket

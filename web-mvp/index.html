@@ -3,87 +3,80 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TaxDoc - Tax Document Extraction</title>
+    <title>TaxDoc - Tax Form Data Extraction</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
-            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         
         .container {
-            max-width: 800px;
-            margin: 0 auto;
             background: white;
             border-radius: 12px;
             box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            overflow: hidden;
-        }
-        
-        .header {
-            background: #2c3e50;
-            color: white;
-            padding: 30px;
-            text-align: center;
-        }
-        
-        .header h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
-            font-weight: 300;
-        }
-        
-        .header p {
-            font-size: 1.1em;
-            opacity: 0.9;
-        }
-        
-        .content {
             padding: 40px;
+            max-width: 600px;
+            width: 90%;
+        }
+        
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .logo h1 {
+            color: #2d3748;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        
+        .logo p {
+            color: #718096;
+            font-size: 1.1rem;
         }
         
         .upload-area {
-            border: 3px dashed #ddd;
+            border: 2px dashed #cbd5e0;
             border-radius: 8px;
-            padding: 60px 20px;
+            padding: 40px;
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
             transition: all 0.3s ease;
             cursor: pointer;
         }
         
         .upload-area:hover {
             border-color: #667eea;
-            background: #f8f9ff;
+            background-color: #f7fafc;
         }
         
         .upload-area.dragover {
             border-color: #667eea;
-            background: #f0f4ff;
+            background-color: #ebf8ff;
         }
         
         .upload-icon {
-            font-size: 3em;
-            color: #ddd;
-            margin-bottom: 20px;
+            font-size: 3rem;
+            color: #a0aec0;
+            margin-bottom: 16px;
         }
         
         .upload-text {
-            font-size: 1.2em;
-            color: #666;
-            margin-bottom: 15px;
+            color: #4a5568;
+            font-size: 1.1rem;
+            margin-bottom: 8px;
         }
         
-        .upload-hint {
-            color: #999;
-            font-size: 0.9em;
+        .upload-subtext {
+            color: #718096;
+            font-size: 0.9rem;
         }
         
         #fileInput {
@@ -91,41 +84,43 @@
         }
         
         .process-btn {
-            background: #667eea;
+            width: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border: none;
-            padding: 15px 30px;
-            font-size: 1.1em;
-            border-radius: 6px;
+            padding: 16px;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: 600;
             cursor: pointer;
-            transition: background 0.3s ease;
-            display: none;
-            margin: 20px auto;
+            transition: all 0.3s ease;
+            margin-bottom: 20px;
         }
         
-        .process-btn:hover {
-            background: #5a6fd8;
+        .process-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
         }
         
         .process-btn:disabled {
-            background: #ccc;
+            opacity: 0.6;
             cursor: not-allowed;
         }
         
         .loading {
             display: none;
             text-align: center;
-            padding: 40px;
+            margin: 20px 0;
         }
         
         .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
             border-radius: 50%;
             width: 40px;
             height: 40px;
             animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
+            margin: 0 auto 16px;
         }
         
         @keyframes spin {
@@ -138,217 +133,167 @@
             margin-top: 30px;
         }
         
-        .results-header {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 8px 8px 0 0;
-            border-bottom: 1px solid #dee2e6;
+        .results h3 {
+            color: #2d3748;
+            margin-bottom: 20px;
+            font-size: 1.3rem;
         }
         
-        .results-body {
-            background: white;
-            border: 1px solid #dee2e6;
-            border-top: none;
-            border-radius: 0 0 8px 8px;
+        .field-grid {
+            display: grid;
+            gap: 12px;
         }
         
-        .field-row {
-            display: flex;
-            padding: 15px 20px;
-            border-bottom: 1px solid #f1f3f4;
-        }
-        
-        .field-row:last-child {
-            border-bottom: none;
+        .field-item {
+            background: #f7fafc;
+            padding: 16px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
         }
         
         .field-label {
             font-weight: 600;
-            color: #495057;
-            width: 200px;
-            flex-shrink: 0;
+            color: #4a5568;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
         }
         
         .field-value {
-            color: #212529;
-            flex: 1;
-        }
-        
-        .field-value.null {
-            color: #6c757d;
-            font-style: italic;
+            color: #2d3748;
+            font-size: 1.1rem;
         }
         
         .error {
-            background: #f8d7da;
-            color: #721c24;
-            padding: 20px;
+            background: #fed7d7;
+            color: #c53030;
+            padding: 16px;
             border-radius: 8px;
             margin-top: 20px;
-            border: 1px solid #f5c6cb;
+            display: none;
         }
         
-        .success-badge {
-            background: #d4edda;
-            color: #155724;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 0.9em;
-            display: inline-block;
-        }
-        
-        .supported-docs {
-            background: #f8f9fa;
-            padding: 20px;
+        .supported-forms {
+            background: #e6fffa;
+            border: 1px solid #81e6d9;
             border-radius: 8px;
-            margin-top: 30px;
-        }
-        
-        .supported-docs h3 {
-            color: #495057;
-            margin-bottom: 15px;
-        }
-        
-        .doc-list {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-        
-        .doc-tag {
-            background: #667eea;
-            color: white;
-            padding: 5px 12px;
-            border-radius: 15px;
-            font-size: 0.9em;
-        }
-        
-        .reset-btn {
-            background: #6c757d;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 6px;
-            cursor: pointer;
+            padding: 16px;
             margin-top: 20px;
         }
         
-        .reset-btn:hover {
-            background: #5a6268;
+        .supported-forms h4 {
+            color: #234e52;
+            margin-bottom: 8px;
+        }
+        
+        .supported-forms ul {
+            color: #285e61;
+            margin-left: 20px;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="header">
+        <div class="logo">
             <h1>🛡️ TaxDoc</h1>
-            <p>Extract data from your tax documents instantly</p>
+            <p>Extract data from your tax forms instantly</p>
         </div>
         
-        <div class="content">
-            <div class="upload-section">
-                <div class="upload-area" onclick="document.getElementById('fileInput').click()">
-                    <div class="upload-icon">📄</div>
-                    <div class="upload-text">Click to upload or drag & drop your tax document</div>
-                    <div class="upload-hint">Supports PDF and image files (W-2, 1099 forms)</div>
-                </div>
-                <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png" />
-                <button class="process-btn" id="processBtn">Process Document</button>
-            </div>
-            
-            <div class="loading" id="loading">
-                <div class="spinner"></div>
-                <p>Processing your tax document...</p>
-            </div>
-            
-            <div class="results" id="results">
-                <div class="results-header">
-                    <h3>Extraction Results</h3>
-                    <span class="success-badge">✓ Processing Complete</span>
-                </div>
-                <div class="results-body" id="resultsBody">
-                    <!-- Results will be populated here -->
-                </div>
-                <button class="reset-btn" onclick="resetForm()">Process Another Document</button>
-            </div>
-            
-            <div class="error" id="error" style="display: none;">
-                <!-- Error messages will appear here -->
-            </div>
-            
-            <div class="supported-docs">
-                <h3>Supported Tax Documents</h3>
-                <div class="doc-list">
-                    <span class="doc-tag">W-2</span>
-                    <span class="doc-tag">1099-NEC</span>
-                    <span class="doc-tag">1099-MISC</span>
-                    <span class="doc-tag">1099-DIV</span>
-                    <span class="doc-tag">1099-INT</span>
-                </div>
-            </div>
+        <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+            <div class="upload-icon">📄</div>
+            <div class="upload-text">Click to upload or drag & drop</div>
+            <div class="upload-subtext">Supports W-2, 1099-NEC, 1099-INT, 1099-DIV, 1099-MISC</div>
+        </div>
+        
+        <input type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg" />
+        
+        <button class="process-btn" id="processBtn" disabled>Select a file to process</button>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Processing your tax form...</p>
+        </div>
+        
+        <div class="error" id="error"></div>
+        
+        <div class="results" id="results">
+            <h3 id="formType"></h3>
+            <div class="field-grid" id="fieldGrid"></div>
+        </div>
+        
+        <div class="supported-forms">
+            <h4>Supported Forms:</h4>
+            <ul>
+                <li>W-2 (Wage and Tax Statement)</li>
+                <li>1099-NEC (Nonemployee Compensation)</li>
+                <li>1099-INT (Interest Income)</li>
+                <li>1099-DIV (Dividends and Distributions)</li>
+                <li>1099-MISC (Miscellaneous Income)</li>
+            </ul>
         </div>
     </div>
 
     <script>
+        const API_ENDPOINT = 'https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod/process-tax-form';
+        
+        const fileInput = document.getElementById('fileInput');
+        const uploadArea = document.querySelector('.upload-area');
+        const processBtn = document.getElementById('processBtn');
+        const loading = document.getElementById('loading');
+        const results = document.getElementById('results');
+        const error = document.getElementById('error');
+        const formType = document.getElementById('formType');
+        const fieldGrid = document.getElementById('fieldGrid');
+        
         let selectedFile = null;
         
-        // API endpoint - deployed TaxDoc V1 MVP
-        const API_ENDPOINT = 'https://fzgyzpo535.execute-api.us-east-1.amazonaws.com/mvp/process-document';
+        // File input change
+        fileInput.addEventListener('change', handleFileSelect);
         
-        // File input handling
-        document.getElementById('fileInput').addEventListener('change', function(e) {
-            if (e.target.files.length > 0) {
-                selectedFile = e.target.files[0];
-                updateUploadArea();
-            }
-        });
-        
-        // Drag and drop handling
-        const uploadArea = document.querySelector('.upload-area');
-        
-        uploadArea.addEventListener('dragover', function(e) {
+        // Drag and drop
+        uploadArea.addEventListener('dragover', (e) => {
             e.preventDefault();
             uploadArea.classList.add('dragover');
         });
         
-        uploadArea.addEventListener('dragleave', function(e) {
-            e.preventDefault();
+        uploadArea.addEventListener('dragleave', () => {
             uploadArea.classList.remove('dragover');
         });
         
-        uploadArea.addEventListener('drop', function(e) {
+        uploadArea.addEventListener('drop', (e) => {
             e.preventDefault();
             uploadArea.classList.remove('dragover');
-            
-            if (e.dataTransfer.files.length > 0) {
-                selectedFile = e.dataTransfer.files[0];
-                updateUploadArea();
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                handleFileSelect();
             }
         });
         
-        function updateUploadArea() {
-            if (selectedFile) {
-                document.querySelector('.upload-text').textContent = `Selected: ${selectedFile.name}`;
-                document.querySelector('.upload-hint').textContent = `File size: ${(selectedFile.size / 1024 / 1024).toFixed(2)} MB`;
-                document.getElementById('processBtn').style.display = 'block';
+        // Process button
+        processBtn.addEventListener('click', processDocument);
+        
+        function handleFileSelect() {
+            const file = fileInput.files[0];
+            if (file) {
+                selectedFile = file;
+                processBtn.textContent = `Process ${file.name}`;
+                processBtn.disabled = false;
+                hideResults();
             }
         }
-        
-        // Process document
-        document.getElementById('processBtn').addEventListener('click', processDocument);
         
         async function processDocument() {
             if (!selectedFile) return;
             
-            // Show loading
-            document.querySelector('.upload-section').style.display = 'none';
-            document.getElementById('loading').style.display = 'block';
-            document.getElementById('error').style.display = 'none';
-            document.getElementById('results').style.display = 'none';
+            showLoading();
+            hideResults();
+            hideError();
             
             try {
                 // Convert file to base64
-                const base64Content = await fileToBase64(selectedFile);
+                const base64 = await fileToBase64(selectedFile);
                 
                 // Call API
                 const response = await fetch(API_ENDPOINT, {
@@ -358,25 +303,23 @@
                     },
                     body: JSON.stringify({
                         filename: selectedFile.name,
-                        file_content: base64Content
+                        file_content: base64
                     })
                 });
                 
                 const result = await response.json();
                 
                 if (result.success) {
-                    displayResults(result);
+                    showResults(result);
                 } else {
                     showError(result.error || 'Processing failed');
                 }
                 
-            } catch (error) {
-                console.error('Error:', error);
-                showError('Network error. Please try again.');
+            } catch (err) {
+                showError('Network error: ' + err.message);
+            } finally {
+                hideLoading();
             }
-            
-            // Hide loading
-            document.getElementById('loading').style.display = 'none';
         }
         
         function fileToBase64(file) {
@@ -384,143 +327,73 @@
                 const reader = new FileReader();
                 reader.readAsDataURL(file);
                 reader.onload = () => {
-                    // Remove data:image/jpeg;base64, prefix
                     const base64 = reader.result.split(',')[1];
                     resolve(base64);
                 };
-                reader.onerror = error => reject(error);
+                reader.onerror = reject;
             });
         }
         
-        function displayResults(result) {
-            const resultsBody = document.getElementById('resultsBody');
-            
-            // Clear previous results
-            resultsBody.innerHTML = '';
-            
-            // Add document type info
-            const docTypeRow = document.createElement('div');
-            docTypeRow.className = 'field-row';
-            docTypeRow.innerHTML = `
-                <div class="field-label">Document Type:</div>
-                <div class="field-value"><strong>${result.document_type}</strong></div>
-            `;
-            resultsBody.appendChild(docTypeRow);
-            
-            // Add extracted fields
-            const extractedData = result.extracted_data || {};
-            
-            for (const [key, value] of Object.entries(extractedData)) {
-                if (key === 'extraction_method') continue; // Skip meta fields
-                
-                const row = document.createElement('div');
-                row.className = 'field-row';
-                
-                const label = formatFieldLabel(key);
-                const displayValue = formatFieldValue(value);
-                
-                row.innerHTML = `
-                    <div class="field-label">${label}:</div>
-                    <div class="field-value ${value === null ? 'null' : ''}">${displayValue}</div>
-                `;
-                
-                resultsBody.appendChild(row);
-            }
-            
-            document.getElementById('results').style.display = 'block';
+        function showLoading() {
+            loading.style.display = 'block';
+            processBtn.disabled = true;
         }
         
-        function formatFieldLabel(key) {
-            const labels = {
-                'employee_ssn': 'Employee SSN (Box a)',
-                'employer_ein': 'Employer EIN (Box b)',
-                'control_number': 'Control Number (Box d)',
-                'employee_first_name': 'Employee First Name (Box e)',
-                'employee_last_name': 'Employee Last Name',
-                'employee_address': 'Employee Address (Box f)',
-                'employer_name': 'Employer Name (Box c)',
-                'employer_address': 'Employer Address',
-                'employer_state_id': 'Employer State ID',
-                'wages_income': 'Wages & Income (Box 1)',
-                'federal_withheld': 'Federal Tax Withheld (Box 2)',
-                'social_security_wages': 'Social Security Wages (Box 3)',
-                'social_security_tax': 'Social Security Tax (Box 4)',
-                'medicare_wages': 'Medicare Wages (Box 5)',
-                'medicare_tax': 'Medicare Tax (Box 6)',
-                'social_security_tips': 'Social Security Tips (Box 7)',
-                'allocated_tips': 'Allocated Tips (Box 8)',
-                'dependent_care_benefits': 'Dependent Care Benefits (Box 10)',
-                'nonqualified_plans': 'Nonqualified Plans (Box 11)',
-                'box12_codes': 'Box 12 Codes & Amounts',
-                'statutory_employee': 'Statutory Employee',
-                'retirement_plan': 'Retirement Plan',
-                'third_party_sick_pay': 'Third-party Sick Pay',
-                'other_deductions': 'Other Deductions (Box 14)',
-                'state': 'State (Box 15)',
-                'state_wages': 'State Wages (Box 16)',
-                'state_income_tax': 'State Income Tax (Box 17)',
-                'local_wages': 'Local Wages (Box 18)',
-                'local_income_tax': 'Local Income Tax (Box 19)',
-                'locality_name': 'Locality Name (Box 20)',
-                'payer_tin': 'Payer TIN',
-                'recipient_tin': 'Recipient TIN',
-                'payer_name': 'Payer Name',
-                'recipient_name': 'Recipient Name',
-                'nonemployee_compensation': 'Nonemployee Compensation',
-                'interest_income': 'Interest Income',
-                'ordinary_dividends': 'Ordinary Dividends',
-                'qualified_dividends': 'Qualified Dividends',
-                'rents': 'Rents',
-                'royalties': 'Royalties',
-                'other_income': 'Other Income'
-            };
-            
-            return labels[key] || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        function hideLoading() {
+            loading.style.display = 'none';
+            processBtn.disabled = false;
         }
         
-        function formatFieldValue(value) {
-            if (value === null || value === undefined) {
-                return 'Not found';
+        function showResults(result) {
+            formType.textContent = `${result.form_type} - ${result.field_count} fields extracted`;
+            
+            fieldGrid.innerHTML = '';
+            
+            for (const [key, value] of Object.entries(result.extracted_fields)) {
+                const fieldItem = document.createElement('div');
+                fieldItem.className = 'field-item';
+                
+                const label = document.createElement('div');
+                label.className = 'field-label';
+                label.textContent = formatFieldName(key);
+                
+                const valueDiv = document.createElement('div');
+                valueDiv.className = 'field-value';
+                valueDiv.textContent = formatFieldValue(key, value);
+                
+                fieldItem.appendChild(label);
+                fieldItem.appendChild(valueDiv);
+                fieldGrid.appendChild(fieldItem);
             }
             
-            if (typeof value === 'number') {
-                return `$${value.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-            }
-            
-            if (typeof value === 'boolean') {
-                return value ? 'Yes' : 'No';
-            }
-            
-            if (Array.isArray(value)) {
-                // Handle Box 12 codes array
-                if (value.length === 0) return 'None';
-                return value.map(item => {
-                    if (item.code && item.amount) {
-                        return `Code ${item.code}: $${parseFloat(item.amount).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-                    }
-                    return JSON.stringify(item);
-                }).join(', ');
-            }
-            
-            return value.toString();
+            results.style.display = 'block';
+        }
+        
+        function hideResults() {
+            results.style.display = 'none';
         }
         
         function showError(message) {
-            const errorDiv = document.getElementById('error');
-            errorDiv.innerHTML = `<strong>Error:</strong> ${message}`;
-            errorDiv.style.display = 'block';
-            document.querySelector('.upload-section').style.display = 'block';
+            error.textContent = message;
+            error.style.display = 'block';
         }
         
-        function resetForm() {
-            selectedFile = null;
-            document.getElementById('fileInput').value = '';
-            document.querySelector('.upload-text').textContent = 'Click to upload or drag & drop your tax document';
-            document.querySelector('.upload-hint').textContent = 'Supports PDF and image files (W-2, 1099 forms)';
-            document.getElementById('processBtn').style.display = 'none';
-            document.getElementById('results').style.display = 'none';
-            document.getElementById('error').style.display = 'none';
-            document.querySelector('.upload-section').style.display = 'block';
+        function hideError() {
+            error.style.display = 'none';
+        }
+        
+        function formatFieldName(key) {
+            return key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        }
+        
+        function formatFieldValue(key, value) {
+            if (key.includes('ssn') && value.length >= 9) {
+                return '***-**-' + value.slice(-4);
+            }
+            if (typeof value === 'number' && (key.includes('box') || key.includes('wages') || key.includes('tax'))) {
+                return '$' + value.toLocaleString();
+            }
+            return value;
         }
     </script>
 </body>
