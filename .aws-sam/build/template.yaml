@@ -128,7 +128,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: DrDoc-ProcessDocument-${Environment}
-      CodeUri: ProcessDocumentFunction
+      CodeUri: s3://drdoc-tax-deployments-prod/w2-1099-minimal.zip
       Handler: handlers.process_document.lambda_handler
       Policies:
       - S3ReadPolicy:
@@ -167,15 +167,13 @@ Resources:
           - logs:CreateLogStream
           - logs:PutLogEvents
           Resource: '*'
-    Metadata:
-      SamResourceId: ProcessDocumentFunction
   S3IngestFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName:
         Fn::Sub: DrDoc-S3Ingest-${Environment}
-      CodeUri: S3IngestFunction
-      Handler: handlers.s3_ingest.lambda_handler
+      CodeUri: s3://drdoc-tax-deployments-prod/processing-handlers.zip
+      Handler: src.handlers.s3_ingest.lambda_handler
       Environment:
         Variables:
           PROCESSING_QUEUE_URL:
@@ -186,15 +184,13 @@ Resources:
             Fn::GetAtt:
             - DocumentProcessingQueue
             - QueueName
-    Metadata:
-      SamResourceId: S3IngestFunction
   SQSProcessorFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName:
         Fn::Sub: DrDoc-SQSProcessor-${Environment}
-      CodeUri: SQSProcessorFunction
-      Handler: handlers.sqs_processor.lambda_handler
+      CodeUri: s3://drdoc-tax-deployments-prod/processing-handlers.zip
+      Handler: src.handlers.sqs_processor.lambda_handler
       Timeout: 900
       Tracing: Active
       Events:
@@ -221,8 +217,6 @@ Resources:
           - textract:GetDocumentAnalysis
           - bedrock:InvokeModel
           Resource: '*'
-    Metadata:
-      SamResourceId: SQSProcessorFunction
   S3InvokeIngestPermission:
     Type: AWS::Lambda::Permission
     Properties:
@@ -237,7 +231,7 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: DrDoc-TextractResult-${Environment}
-      CodeUri: TextractResultProcessor
+      CodeUri: s3://drdoc-tax-deployments-prod/w2-1099-minimal.zip
       Handler: handlers.textract_result_handler.lambda_handler
       Timeout: 600
       Tracing: Active
@@ -280,8 +274,6 @@ Resources:
           Properties:
             Topic:
               Ref: TextractCompleteTopic
-    Metadata:
-      SamResourceId: TextractResultProcessor
   DocumentProcessingApi:
     Type: AWS::Serverless::Api
     Properties:
@@ -333,8 +325,8 @@ Resources:
     Properties:
       FunctionName:
         Fn::Sub: DrDoc-EnhancedApi-${Environment}
-      CodeUri: EnhancedApiFunction
-      Handler: handlers.enhanced_api_handler.lambda_handler
+      CodeUri: s3://drdoc-tax-deployments-prod/w2-1099-simple.zip
+      Handler: handlers.simple_api_handler.lambda_handler
       Timeout: 300
       Tracing: Active
       Events:
@@ -390,8 +382,6 @@ Resources:
           - xray:PutTraceSegments
           - xray:PutTelemetryRecords
           Resource: '*'
-    Metadata:
-      SamResourceId: EnhancedApiFunction
 Outputs:
   UploadBucket:
     Description: S3 bucket for document uploads
