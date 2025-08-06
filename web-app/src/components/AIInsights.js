@@ -16,8 +16,25 @@ const AIInsights = ({ documentData }) => {
     setError(null);
     
     try {
+      // Check if AI insights are already provided by backend
+      if (documentData.ai_insights) {
+        setInsights({
+          insights: documentData.ai_insights.insights || [],
+          sentiment: {
+            sentiment: 'professional',
+            confidence: 95,
+            tone: 'formal',
+            business_impact: documentData.ai_insights.summary || 'Document processed successfully'
+          },
+          actionItems: documentData.ai_insights.action_items || [
+            { action: "Review extracted data", priority: "medium", category: "validation" }
+          ]
+        });
+        return;
+      }
+      
       // Handle different document data structures
-      const extractedData = documentData.ExtractedData || documentData || {};
+      const extractedData = documentData.ExtractedData || documentData.extracted_fields || documentData || {};
       const docType = documentData.DocumentType || documentData.form_type || 'Document';
       const fieldCount = Object.keys(extractedData).length;
       const confidence = documentData.ExtractionMetadata?.overall_confidence || 

@@ -235,7 +235,7 @@
     </div>
 
     <script>
-        const API_ENDPOINT = 'https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod/process-tax-form';
+        const API_ENDPOINT = 'https://fzgyzpo535.execute-api.us-east-1.amazonaws.com/mvp/process-document';
         
         const fileInput = document.getElementById('fileInput');
         const uploadArea = document.querySelector('.upload-area');
@@ -345,11 +345,24 @@
         }
         
         function showResults(result) {
-            formType.textContent = `${result.form_type} - ${result.field_count} fields extracted`;
+            const extractedData = result.extracted_data || {};
+            const fieldCount = Object.keys(extractedData).filter(k => !['layers_used', 'confidence_scores', 'extraction_method', 'total_fields_extracted'].includes(k)).length;
+            
+            formType.textContent = `${result.document_type} - ${fieldCount} fields extracted`;
             
             fieldGrid.innerHTML = '';
             
-            for (const [key, value] of Object.entries(result.extracted_fields)) {
+            // Add AI insights first if available
+            if (result.ai_insights) {
+                displayAIInsights(result.ai_insights);
+            }
+            
+            // Display extracted fields
+            for (const [key, value] of Object.entries(extractedData)) {
+                if (['layers_used', 'confidence_scores', 'extraction_method', 'total_fields_extracted'].includes(key)) {
+                    continue;
+                }
+                
                 const fieldItem = document.createElement('div');
                 fieldItem.className = 'field-item';
                 
@@ -367,6 +380,128 @@
             }
             
             results.style.display = 'block';
+        }
+        
+        function displayAIInsights(insights) {
+            const insightsItem = document.createElement('div');
+            insightsItem.style.cssText = `
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 20px;
+                border-radius: 12px;
+                margin-bottom: 20px;
+                box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+            `;
+            
+            const header = document.createElement('h4');
+            header.textContent = '🤖 AI-Powered Insights';
+            header.style.cssText = `
+                margin: 0 0 15px 0;
+                font-size: 1.2em;
+                font-weight: 600;
+            `;
+            insightsItem.appendChild(header);
+            
+            // Summary
+            if (insights.summary) {
+                const summaryDiv = document.createElement('div');
+                summaryDiv.style.cssText = `
+                    background: rgba(255, 255, 255, 0.1);
+                    padding: 12px;
+                    border-radius: 8px;
+                    margin-bottom: 15px;
+                    font-style: italic;
+                `;
+                summaryDiv.innerHTML = `<strong>Summary:</strong> ${insights.summary}`;
+                insightsItem.appendChild(summaryDiv);
+            }
+            
+            // Key insights
+            if (insights.insights && insights.insights.length > 0) {
+                const insightsTitle = document.createElement('div');
+                insightsTitle.textContent = 'Key Insights:';
+                insightsTitle.style.cssText = `
+                    font-weight: 600;
+                    margin-bottom: 10px;
+                `;
+                insightsItem.appendChild(insightsTitle);
+                
+                const insightsList = document.createElement('ul');
+                insightsList.style.cssText = `
+                    margin: 0;
+                    padding-left: 20px;
+                    list-style-type: disc;
+                `;
+                
+                insights.insights.forEach(insight => {
+                    const li = document.createElement('li');
+                    li.textContent = insight;
+                    li.style.cssText = `
+                        margin-bottom: 8px;
+                        line-height: 1.5;
+                    `;
+                    insightsList.appendChild(li);
+                });
+                
+                insightsItem.appendChild(insightsList);
+            }
+            
+            // Risk and action indicators
+            const indicators = document.createElement('div');
+            indicators.style.cssText = `
+                display: flex;
+                gap: 10px;
+                margin-top: 15px;
+                flex-wrap: wrap;
+            `;
+            
+            if (insights.risk_level) {
+                const riskBadge = document.createElement('span');
+                const riskColors = {
+                    'low': 'rgba(72, 187, 120, 0.8)',
+                    'medium': 'rgba(237, 137, 54, 0.8)', 
+                    'high': 'rgba(245, 101, 101, 0.8)'
+                };
+                riskBadge.textContent = `Risk: ${insights.risk_level.toUpperCase()}`;
+                riskBadge.style.cssText = `
+                    background: ${riskColors[insights.risk_level] || 'rgba(113, 128, 150, 0.8)'};
+                    color: white;
+                    padding: 6px 12px;
+                    border-radius: 15px;
+                    font-size: 0.8em;
+                    font-weight: 600;
+                `;
+                indicators.appendChild(riskBadge);
+            }
+            
+            if (insights.action_required !== undefined) {
+                const actionBadge = document.createElement('span');
+                actionBadge.textContent = insights.action_required ? 'Action Required' : 'No Action Needed';
+                actionBadge.style.cssText = `
+                    background: ${insights.action_required ? 'rgba(245, 101, 101, 0.8)' : 'rgba(72, 187, 120, 0.8)'};
+                    color: white;
+                    padding: 6px 12px;
+                    border-radius: 15px;
+                    font-size: 0.8em;
+                    font-weight: 600;
+                `;
+                indicators.appendChild(actionBadge);
+            }
+            
+            insightsItem.appendChild(indicators);
+            
+            // Add disclaimer
+            const disclaimer = document.createElement('div');
+            disclaimer.textContent = 'AI-generated insights for informational purposes only.';
+            disclaimer.style.cssText = `
+                font-size: 0.8em;
+                opacity: 0.8;
+                margin-top: 10px;
+                font-style: italic;
+            `;
+            insightsItem.appendChild(disclaimer);
+            
+            fieldGrid.appendChild(insightsItem);
         }
         
         function hideResults() {

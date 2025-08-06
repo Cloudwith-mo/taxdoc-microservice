@@ -24,6 +24,7 @@ sys.path.append('/var/task')
 
 from services.tax_classifier import TaxClassifier
 from services.enhanced_tax_extractor import EnhancedTaxExtractor
+from services.ai_insights_service import AIInsightsService
 
 def lambda_handler(event, context):
     """
@@ -131,17 +132,23 @@ def process_tax_document(file_bytes: bytes, filename: str) -> Dict[str, Any]:
     extractor = EnhancedTaxExtractor()
     extracted_data = extractor.extract_with_three_layers(textract_response, doc_type)
     
-    # Step 4: Format response
+    # Step 4: Generate AI insights
+    insights_service = AIInsightsService()
+    ai_insights = insights_service.generate_insights(extracted_data, doc_type)
+    
+    # Step 5: Format response with AI insights
     return {
         'success': True,
         'filename': filename,
         'document_type': doc_type,
         'extracted_data': extracted_data,
+        'ai_insights': ai_insights,
         'processing_info': {
             'ocr_blocks': len(textract_response.get('Blocks', [])),
             'extraction_method': 'three_layer_pipeline',
             'layers_used': extracted_data.get('layers_used', []),
             'total_fields': extracted_data.get('total_fields_extracted', 0),
+            'insights_generated': True,
             'version': 'enhanced-mvp'
         }
     }
