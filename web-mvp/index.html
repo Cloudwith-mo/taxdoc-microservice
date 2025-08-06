@@ -163,11 +163,6 @@
             100% { transform: rotate(360deg); }
         }
         
-        @keyframes pulse {
-            0%, 100% { opacity: 0.4; }
-            50% { opacity: 1; }
-        }
-        
         .results {
             display: none;
             margin-top: 30px;
@@ -339,7 +334,6 @@
         <div class="tabs">
             <button class="tab active" onclick="switchTab('upload')">📄 Document Upload</button>
             <button class="tab" onclick="switchTab('analytics')">📊 Analytics Dashboard</button>
-            <button class="tab" onclick="switchTab('chatbot')">💬 Chatbot Q&A</button>
         </div>
         
         <div class="tab-content active" id="upload-tab">
@@ -374,29 +368,6 @@
                     <li>1099-DIV (Dividends and Distributions)</li>
                     <li>1099-MISC (Miscellaneous Income)</li>
                 </ul>
-            </div>
-        </div>
-        
-        <div class="tab-content" id="chatbot-tab">
-            <div style="background: #f7fafc; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
-                <h3 style="color: #2d3748; margin-bottom: 15px;">🤖 Ask about your tax documents</h3>
-                <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-                    <input type="text" id="chatInput" placeholder="Ask me about W-2 forms, tax filing, or document processing..." 
-                           style="flex: 1; padding: 12px; border: 1px solid #cbd5e0; border-radius: 8px; font-size: 1rem;">
-                    <button onclick="sendChatMessage()" style="background: #667eea; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer;">Send</button>
-                </div>
-                <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px;">
-                    <button onclick="askQuickQuestion('What is a W-2 form?')" style="background: #e2e8f0; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">What is a W-2 form?</button>
-                    <button onclick="askQuickQuestion('How accurate is the extraction?')" style="background: #e2e8f0; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">How accurate is extraction?</button>
-                    <button onclick="askQuickQuestion('What should I do with this data?')" style="background: #e2e8f0; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">What should I do next?</button>
-                </div>
-            </div>
-            
-            <div id="chatMessages" style="background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; min-height: 400px; max-height: 500px; overflow-y: auto;">
-                <div style="text-align: center; color: #718096; padding: 40px;">
-                    <div style="font-size: 3rem; margin-bottom: 16px;">💬</div>
-                    <p>Ask me anything about tax documents, processing results, or general tax questions!</p>
-                </div>
             </div>
         </div>
         
@@ -620,51 +591,22 @@
                 displayAIInsights(result.ai_insights);
             }
             
-            // Display extracted fields (show all fields including null ones for transparency)
-            const allPossibleFields = {
-                'employee_first_name': 'Employee First Name',
-                'employee_last_name': 'Employee Last Name', 
-                'employee_ssn': 'Employee SSN',
-                'employee_address': 'Employee Address',
-                'employer_name': 'Employer Name',
-                'employer_address': 'Employer Address',
-                'employer_ein': 'Employer EIN',
-                'control_number': 'Control Number',
-                'wages_income': 'Wages, Tips, Other Compensation (Box 1)',
-                'federal_withheld': 'Federal Income Tax Withheld (Box 2)',
-                'social_security_wages': 'Social Security Wages (Box 3)',
-                'social_security_tax': 'Social Security Tax Withheld (Box 4)',
-                'medicare_wages': 'Medicare Wages and Tips (Box 5)',
-                'medicare_tax': 'Medicare Tax Withheld (Box 6)',
-                'state': 'State (Box 15)',
-                'state_wages': 'State Wages (Box 16)',
-                'state_income_tax': 'State Income Tax (Box 17)',
-                'local_wages': 'Local Wages (Box 18)',
-                'local_income_tax': 'Local Income Tax (Box 19)',
-                'locality_name': 'Locality Name (Box 20)',
-                'box12_codes': 'Box 12 Codes'
-            };
-            
-            // Show all fields, marking extracted vs not extracted
-            for (const [key, displayName] of Object.entries(allPossibleFields)) {
+            // Display extracted fields
+            for (const [key, value] of Object.entries(extractedData)) {
+                if (['layers_used', 'confidence_scores', 'extraction_method', 'total_fields_extracted'].includes(key)) {
+                    continue;
+                }
+                
                 const fieldItem = document.createElement('div');
                 fieldItem.className = 'field-item';
                 
-                const hasValue = extractedData.hasOwnProperty(key) && extractedData[key] !== null && extractedData[key] !== undefined;
-                
-                if (!hasValue) {
-                    fieldItem.style.opacity = '0.5';
-                    fieldItem.style.borderLeftColor = '#cbd5e0';
-                }
-                
                 const label = document.createElement('div');
                 label.className = 'field-label';
-                label.textContent = displayName + (hasValue ? ' ✓' : ' ✗');
+                label.textContent = formatFieldName(key);
                 
                 const valueDiv = document.createElement('div');
                 valueDiv.className = 'field-value';
-                valueDiv.textContent = hasValue ? formatFieldValue(key, extractedData[key]) : 'Not extracted';
-                valueDiv.style.color = hasValue ? '#2d3748' : '#a0aec0';
+                valueDiv.textContent = formatFieldValue(key, value);
                 
                 fieldItem.appendChild(label);
                 fieldItem.appendChild(valueDiv);
@@ -790,108 +732,6 @@
                 loadAnalyticsData();
             }
         }
-        
-        // Chatbot functionality
-        async function sendChatMessage() {
-            const input = document.getElementById('chatInput');
-            const question = input.value.trim();
-            if (!question) return;
-            
-            // Add user message
-            addChatMessage(question, 'user');
-            input.value = '';
-            
-            // Add loading message
-            const loadingId = addChatMessage('Thinking...', 'bot', true);
-            
-            try {
-                const response = await fetch('https://fzgyzpo535.execute-api.us-east-1.amazonaws.com/mvp/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ question })
-                });
-                
-                const result = await response.json();
-                
-                // Remove loading message
-                document.getElementById(loadingId).remove();
-                
-                if (result.success) {
-                    addChatMessage(result.response.answer, 'bot');
-                } else {
-                    addChatMessage('Sorry, I had trouble processing your question. Please try again.', 'bot');
-                }
-            } catch (error) {
-                document.getElementById(loadingId).remove();
-                addChatMessage('Sorry, there was a network error. Please try again.', 'bot');
-            }
-        }
-        
-        function askQuickQuestion(question) {
-            document.getElementById('chatInput').value = question;
-            sendChatMessage();
-        }
-        
-        function addChatMessage(message, sender, isLoading = false) {
-            const messagesContainer = document.getElementById('chatMessages');
-            
-            // Clear welcome message if it exists
-            if (messagesContainer.children.length === 1 && messagesContainer.children[0].style.textAlign === 'center') {
-                messagesContainer.innerHTML = '';
-            }
-            
-            const messageDiv = document.createElement('div');
-            const messageId = 'msg-' + Date.now();
-            messageDiv.id = messageId;
-            
-            const isUser = sender === 'user';
-            messageDiv.style.cssText = `
-                display: flex;
-                margin-bottom: 16px;
-                ${isUser ? 'justify-content: flex-end;' : 'justify-content: flex-start;'}
-            `;
-            
-            const bubble = document.createElement('div');
-            bubble.style.cssText = `
-                max-width: 70%;
-                padding: 12px 16px;
-                border-radius: 18px;
-                ${isUser ? 
-                    'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;' : 
-                    'background: #f7fafc; color: #2d3748; border: 1px solid #e2e8f0;'
-                }
-                word-wrap: break-word;
-                line-height: 1.4;
-            `;
-            
-            if (isLoading) {
-                bubble.innerHTML = `
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <div style="width: 8px; height: 8px; background: #667eea; border-radius: 50%; animation: pulse 1.5s infinite;"></div>
-                        <div style="width: 8px; height: 8px; background: #667eea; border-radius: 50%; animation: pulse 1.5s infinite 0.2s;"></div>
-                        <div style="width: 8px; height: 8px; background: #667eea; border-radius: 50%; animation: pulse 1.5s infinite 0.4s;"></div>
-                        <span style="margin-left: 8px;">${message}</span>
-                    </div>
-                `;
-            } else {
-                bubble.textContent = message;
-            }
-            
-            messageDiv.appendChild(bubble);
-            messagesContainer.appendChild(messageDiv);
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            
-            return messageId;
-        }
-        
-        // Enter key support for chat
-        document.addEventListener('DOMContentLoaded', function() {
-            document.getElementById('chatInput').addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    sendChatMessage();
-                }
-            });
-        });
         
         function updateAnalyticsAfterProcessing(result) {
             analyticsData.totalDocuments++;
