@@ -123,6 +123,39 @@ Resources:
             Method: options
     Metadata:
       SamResourceId: AnalyticsFunction
+  ChatbotFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: TaxDoc-Chatbot-${Environment}
+      CodeUri: ChatbotFunction
+      Handler: handlers/chatbot_handler.lambda_handler
+      Policies:
+      - Statement:
+        - Effect: Allow
+          Action:
+          - bedrock:InvokeModel
+          - bedrock:ListFoundationModels
+          Resource:
+          - Fn::Sub: arn:aws:bedrock:${AWS::Region}::foundation-model/us.anthropic.claude-3-5-sonnet-20241022-v2:0
+          - Fn::Sub: arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:*
+      Events:
+        ChatbotPost:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: TaxDocApi
+            Path: /chat
+            Method: post
+        ChatbotOptions:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: TaxDocApi
+            Path: /chat
+            Method: options
+    Metadata:
+      SamResourceId: ChatbotFunction
   TaxDocApi:
     Type: AWS::Serverless::Api
     Properties:
@@ -140,6 +173,47 @@ Resources:
           title: TaxDoc MVP API
           version: '1.0'
         paths:
+          /chat:
+            post:
+              produces:
+              - application/json
+              responses:
+                '200':
+                  description: Success
+                  headers:
+                    Access-Control-Allow-Origin:
+                      type: string
+              x-amazon-apigateway-integration:
+                uri:
+                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ChatbotFunction.Arn}/invocations
+                httpMethod: POST
+                type: aws_proxy
+            options:
+              consumes:
+              - application/json
+              produces:
+              - application/json
+              responses:
+                '200':
+                  description: Success
+                  headers:
+                    Access-Control-Allow-Origin:
+                      type: string
+                    Access-Control-Allow-Headers:
+                      type: string
+                    Access-Control-Allow-Methods:
+                      type: string
+              x-amazon-apigateway-integration:
+                type: mock
+                requestTemplates:
+                  application/json: '{"statusCode": 200}'
+                responses:
+                  default:
+                    statusCode: 200
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Headers: '''Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'''
+                      method.response.header.Access-Control-Allow-Methods: '''POST,OPTIONS'''
+                      method.response.header.Access-Control-Allow-Origin: '''*'''
           /analytics:
             get:
               produces:
@@ -240,6 +314,15 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn:
         Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${TaxDocApi}/*/*
+  ChatbotApiGatewayInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName:
+        Ref: ChatbotFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${TaxDocApi}/*/*
   TaxProcessorLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -251,6 +334,12 @@ Resources:
     Properties:
       LogGroupName:
         Fn::Sub: /aws/lambda/TaxDoc-Analytics-${Environment}
+      RetentionInDays: 7
+  ChatbotLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:
+        Fn::Sub: /aws/lambda/TaxDoc-Chatbot-${Environment}
       RetentionInDays: 7
 Outputs:
   ApiEndpoint:

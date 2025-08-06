@@ -7,6 +7,6 @@ architecture = "x86_64"
 handler = "handlers.mvp_api_handler.lambda_handler"
 manifest_hash = ""
 packagetype = "Zip"
-functions = ["TaxProcessorFunction", "AnalyticsFunction"]
+functions = ["TaxProcessorFunction", "AnalyticsFunction", "ChatbotFunction"]
 
 [layer_build_definitions]

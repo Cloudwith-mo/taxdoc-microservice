@@ -155,30 +155,67 @@ class EnhancedTaxExtractor:
         
         text_content = self._extract_text_from_textract(textract_response)
         
-        # Build prompt for missing fields
-        field_descriptions = []
-        for field in missing_fields:
-            if field in self.w2_fields:
-                field_descriptions.append(f"- {field}: {self.w2_fields[field]}")
-        
-        prompt = f"""Extract the following missing fields from this {doc_type} tax form:
+        # Enhanced prompt for comprehensive W-2 extraction
+        prompt = f"""Extract ALL possible fields from this W-2 tax form. Analyze the document text carefully and extract:
 
-{chr(10).join(field_descriptions)}
+EMPLOYEE INFO:
+- employee_first_name: First name from box e
+- employee_last_name: Last name from box f  
+- employee_address: Full address from box f
+- employee_ssn: Social Security Number from box a
+
+EMPLOYER INFO:
+- employer_name: Company name from box c
+- employer_address: Company address from box c
+- employer_ein: EIN from box b
+- control_number: Control number from box d
+
+WAGES & TAXES (boxes 1-11):
+- wages_income: Box 1 wages, tips, other compensation
+- federal_withheld: Box 2 federal income tax withheld
+- social_security_wages: Box 3 social security wages
+- social_security_tax: Box 4 social security tax withheld
+- medicare_wages: Box 5 medicare wages and tips
+- medicare_tax: Box 6 medicare tax withheld
+- social_security_tips: Box 7 social security tips
+- allocated_tips: Box 8 allocated tips
+- dependent_care_benefits: Box 10 dependent care benefits
+- nonqualified_plans: Box 11 nonqualified plans
+
+BOX 12 CODES:
+- box12_codes: Array of objects with code and amount from box 12
+
+CHECKBOXES (box 13):
+- statutory_employee: Statutory employee checkbox
+- retirement_plan: Retirement plan checkbox
+- third_party_sick_pay: Third-party sick pay checkbox
+
+STATE/LOCAL (boxes 15-20):
+- state: State abbreviation from box 15
+- state_wages: State wages from box 16
+- state_income_tax: State income tax from box 17
+- local_wages: Local wages from box 18
+- local_income_tax: Local income tax from box 19
+- locality_name: Locality name from box 20
+
+OTHER:
+- other_deductions: Box 14 other deductions
+- employer_state_id: Employer's state ID number
 
 Document text:
 {text_content}
 
-Return ONLY a JSON object with the extracted values. Use null for missing values.
+Return ONLY a JSON object with ALL extracted values. Use null for missing values.
 For currency amounts: return numeric values without $ or commas.
-For Box 12 codes: return as array of objects with "code" and "amount" fields.
-For checkboxes: return true/false.
+For Box 12: return as array like [{{"code": "D", "amount": 1500.00}}]
+For checkboxes: return true/false based on if marked.
 
-Example: {{"state": "CA", "state_wages": 50000.00, "box12_codes": [{{"code": "D", "amount": 1500.00}}]}}"""
+JSON:"""
 
         try:
             bedrock_request = {
                 "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": 1000,
+                "max_tokens": 2000,
                 "messages": [{"role": "user", "content": prompt}]
             }
             
@@ -193,7 +230,9 @@ Example: {{"state": "CA", "state_wages": 50000.00, "box12_codes": [{{"code": "D"
             # Extract JSON from response
             json_match = re.search(r'\{.*\}', content, re.DOTALL)
             if json_match:
-                return json.loads(json_match.group())
+                extracted = json.loads(json_match.group())
+                logger.info(f"Claude extracted {len(extracted)} fields")
+                return extracted
             
         except Exception as e:
             logger.error(f"Bedrock extraction failed: {e}")

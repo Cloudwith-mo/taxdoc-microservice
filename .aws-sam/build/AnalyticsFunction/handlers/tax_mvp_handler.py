@@ -26,6 +26,8 @@ sys.path.append('/var/task')
 from services.tax_classifier import TaxClassifier
 from services.enhanced_tax_extractor import EnhancedTaxExtractor
 from services.ai_insights_service import AIInsightsService
+from services.sentiment_service import SentimentService
+from services.chatbot_service import ChatbotService
 
 def lambda_handler(event, context):
     """
@@ -182,20 +184,32 @@ def process_tax_document(file_bytes: bytes, filename: str) -> Dict[str, Any]:
     insights_service = AIInsightsService()
     ai_insights = insights_service.generate_insights(extracted_data, doc_type)
     
-    # Step 5: Format response with AI insights
+    # Step 5: Generate sentiment analysis
+    sentiment_service = SentimentService()
+    sentiment_analysis = sentiment_service.analyze_document_sentiment(extracted_data, doc_type)
+    
+    # Step 6: Generate chatbot summary
+    chatbot_service = ChatbotService()
+    document_summary = chatbot_service.get_document_summary(extracted_data, doc_type)
+    
+    # Step 7: Format response with all enhancements
     return {
         'success': True,
         'filename': filename,
         'document_type': doc_type,
         'extracted_data': extracted_data,
         'ai_insights': ai_insights,
+        'sentiment_analysis': sentiment_analysis,
+        'document_summary': document_summary,
         'processing_info': {
             'ocr_blocks': len(textract_response.get('Blocks', [])),
             'extraction_method': 'three_layer_pipeline',
             'layers_used': extracted_data.get('layers_used', []),
             'total_fields': extracted_data.get('total_fields_extracted', 0),
             'insights_generated': True,
-            'version': 'enhanced-mvp'
+            'sentiment_analyzed': True,
+            'chatbot_enabled': True,
+            'version': 'enhanced-mvp-v2'
         }
     }
 

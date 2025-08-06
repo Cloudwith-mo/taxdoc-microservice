@@ -1,0 +1,371 @@
+"""
+Tax Data Extractor using Claude for V1 MVP
+Extracts structured data from W-2 and 1099 forms
+"""
+import json
+import boto3
+import os
+import re
+from typing import Dict, Any, List
+import logging
+
+logger = logging.getLogger()
+
+class TaxExtractor:
+    """Extract tax data using Claude LLM"""
+    
+    def __init__(self):
+        self.bedrock_client = boto3.client('bedrock-runtime', region_name='us-east-1')
+        self.model_id = "anthropic.claude-3-5-sonnet-20241022-v2:0"
+        
+        # Field definitions for each form type
+        self.form_fields = {
+            "W-2": {
+                "employee_ssn": "Employee's Social Security Number (Box a)",
+                "employer_ein": "Employer identification number EIN (Box b)",
+                "control_number": "Control number (Box d)",
+                "employee_first_name": "Employee's first name and initial (Box e)",
+                "employee_last_name": "Employee's last name (Box f)",
+                "employee_address": "Employee's address and ZIP code (Box f)",
+                "employer_name": "Employer's name, address, and ZIP code (Box c)",
+                "employer_address": "Employer's address from Box c",
+                "employer_state_id": "Employer's state ID number",
+                "wages_income": "Wages, tips, other compensation (Box 1)",
+                "federal_withheld": "Federal income tax withheld (Box 2)",
+                "social_security_wages": "Social Security wages (Box 3)",
+                "social_security_tax": "Social Security tax withheld (Box 4)",
+                "medicare_wages": "Medicare wages and tips (Box 5)",
+                "medicare_tax": "Medicare tax withheld (Box 6)",
+                "social_security_tips": "Social Security tips (Box 7)",
+                "allocated_tips": "Allocated tips (Box 8)",
+                "dependent_care_benefits": "Dependent care benefits (Box 10)",
+                "nonqualified_plans": "Nonqualified plans (Box 11)",
+                "box12_codes": "Box 12 codes and amounts (multiple entries)",
+                "statutory_employee": "Statutory employee checkbox (Box 13)",
+                "retirement_plan": "Retirement plan checkbox (Box 13)",
+                "third_party_sick_pay": "Third-party sick pay checkbox (Box 13)",
+                "other_deductions": "Other deductions or info (Box 14)",
+                "state": "State (Box 15)",
+                "state_wages": "State wages, tips, etc. (Box 16)",
+                "state_income_tax": "State income tax (Box 17)",
+                "local_wages": "Local wages, tips, etc. (Box 18)",
+                "local_income_tax": "Local income tax (Box 19)",
+                "locality_name": "Locality name (Box 20)"
+            },
+            "1099-NEC": {
+                "payer_tin": "Payer's TIN",
+                "recipient_tin": "Recipient's TIN",
+                "payer_name": "Payer's Name",
+                "recipient_name": "Recipient's Name",
+                "nonemployee_compensation": "Nonemployee compensation (Box 1)",
+                "federal_withheld": "Federal income tax withheld (Box 4)"
+            },
+            "1099-MISC": {
+                "payer_tin": "Payer's TIN",
+                "recipient_tin": "Recipient's TIN",
+                "payer_name": "Payer's Name",
+                "recipient_name": "Recipient's Name",
+                "rents": "Rents (Box 1)",
+                "royalties": "Royalties (Box 2)",
+                "other_income": "Other income (Box 3)",
+                "federal_withheld": "Federal income tax withheld (Box 4)"
+            },
+            "1099-DIV": {
+                "payer_name": "Payer's Name",
+                "recipient_name": "Recipient's Name",
+                "ordinary_dividends": "Ordinary dividends (Box 1a)",
+                "qualified_dividends": "Qualified dividends (Box 1b)",
+                "federal_withheld": "Federal income tax withheld (Box 4)"
+            },
+            "1099-INT": {
+                "payer_name": "Payer's Name",
+                "recipient_name": "Recipient's Name",
+                "interest_income": "Interest income (Box 1)",
+                "federal_withheld": "Federal income tax withheld (Box 4)"
+            }
+        }
+    
+    def extract_tax_data(self, textract_response: Dict[str, Any], doc_type: str) -> Dict[str, Any]:
+        """Extract structured data from tax document"""
+        
+        # Get text content from Textract
+        text_content = self._extract_text_from_textract(textract_response)
+        
+        # Get field definitions for this document type
+        fields = self.form_fields.get(doc_type, {})
+        
+        if not fields:
+            return {"error": f"No field definitions for document type: {doc_type}"}
+        
+        # Extract data using Claude
+        extracted_data = self._extract_with_claude(text_content, doc_type, fields)
+        
+        # Post-process and validate
+        processed_data = self._post_process_data(extracted_data, doc_type)
+        
+        return processed_data
+    
+    def _extract_text_from_textract(self, textract_response: Dict[str, Any]) -> str:
+        """Extract text content from Textract response"""
+        text_blocks = []
+        
+        for block in textract_response.get('Blocks', []):
+            if block.get('BlockType') == 'LINE':
+                text = block.get('Text', '').strip()
+                if text:
+                    text_blocks.append(text)
+        
+        return '\n'.join(text_blocks)
+    
+    def _extract_with_claude(self, text_content: str, doc_type: str, fields: Dict[str, str]) -> Dict[str, Any]:
+        """Use Claude via AWS Bedrock to extract structured data"""
+        
+        try:
+            # Test Bedrock access
+            self.bedrock_client.list_foundation_models()
+        except Exception as e:
+            logger.warning(f"Bedrock not available, using fallback extraction: {e}")
+            return self._fallback_extraction(text_content, doc_type)
+        
+        # Build field list for prompt
+        field_descriptions = []
+        for field_key, field_desc in fields.items():
+            field_descriptions.append(f"- {field_key}: {field_desc}")
+        
+        prompt = f"""You are an expert tax document data extraction assistant. Extract ALL available fields from this {doc_type} tax form with high accuracy.
+
+Extract these fields:
+{chr(10).join(field_descriptions)}
+
+Document text:
+{text_content}
+
+IMPORTANT INSTRUCTIONS:
+1. Return ONLY a valid JSON object with ALL extracted values
+2. Use null for missing/empty values
+3. For currency amounts: return numeric values without $ or commas (e.g., 50000.00)
+4. For SSN/EIN: keep dashes (e.g., "123-45-6789")
+5. For Box 12 codes: extract as array of objects with "code" and "amount" fields
+6. For addresses: include full address text
+7. For checkboxes: return true/false based on if checked
+8. Extract ALL visible text content, don't skip any fields
+
+Example JSON format:
+{{
+  "employee_ssn": "123-45-6789",
+  "wages_income": 50000.00,
+  "box12_codes": [{{"code": "D", "amount": 1500.00}}],
+  "state": "PA",
+  "missing_field": null
+}}"""
+
+        try:
+            # Prepare Bedrock request
+            bedrock_request = {
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 2000,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ]
+            }
+            
+            response = self.bedrock_client.invoke_model(
+                modelId=self.model_id,
+                body=json.dumps(bedrock_request)
+            )
+            
+            response_body = json.loads(response['body'].read())
+            content = response_body['content'][0]['text']
+            
+            # Extract JSON from response
+            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            if json_match:
+                extracted_data = json.loads(json_match.group())
+                extracted_data['extraction_method'] = 'bedrock_claude'
+                return extracted_data
+            else:
+                logger.error("No JSON found in Claude response")
+                return self._fallback_extraction(text_content, doc_type)
+                
+        except Exception as e:
+            logger.error(f"Bedrock Claude extraction failed: {str(e)}")
+            logger.info("Falling back to regex extraction")
+            return self._fallback_extraction(text_content, doc_type)
+    
+    def _fallback_extraction(self, text_content: str, doc_type: str) -> Dict[str, Any]:
+        """Simple regex-based fallback extraction"""
+        
+        result = {"extraction_method": "fallback_regex"}
+        
+        # Basic patterns for common fields
+        patterns = {
+            "ssn": r'\b\d{3}-\d{2}-\d{4}\b',
+            "ein": r'\b\d{2}-\d{7}\b',
+            "currency": r'\$?[\d,]+\.?\d{0,2}',
+            "box_1": r'(?:box\s*1|1\.)\s*[\$\d,\.]+',
+            "box_2": r'(?:box\s*2|2\.)\s*[\$\d,\.]+',
+            "box_3": r'(?:box\s*3|3\.)\s*[\$\d,\.]+',
+            "box_4": r'(?:box\s*4|4\.)\s*[\$\d,\.]+'
+        }
+        
+        text_lower = text_content.lower()
+        
+        # Extract SSNs and EINs
+        ssns = re.findall(patterns["ssn"], text_content)
+        eins = re.findall(patterns["ein"], text_content)
+        
+        if doc_type == "W-2":
+            result.update({
+                "employee_ssn": ssns[0] if ssns else None,
+                "employer_ein": eins[0] if eins else None,
+                "wages_income": self._extract_currency_near_text(text_content, ["wages", "box 1"]),
+                "federal_withheld": self._extract_currency_near_text(text_content, ["federal", "withheld", "box 2"]),
+                "social_security_wages": self._extract_currency_near_text(text_content, ["social security", "box 3"]),
+                "medicare_wages": self._extract_currency_near_text(text_content, ["medicare", "box 5"])
+            })
+        elif doc_type.startswith("1099"):
+            result.update({
+                "payer_tin": eins[0] if eins else None,
+                "recipient_tin": ssns[0] if ssns else eins[1] if len(eins) > 1 else None
+            })
+            
+            if doc_type == "1099-NEC":
+                result["nonemployee_compensation"] = self._extract_currency_near_text(text_content, ["nonemployee", "compensation", "box 1"])
+            elif doc_type == "1099-INT":
+                result["interest_income"] = self._extract_currency_near_text(text_content, ["interest", "income", "box 1"])
+        
+        return result
+    
+    def _extract_currency_near_text(self, text: str, keywords: List[str]) -> float:
+        """Extract currency value near specific keywords"""
+        text_lower = text.lower()
+        
+        for keyword in keywords:
+            # Find keyword position
+            pos = text_lower.find(keyword.lower())
+            if pos != -1:
+                # Look for currency in nearby text (±100 characters)
+                start = max(0, pos - 100)
+                end = min(len(text), pos + 100)
+                nearby_text = text[start:end]
+                
+                # Find currency patterns
+                currency_matches = re.findall(r'\$?([\d,]+\.?\d{0,2})', nearby_text)
+                if currency_matches:
+                    try:
+                        # Return first valid currency value
+                        value_str = currency_matches[0].replace(',', '')
+                        return float(value_str)
+                    except ValueError:
+                        continue
+        
+        return None
+    
+    def _post_process_data(self, data: Dict[str, Any], doc_type: str) -> Dict[str, Any]:
+        """Clean and validate extracted data"""
+        
+        processed = {}
+        
+        for key, value in data.items():
+            if value is None or value == "":
+                processed[key] = None
+            elif key in ["wages_income", "federal_withheld", "social_security_wages", 
+                        "social_security_tax", "medicare_wages", "medicare_tax",
+                        "social_security_tips", "allocated_tips", "dependent_care_benefits",
+                        "nonqualified_plans", "state_wages", "state_income_tax",
+                        "local_wages", "local_income_tax", "nonemployee_compensation", 
+                        "interest_income", "ordinary_dividends", "qualified_dividends", 
+                        "rents", "royalties", "other_income"]:
+                # Process currency fields
+                processed[key] = self._clean_currency(value)
+            elif key in ["employee_ssn", "recipient_tin"]:
+                # Process SSN fields
+                processed[key] = self._clean_ssn(value)
+            elif key in ["employer_ein", "payer_tin"]:
+                # Process EIN fields
+                processed[key] = self._clean_ein(value)
+            elif key == "box12_codes":
+                # Process Box 12 codes array
+                processed[key] = self._process_box12_codes(value)
+            elif key in ["statutory_employee", "retirement_plan", "third_party_sick_pay"]:
+                # Process checkbox fields
+                processed[key] = self._process_checkbox(value)
+            else:
+                # Keep other fields as-is
+                processed[key] = value
+        
+        return processed
+    
+    def _clean_currency(self, value) -> float:
+        """Clean and convert currency values"""
+        if value is None:
+            return None
+        
+        try:
+            if isinstance(value, (int, float)):
+                return float(value)
+            
+            # Remove currency symbols and commas
+            clean_value = str(value).replace('$', '').replace(',', '').strip()
+            return float(clean_value) if clean_value else None
+        except (ValueError, TypeError):
+            return None
+    
+    def _clean_ssn(self, value) -> str:
+        """Clean and validate SSN format"""
+        if not value:
+            return None
+        
+        # Extract digits only
+        digits = re.sub(r'\D', '', str(value))
+        
+        if len(digits) == 9:
+            return f"{digits[:3]}-{digits[3:5]}-{digits[5:]}"
+        
+        return None
+    
+    def _clean_ein(self, value) -> str:
+        """Clean and validate EIN format"""
+        if not value:
+            return None
+        
+        # Extract digits only
+        digits = re.sub(r'\D', '', str(value))
+        
+        if len(digits) == 9:
+            return f"{digits[:2]}-{digits[2:]}"
+        
+        return None
+    
+    def _process_box12_codes(self, value) -> List[Dict[str, Any]]:
+        """Process Box 12 codes array"""
+        if not value:
+            return []
+        
+        if isinstance(value, list):
+            return value
+        
+        # If it's a string, try to parse it
+        if isinstance(value, str):
+            try:
+                return json.loads(value)
+            except:
+                return []
+        
+        return []
+    
+    def _process_checkbox(self, value) -> bool:
+        """Process checkbox field"""
+        if value is None:
+            return False
+        
+        if isinstance(value, bool):
+            return value
+        
+        if isinstance(value, str):
+            return value.lower() in ['true', 'yes', 'checked', 'x']
+        
+        return False
