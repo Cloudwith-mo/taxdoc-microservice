@@ -3,7 +3,7 @@ Tax Data Extractor using Claude for V1 MVP
 Extracts structured data from W-2 and 1099 forms
 """
 import json
-import requests
+import boto3
 import os
 import re
 from typing import Dict, Any, List
@@ -15,8 +15,8 @@ class TaxExtractor:
     """Extract tax data using Claude LLM"""
     
     def __init__(self):
-        self.claude_api_key = os.environ.get('CLAUDE_API_KEY')
-        self.claude_url = "https://api.anthropic.com/v1/messages"
+        self.bedrock_client = boto3.client('bedrock-runtime', region_name='us-east-1')
+        self.model_id = "anthropic.claude-3-5-sonnet-20241022-v2:0"
         
         # Field definitions for each form type
         self.form_fields = {
@@ -118,10 +118,13 @@ class TaxExtractor:
         return '\n'.join(text_blocks)
     
     def _extract_with_claude(self, text_content: str, doc_type: str, fields: Dict[str, str]) -> Dict[str, Any]:
-        """Use Claude to extract structured data"""
+        """Use Claude via AWS Bedrock to extract structured data"""
         
-        if not self.claude_api_key:
-            logger.warning("No Claude API key found, using fallback extraction")
+        try:
+            # Test Bedrock access
+            self.bedrock_client.list_foundation_models()
+        except Exception as e:
+            logger.warning(f"Bedrock not available, using fallback extraction: {e}")
             return self._fallback_extraction(text_content, doc_type)
         
         # Build field list for prompt
@@ -157,14 +160,9 @@ Example JSON format:
 }}"""
 
         try:
-            headers = {
-                "Content-Type": "application/json",
-                "x-api-key": self.claude_api_key,
-                "anthropic-version": "2023-06-01"
-            }
-            
-            data = {
-                "model": "claude-3-5-sonnet-20241022",
+            # Prepare Bedrock request
+            bedrock_request = {
+                "anthropic_version": "bedrock-2023-05-31",
                 "max_tokens": 2000,
                 "messages": [
                     {
@@ -174,27 +172,28 @@ Example JSON format:
                 ]
             }
             
-            response = requests.post(self.claude_url, headers=headers, json=data, timeout=30)
+            response = self.bedrock_client.invoke_model(
+                modelId=self.model_id,
+                body=json.dumps(bedrock_request)
+            )
             
-            if response.status_code == 200:
-                result = response.json()
-                content = result['content'][0]['text']
-                
-                # Extract JSON from response
-                json_match = re.search(r'\{.*\}', content, re.DOTALL)
-                if json_match:
-                    return json.loads(json_match.group())
-                else:
-                    logger.error("No JSON found in Claude response")
-                    return self._fallback_extraction(text_content, doc_type)
+            response_body = json.loads(response['body'].read())
+            content = response_body['content'][0]['text']
+            
+            # Extract JSON from response
+            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            if json_match:
+                extracted_data = json.loads(json_match.group())
+                extracted_data['extraction_method'] = 'bedrock_claude'
+                return extracted_data
             else:
-                logger.error(f"Claude API error: {response.status_code} - {response.text}")
+                logger.error("No JSON found in Claude response")
                 return self._fallback_extraction(text_content, doc_type)
                 
         except Exception as e:
-            logger.error(f"Claude extraction failed: {str(e)}")
-            # Don't use fallback - let the error bubble up
-            raise Exception(f"Claude extraction failed: {str(e)}")
+            logger.error(f"Bedrock Claude extraction failed: {str(e)}")
+            logger.info("Falling back to regex extraction")
+            return self._fallback_extraction(text_content, doc_type)
     
     def _fallback_extraction(self, text_content: str, doc_type: str) -> Dict[str, Any]:
         """Simple regex-based fallback extraction"""

@@ -7,19 +7,12 @@ Parameters:
     Type: String
     Default: 'mvp'
     Description: Environment name
-  ClaudeApiKey:
-    Type: String
-    NoEcho: true
-    Description: Anthropic Claude API key for LLM extraction
 
 Globals:
   Function:
     Timeout: 30
     MemorySize: 512
     Runtime: python3.9
-    Environment:
-      Variables:
-        CLAUDE_API_KEY: !Ref ClaudeApiKey
 
 Resources:
   # S3 Bucket for temporary file storage
@@ -53,6 +46,14 @@ Resources:
         - TextractPolicy: {}
         - S3ReadPolicy:
             BucketName: !Ref TaxDocBucket
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+                - bedrock:ListFoundationModels
+              Resource: 
+                - !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0'
+                - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:*'
       Events:
         ProcessDocument:
           Type: Api

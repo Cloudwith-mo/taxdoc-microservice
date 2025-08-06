@@ -20,13 +20,9 @@ NC='\033[0m' # No Color
 echo -e "${GREEN}🚀 TaxDoc V1 MVP Deployment${NC}"
 echo "=================================="
 
-# Check if Claude API key is provided (optional for testing)
-if [ -z "$CLAUDE_API_KEY" ]; then
-    echo -e "${YELLOW}Warning: No CLAUDE_API_KEY provided${NC}"
-    echo "System will use regex fallback extraction (lower accuracy)"
-    echo "To use Claude LLM: export CLAUDE_API_KEY='your-api-key-here'"
-    CLAUDE_API_KEY="fallback-mode"
-fi
+# Using AWS Bedrock for AI extraction (no API key needed)
+echo -e "${GREEN}✅ Using AWS Bedrock for AI extraction${NC}"
+echo "Claude 3.5 Sonnet will be used via Bedrock for high-accuracy extraction"
 
 # Check if AWS CLI is configured
 if ! aws sts get-caller-identity > /dev/null 2>&1; then
@@ -55,7 +51,6 @@ sam deploy \
     --stack-name $STACK_NAME \
     --parameter-overrides \
         Environment=$ENVIRONMENT \
-        ClaudeApiKey=$CLAUDE_API_KEY \
     --capabilities CAPABILITY_IAM \
     --region $REGION \
     --resolve-s3
