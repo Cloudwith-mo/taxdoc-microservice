@@ -1,50 +1,53 @@
 import boto3
 import json
 from typing import Dict, Any, Tuple
-from .tax_form_classifier import TaxFormClassifier
-from .textract_extractor import TextractExtractor
-from .claude_extractor import ClaudeExtractor
-from .field_validator import FieldValidator
+from .enhanced_textract_service import EnhancedTextractService
+from .three_layer_orchestrator import ThreeLayerOrchestrator
+from .enhanced_classifier import EnhancedClassifier
+from config.document_config import DOCUMENT_CONFIGS
 
 class TaxFormProcessor:
-    """Simplified processor for W-2 and 1099 forms only"""
+    """Enhanced processor using three-layer extraction like production"""
     
     def __init__(self):
-        self.classifier = TaxFormClassifier()
-        self.textract = TextractExtractor()
-        self.claude = ClaudeExtractor()
-        self.validator = FieldValidator()
+        self.classifier = EnhancedClassifier()
+        self.orchestrator = ThreeLayerOrchestrator()
+        self.textract = EnhancedTextractService()
     
     def process_tax_document(self, document_bytes: bytes, filename: str) -> Dict[str, Any]:
-        """Main processing pipeline for tax documents"""
+        """Enhanced processing pipeline using three-layer extraction"""
         
         try:
-            # Step 1: Extract text with Textract
-            textract_response = self.textract.extract_text(document_bytes)
+            # Step 1: Basic text extraction for classification
+            textract_response = self.textract.client.detect_document_text(
+                Document={'Bytes': document_bytes}
+            )
             
-            # Step 2: Classify form type
-            form_type, confidence = self.classifier.classify_form(textract_response)
+            # Step 2: Classify document type
+            form_type, confidence = self.classifier.classify_document(textract_response)
             
-            if form_type not in ['W-2', '1099-NEC', '1099-INT', '1099-DIV', '1099-MISC']:
+            if form_type not in DOCUMENT_CONFIGS:
                 return {
                     'success': False,
                     'error': f'Unsupported form type: {form_type}',
-                    'supported_forms': ['W-2', '1099-NEC', '1099-INT', '1099-DIV', '1099-MISC']
+                    'supported_forms': list(DOCUMENT_CONFIGS.keys())
                 }
             
-            # Step 3: Extract fields with Claude
-            extracted_fields = self.claude.extract_fields(textract_response, form_type)
+            # Step 3: Use three-layer orchestrator for comprehensive extraction
+            extraction_result = self.orchestrator.extract_document_fields(document_bytes, form_type)
             
-            # Step 4: Validate and format results
-            validated_fields = self.validator.validate_fields(extracted_fields, form_type)
-            
+            # Convert to MVP format for compatibility
             return {
                 'success': True,
                 'form_type': form_type,
                 'classification_confidence': confidence,
-                'extracted_fields': validated_fields,
-                'field_count': len(validated_fields),
-                'filename': filename
+                'extracted_fields': extraction_result.get('ExtractedData', {}),
+                'field_count': len(extraction_result.get('ExtractedData', {})),
+                'filename': filename,
+                'DocumentType': extraction_result.get('DocumentType'),
+                'ExtractedData': extraction_result.get('ExtractedData', {}),
+                'ExtractionMetadata': extraction_result.get('ExtractionMetadata', {}),
+                'QualityMetrics': extraction_result.get('QualityMetrics', {})
             }
             
         except Exception as e:
