@@ -606,13 +606,21 @@
             const extractedData = result.extracted_data || {};
             const fieldCount = Object.keys(extractedData).filter(k => !['layers_used', 'confidence_scores', 'extraction_method', 'total_fields_extracted'].includes(k)).length;
             
-            formType.textContent = `${result.document_type} - ${fieldCount} fields extracted`;
+            const sentiment = result.sentiment_analysis;
+            const sentimentEmoji = sentiment && sentiment.overall_sentiment === 'positive' ? ' 😊' : 
+                                 sentiment && sentiment.overall_sentiment === 'negative' ? ' 😞' : ' 😐';
+            formType.textContent = `${result.document_type} - ${fieldCount} fields extracted${sentimentEmoji}`;
             
             fieldGrid.innerHTML = '';
             
             // Add AI insights first if available
             if (result.ai_insights) {
                 displayAIInsights(result.ai_insights);
+            }
+            
+            // Add sentiment analysis if available
+            if (result.sentiment_analysis) {
+                displaySentimentAnalysis(result.sentiment_analysis);
             }
             
             // Display extracted fields
@@ -638,6 +646,84 @@
             }
             
             results.style.display = 'block';
+        }
+        
+        function displaySentimentAnalysis(sentiment) {
+            const sentimentItem = document.createElement('div');
+            sentimentItem.style.cssText = `
+                background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+                color: white;
+                padding: 20px;
+                border-radius: 12px;
+                margin-bottom: 20px;
+                box-shadow: 0 8px 20px rgba(72, 187, 120, 0.3);
+            `;
+            
+            const header = document.createElement('h4');
+            header.textContent = '😊 Sentiment Analysis';
+            header.style.cssText = `
+                margin: 0 0 15px 0;
+                font-size: 1.2em;
+                font-weight: 600;
+            `;
+            sentimentItem.appendChild(header);
+            
+            // Overall sentiment and UX score
+            const overallDiv = document.createElement('div');
+            overallDiv.style.cssText = `
+                background: rgba(255, 255, 255, 0.1);
+                padding: 12px;
+                border-radius: 8px;
+                margin-bottom: 15px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            `;
+            
+            const sentimentText = document.createElement('div');
+            const overall = sentiment.overall_sentiment || 'neutral';
+            const uxScore = sentiment.user_experience_score || 0;
+            sentimentText.innerHTML = `
+                <strong>Overall Sentiment:</strong> ${overall.charAt(0).toUpperCase() + overall.slice(1)}<br>
+                <strong>User Experience Score:</strong> ${uxScore}/1.0
+            `;
+            
+            const emoji = overall === 'positive' ? '😊' : overall === 'negative' ? '😞' : '😐';
+            const emojiDiv = document.createElement('div');
+            emojiDiv.style.fontSize = '2em';
+            emojiDiv.textContent = emoji;
+            
+            overallDiv.appendChild(sentimentText);
+            overallDiv.appendChild(emojiDiv);
+            sentimentItem.appendChild(overallDiv);
+            
+            // Confidence sentiment
+            if (sentiment.confidence_sentiment) {
+                const confDiv = document.createElement('div');
+                confDiv.style.cssText = `
+                    background: rgba(255, 255, 255, 0.1);
+                    padding: 10px;
+                    border-radius: 6px;
+                    margin-bottom: 10px;
+                    font-size: 0.9em;
+                `;
+                const conf = sentiment.confidence_sentiment;
+                confDiv.innerHTML = `<strong>Confidence:</strong> ${conf.sentiment || 'N/A'} ${conf.emoji || ''} - ${conf.message || ''}`;
+                sentimentItem.appendChild(confDiv);
+            }
+            
+            // Emotional indicators
+            if (sentiment.emotional_indicators && sentiment.emotional_indicators.length > 0) {
+                const emotionsDiv = document.createElement('div');
+                emotionsDiv.style.cssText = `
+                    font-size: 0.9em;
+                    margin-top: 10px;
+                `;
+                emotionsDiv.innerHTML = `<strong>Emotions:</strong> ${sentiment.emotional_indicators.join(', ')}`;
+                sentimentItem.appendChild(emotionsDiv);
+            }
+            
+            fieldGrid.appendChild(sentimentItem);
         }
         
         function displayAIInsights(insights) {
