@@ -73,8 +73,8 @@ Resources:
                 - bedrock:InvokeModel
                 - bedrock:ListFoundationModels
               Resource: 
-                - !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/us.anthropic.claude-3-5-sonnet-20241022-v2:0'
-                - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:*'
+                - 'arn:aws:bedrock:us-east-1::foundation-model/us.anthropic.claude-3-5-sonnet-20241022-v2:0'
+                - !Sub 'arn:aws:bedrock:us-east-1:${AWS::AccountId}:*'
       Events:
         ProcessDocument:
           Type: Api
@@ -131,8 +131,8 @@ Resources:
                 - bedrock:InvokeModel
                 - bedrock:ListFoundationModels
               Resource: 
-                - !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/us.anthropic.claude-3-5-sonnet-20241022-v2:0'
-                - !Sub 'arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:*'
+                - 'arn:aws:bedrock:us-east-1::foundation-model/us.anthropic.claude-3-5-sonnet-20241022-v2:0'
+                - !Sub 'arn:aws:bedrock:us-east-1:${AWS::AccountId}:*'
       Events:
         ChatbotPost:
           Type: Api
