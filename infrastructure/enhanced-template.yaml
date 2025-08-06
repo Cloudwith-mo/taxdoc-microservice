@@ -1,0 +1,120 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'TaxDoc Enhanced - AI-powered document intelligence'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: enhanced
+    Description: Environment name
+
+Globals:
+  Function:
+    Timeout: 60
+    Runtime: python3.9
+    Environment:
+      Variables:
+        ENVIRONMENT: !Ref Environment
+
+Resources:
+  # S3 Bucket for uploads
+  UploadBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'taxdoc-enhanced-${Environment}-${AWS::AccountId}'
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET, PUT, POST]
+            AllowedOrigins: ['*']
+            MaxAge: 3000
+
+  # Enhanced API Lambda
+  EnhancedApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'TaxDoc-Enhanced-${Environment}'
+      CodeUri: ../src/
+      Handler: handlers.enhanced_api_handler.lambda_handler
+      MemorySize: 1024
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref UploadBucket
+        - Statement:
+          - Effect: Allow
+            Action:
+              - textract:DetectDocumentText
+              - textract:AnalyzeDocument
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - bedrock:InvokeModel
+            Resource: 
+              - 'arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0'
+              - 'arn:aws:bedrock:us-east-1::foundation-model/us.anthropic.claude-sonnet-4-20250514-v1:0'
+          - Effect: Allow
+            Action:
+              - cloudwatch:PutMetricData
+            Resource: '*'
+      Events:
+        ProcessApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref EnhancedApi
+            Path: /{action+}
+            Method: ANY
+
+  # API Gateway
+  EnhancedApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub 'TaxDoc-Enhanced-${Environment}'
+      StageName: !Ref Environment
+      Cors:
+        AllowMethods: "'GET,POST,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+
+  # CloudWatch Dashboard
+  EnhancedDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub 'TaxDoc-Enhanced-${Environment}'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["TaxDoc/Processing", "DocumentsProcessed"],
+                  [".", "ProcessingTime"],
+                  [".", "ExtractionAccuracy"]
+                ],
+                "period": 300,
+                "stat": "Average",
+                "region": "us-east-1",
+                "title": "Processing Metrics"
+              }
+            }
+          ]
+        }
+
+  # SNS Topic for notifications
+  NotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'TaxDoc-Notifications-${Environment}'
+
+Outputs:
+  ApiEndpoint:
+    Description: 'Enhanced API Gateway endpoint'
+    Value: !Sub 'https://${EnhancedApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    
+  UploadBucket:
+    Description: 'S3 bucket for uploads'
+    Value: !Ref UploadBucket
+    
+  DashboardUrl:
+    Description: 'CloudWatch Dashboard URL'
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${EnhancedDashboard}'

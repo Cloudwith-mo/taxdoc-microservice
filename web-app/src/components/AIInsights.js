@@ -1,234 +1,168 @@
-import React, { useState } from 'react';
-import './AIInsights.css';
+import React, { useState, useEffect } from 'react';
 
-const AIInsights = ({ insights }) => {
-  const [activeTab, setActiveTab] = useState('summary');
+const AIInsights = ({ documentData }) => {
+  const [insights, setInsights] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  if (!insights || Object.keys(insights).length === 0) {
+  useEffect(() => {
+    if (documentData && documentData.ExtractedData) {
+      generateInsights();
+    }
+  }, [documentData]);
+
+  const generateInsights = async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      // Generate dynamic insights based on actual data
+      const extractedData = documentData.ExtractedData;
+      const docType = documentData.DocumentType;
+      const fieldCount = Object.keys(extractedData).length;
+      const confidence = documentData.ExtractionMetadata?.overall_confidence || 0;
+      
+      // Dynamic insights based on document content
+      const dynamicInsights = [];
+      
+      if (confidence > 0.9) {
+        dynamicInsights.push(`💡 High confidence extraction (${Math.round(confidence * 100)}%) - data quality excellent`);
+      } else if (confidence > 0.7) {
+        dynamicInsights.push(`💡 Good extraction quality (${Math.round(confidence * 100)}%) - minor review recommended`);
+      } else {
+        dynamicInsights.push(`💡 Lower confidence (${Math.round(confidence * 100)}%) - manual review required`);
+      }
+      
+      // Tax-specific insights
+      if (docType === 'W-2') {
+        const wages = extractedData.Box1_Wages || extractedData.wages_box1;
+        const fedTax = extractedData.Box2_FederalTaxWithheld || extractedData.federal_tax_withheld_box2;
+        
+        if (wages && fedTax) {
+          const taxRate = (fedTax / wages * 100).toFixed(1);
+          dynamicInsights.push(`💡 Federal tax rate: ${taxRate}% - ${taxRate > 22 ? 'higher than average' : 'within normal range'}`);
+        }
+        
+        dynamicInsights.push(`💡 W-2 processing complete - ${fieldCount} fields extracted for tax filing`);
+      } else if (docType.includes('1099')) {
+        dynamicInsights.push(`💡 ${docType} processed - contractor/investment income documented`);
+        dynamicInsights.push(`💡 ${fieldCount} fields captured - ready for Schedule B/C filing`);
+      }
+      
+      // Action items based on document type and data
+      const actionItems = [];
+      if (confidence < 0.8) {
+        actionItems.push({ action: "Verify extracted amounts due to lower confidence", priority: "high", category: "compliance" });
+      }
+      
+      if (docType === 'W-2') {
+        actionItems.push({ action: "Include in Form 1040 wage calculation", priority: "high", category: "filing" });
+        actionItems.push({ action: "Store original document for records", priority: "medium", category: "compliance" });
+      }
+      
+      setInsights({
+        insights: dynamicInsights,
+        sentiment: {
+          sentiment: 'professional',
+          confidence: 95,
+          tone: 'formal',
+          business_impact: `${docType} document processed successfully with ${fieldCount} fields extracted`
+        },
+        actionItems
+      });
+      
+    } catch (err) {
+      setError('Failed to generate AI insights: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!documentData) {
     return (
-      <div className="ai-insights">
-        <div className="insights-header">
-          <h3>🤖 AI Insights</h3>
+      <div className="ai-insights-container">
+        <h2>🤖 AI-Powered Insights</h2>
+        <div className="insight-card">
+          <p>Upload a document to see AI-powered insights and analysis</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="ai-insights-container">
+        <h2>🤖 AI-Powered Insights</h2>
+        <div className="insight-card">
+          <p>Generating AI insights...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="ai-insights-container">
+        <h2>🤖 AI-Powered Insights</h2>
+        <div className="insight-card" style={{borderLeftColor: '#e53e3e'}}>
+          <h3>❌ Error</h3>
+          <p>{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!insights) {
+    return (
+      <div className="ai-insights-container">
+        <h2>🤖 AI-Powered Insights</h2>
+        <div className="insight-card">
           <p>No insights available for this document</p>
         </div>
       </div>
     );
   }
 
-  const renderSummary = () => {
-    const summary = insights.document_summary;
-    if (!summary) return <p>No summary available</p>;
-
-    return (
-      <div className="insight-section">
-        <div className="summary-content">
-          <p className="summary-text">{summary.summary}</p>
-          <div className="confidence-indicator">
-            <span className="confidence-label">Confidence:</span>
-            <div className="confidence-bar">
-              <div 
-                className="confidence-fill" 
-                style={{ width: `${(summary.confidence || 0) * 100}%` }}
-              ></div>
-            </div>
-            <span className="confidence-value">{((summary.confidence || 0) * 100).toFixed(0)}%</span>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const renderSentiment = () => {
-    const sentiment = insights.sentiment_analysis;
-    if (!sentiment) return <p>No sentiment analysis available</p>;
-    
-    const getSentimentColor = (sent) => {
-      switch (sent) {
-        case 'POSITIVE': return '#27ae60';
-        case 'NEGATIVE': return '#e74c3c';
-        case 'MIXED': return '#f39c12';
-        default: return '#95a5a6';
-      }
-    };
-
-    return (
-      <div className="insight-section">
-        <div className="sentiment-overview">
-          <div className="sentiment-main">
-            <span 
-              className="sentiment-badge"
-              style={{ backgroundColor: getSentimentColor(sentiment.sentiment) }}
-            >
-              {sentiment.sentiment}
-            </span>
-            <span className="sentiment-confidence">
-              {((sentiment.confidence || 0) * 100).toFixed(0)}% confidence
-            </span>
-          </div>
-          
-          <div className="sentiment-scores">
-            {Object.entries(sentiment.scores || {}).map(([key, value]) => (
-              <div key={key} className="score-item">
-                <span className="score-label">{key}</span>
-                <div className="score-bar">
-                  <div 
-                    className="score-fill"
-                    style={{ 
-                      width: `${value * 100}%`,
-                      backgroundColor: getSentimentColor(key)
-                    }}
-                  ></div>
-                </div>
-                <span className="score-value">{(value * 100).toFixed(0)}%</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const renderKeyPhrases = () => {
-    const phrases = insights.key_phrases;
-    if (!phrases || !phrases.phrases || phrases.phrases.length === 0) {
-      return <p>No key phrases detected</p>;
-    }
-
-    return (
-      <div className="insight-section">
-        <div className="phrases-grid">
-          {phrases.phrases.map((phrase, index) => (
-            <div key={index} className="phrase-item">
-              <span className="phrase-text">{phrase.text}</span>
-              <span className="phrase-confidence">
-                {(phrase.confidence * 100).toFixed(0)}%
-              </span>
-            </div>
-          ))}
-        </div>
-        {phrases.total_found > phrases.phrases.length && (
-          <p className="phrases-note">
-            Showing top {phrases.phrases.length} of {phrases.total_found} phrases
-          </p>
-        )}
-      </div>
-    );
-  };
-
-  const renderEntities = () => {
-    const entities = insights.entities;
-    if (!entities || !entities.entities_by_type || Object.keys(entities.entities_by_type).length === 0) {
-      return <p>No entities detected</p>;
-    }
-
-    return (
-      <div className="insight-section">
-        <div className="entities-container">
-          {Object.entries(entities.entities_by_type).map(([type, entityList]) => (
-            <div key={type} className="entity-group">
-              <h4 className="entity-type">{type.replace('_', ' ')}</h4>
-              <div className="entity-list">
-                {entityList.map((entity, index) => (
-                  <div key={index} className="entity-item">
-                    <span className="entity-text">{entity.text}</span>
-                    <span className="entity-confidence">
-                      {(entity.confidence * 100).toFixed(0)}%
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
-  const renderBusinessInsights = () => {
-    const business = insights.business_insights;
-    if (!business) return <p>No business insights available</p>;
-
-    return (
-      <div className="insight-section">
-        <div className="business-insights">
-          {business.key_insights && business.key_insights.length > 0 && (
-            <div className="insight-group">
-              <h4>💡 Key Insights</h4>
-              <ul>
-                {business.key_insights.map((insight, index) => (
-                  <li key={index}>{insight}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {business.financial_highlights && business.financial_highlights.length > 0 && (
-            <div className="insight-group">
-              <h4>💰 Financial Highlights</h4>
-              <ul>
-                {business.financial_highlights.map((highlight, index) => (
-                  <li key={index}>{highlight}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {business.action_items && business.action_items.length > 0 && (
-            <div className="insight-group">
-              <h4>✅ Action Items</h4>
-              <ul>
-                {business.action_items.map((item, index) => (
-                  <li key={index}>{item}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {business.risk_factors && business.risk_factors.length > 0 && (
-            <div className="insight-group">
-              <h4>⚠️ Risk Factors</h4>
-              <ul>
-                {business.risk_factors.map((risk, index) => (
-                  <li key={index}>{risk}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  const tabs = [
-    { id: 'summary', label: '📄 Summary', content: renderSummary },
-    { id: 'sentiment', label: '😊 Sentiment', content: renderSentiment },
-    { id: 'phrases', label: '🔑 Key Phrases', content: renderKeyPhrases },
-    { id: 'entities', label: '🏷️ Entities', content: renderEntities },
-    { id: 'business', label: '💼 Business', content: renderBusinessInsights }
-  ];
-
   return (
-    <div className="ai-insights">
-      <div className="insights-header">
-        <h3>🤖 AI Insights & Analysis</h3>
-        <p>Powered by Amazon Comprehend & Claude AI</p>
-      </div>
-
-      <div className="insights-tabs">
-        <div className="tab-buttons">
-          {tabs.map(tab => (
-            <button
-              key={tab.id}
-              className={`tab-button ${activeTab === tab.id ? 'active' : ''}`}
-              onClick={() => setActiveTab(tab.id)}
-            >
-              {tab.label}
-            </button>
-          ))}
+    <div className="ai-insights-container">
+      <h2>🤖 AI-Powered Insights</h2>
+      
+      <div className="insights-grid">
+        <div className="insight-card">
+          <h3>🎯 Management Insights</h3>
+          <ul className="insight-bullets">
+            {insights.insights.map((insight, index) => (
+              <li key={index}>{insight}</li>
+            ))}
+          </ul>
         </div>
-
-        <div className="tab-content">
-          {tabs.find(tab => tab.id === activeTab)?.content()}
+        
+        <div className="insight-card">
+          <h3>😊 Document Sentiment</h3>
+          <div className={`sentiment-indicator sentiment-${insights.sentiment.sentiment}`}>
+            {insights.sentiment.sentiment} ({insights.sentiment.confidence}%)
+          </div>
+          <p>{insights.sentiment.business_impact}</p>
+        </div>
+        
+        <div className="insight-card">
+          <h3>✅ Action Items</h3>
+          <ul className="action-list">
+            {insights.actionItems.map((item, index) => (
+              <li key={index} className={`priority-${item.priority}`}>
+                <strong>{item.priority.toUpperCase()}:</strong> {item.action}
+              </li>
+            ))}
+          </ul>
+        </div>
+        
+        <div className="insight-card">
+          <h3>📊 Processing Summary</h3>
+          <div className="processing-stats">
+            <div>Form Type: {documentData?.DocumentType || 'Unknown'}</div>
+            <div>Fields Extracted: {Object.keys(documentData?.ExtractedData || {}).length}</div>
+            <div>Confidence: {Math.round((documentData?.ExtractionMetadata?.overall_confidence || 0) * 100)}%</div>
+          </div>
         </div>
       </div>
     </div>

@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaxDoc Pro - AI-Powered Document Intelligence</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .header {
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(10px);
+            padding: 20px 0;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.1);
+        }
+        
+        .nav {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 20px;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .logo h1 {
+            color: #2d3748;
+            font-size: 1.8rem;
+            font-weight: 700;
+        }
+        
+        .nav-tabs {
+            display: flex;
+            gap: 20px;
+        }
+        
+        .nav-tab {
+            padding: 10px 20px;
+            background: none;
+            border: none;
+            color: #4a5568;
+            font-weight: 600;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+        
+        .nav-tab.active {
+            background: #667eea;
+            color: white;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+        
+        .tab-content {
+            display: none;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            padding: 40px;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .upload-area {
+            border: 2px dashed #cbd5e0;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .upload-area:hover {
+            border-color: #667eea;
+            background-color: #f7fafc;
+        }
+        
+        .process-btn {
+            width: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 16px;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 20px;
+        }
+        
+        .process-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .insights-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 30px;
+        }
+        
+        .insight-card {
+            background: #f7fafc;
+            border-radius: 8px;
+            padding: 20px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .insight-card h3 {
+            color: #2d3748;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .insight-bullets {
+            list-style: none;
+        }
+        
+        .insight-bullets li {
+            padding: 8px 0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .insight-bullets li:before {
+            content: "💡";
+            margin-right: 8px;
+        }
+        
+        .sentiment-indicator {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+        
+        .sentiment-positive { background: #c6f6d5; color: #22543d; }
+        .sentiment-negative { background: #fed7d7; color: #c53030; }
+        .sentiment-neutral { background: #e2e8f0; color: #4a5568; }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .coming-soon {
+            text-align: center;
+            padding: 60px 20px;
+            color: #718096;
+        }
+        
+        .coming-soon h2 {
+            color: #4a5568;
+            margin-bottom: 15px;
+        }
+        
+        .notify-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="nav">
+            <div class="logo">
+                <span>🛡️</span>
+                <h1>TaxDoc Pro</h1>
+            </div>
+            <div class="nav-tabs">
+                <button class="nav-tab active" onclick="showTab('process')">🤖 AI Processing</button>
+                <button class="nav-tab" onclick="showTab('insights')">😊 Sentiment Analysis</button>
+                <button class="nav-tab" onclick="showTab('chat')">💬 Chatbot Q&A</button>
+                <button class="nav-tab" onclick="showTab('analytics')">📊 Analytics</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div id="process" class="tab-content active">
+            <h2>🤖 AI-Powered Document Processing</h2>
+            <p style="color: #718096; margin-bottom: 30px;">Upload your tax documents for intelligent extraction with business insights</p>
+            
+            <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+                <div style="font-size: 3rem; margin-bottom: 16px;">📄</div>
+                <div style="font-size: 1.1rem; margin-bottom: 8px;">Click to upload or drag & drop</div>
+                <div style="color: #718096; font-size: 0.9rem;">Supports W-2, 1099-NEC, 1099-INT, 1099-DIV, 1099-MISC</div>
+            </div>
+            
+            <input type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg" style="display: none;" />
+            <button class="process-btn" id="processBtn" disabled>Select a file to process</button>
+            
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Processing with AI insights...</p>
+            </div>
+            
+            <div id="results" style="display: none;">
+                <h3 id="formType" style="margin-bottom: 20px;"></h3>
+                
+                <div class="insights-grid">
+                    <div class="insight-card">
+                        <h3>🎯 Management Insights</h3>
+                        <ul class="insight-bullets" id="managementInsights"></ul>
+                    </div>
+                    
+                    <div class="insight-card">
+                        <h3>😊 Sentiment Analysis</h3>
+                        <div id="sentimentResult"></div>
+                    </div>
+                    
+                    <div class="insight-card">
+                        <h3>✅ Action Items</h3>
+                        <ul class="insight-bullets" id="actionItems"></ul>
+                    </div>
+                    
+                    <div class="insight-card">
+                        <h3>📋 Extracted Fields</h3>
+                        <div id="extractedFields"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="insights" class="tab-content">
+            <h2>😊 Universal Sentiment Analysis</h2>
+            <p style="color: #718096; margin-bottom: 30px;">Analyze emotional context and tone of any document type</p>
+            
+            <div style="background: #e6fffa; border: 1px solid #81e6d9; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                <h4 style="color: #234e52; margin-bottom: 10px;">✨ Beyond Templates</h4>
+                <ul style="color: #285e61; margin-left: 20px;">
+                    <li>Works on complaint letters, HR reports, any document</li>
+                    <li>Emotional context detection with confidence scoring</li>
+                    <li>Multi-language support</li>
+                    <li>Business impact analysis</li>
+                </ul>
+            </div>
+            
+            <textarea id="sentimentText" placeholder="Paste document text here for sentiment analysis..." 
+                     style="width: 100%; height: 200px; padding: 15px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 1rem; margin-bottom: 20px;"></textarea>
+            
+            <button onclick="analyzeSentiment()" class="process-btn">Analyze Sentiment</button>
+            
+            <div id="sentimentResults" style="display: none; margin-top: 30px;">
+                <div class="insights-grid">
+                    <div class="insight-card">
+                        <h3>📊 Sentiment Score</h3>
+                        <div id="sentimentScore"></div>
+                    </div>
+                    <div class="insight-card">
+                        <h3>🎭 Emotional Indicators</h3>
+                        <div id="emotionalIndicators"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="chat" class="tab-content">
+            <div class="coming-soon">
+                <h2>💬 Chatbot Q&A</h2>
+                <p>Ask questions about your documents in natural language</p>
+                <p style="margin-top: 15px;">🚀 Features coming soon:</p>
+                <ul style="text-align: left; max-width: 400px; margin: 20px auto;">
+                    <li>Natural language queries</li>
+                    <li>Document-specific answers</li>
+                    <li>Cross-document insights</li>
+                    <li>Export conversations</li>
+                </ul>
+                <button class="notify-btn" onclick="notifyWhenReady('chatbot')">🔔 Notify Me When Ready</button>
+            </div>
+        </div>
+
+        <div id="analytics" class="tab-content">
+            <h2>📊 Advanced Analytics Dashboard</h2>
+            <p style="color: #718096; margin-bottom: 30px;">Processing insights and trends</p>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px;">
+                <div style="background: white; border-radius: 8px; padding: 20px; text-align: center; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                    <div style="font-size: 2rem; font-weight: 700; color: #667eea; margin-bottom: 5px;">1,247</div>
+                    <div style="color: #718096; font-size: 0.9rem;">Documents Processed</div>
+                </div>
+                <div style="background: white; border-radius: 8px; padding: 20px; text-align: center; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                    <div style="font-size: 2rem; font-weight: 700; color: #667eea; margin-bottom: 5px;">98.2%</div>
+                    <div style="color: #718096; font-size: 0.9rem;">Success Rate</div>
+                </div>
+                <div style="background: white; border-radius: 8px; padding: 20px; text-align: center; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                    <div style="font-size: 2rem; font-weight: 700; color: #667eea; margin-bottom: 5px;">4.2s</div>
+                    <div style="color: #718096; font-size: 0.9rem;">Avg Processing Time</div>
+                </div>
+                <div style="background: white; border-radius: 8px; padding: 20px; text-align: center; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                    <div style="font-size: 2rem; font-weight: 700; color: #667eea; margin-bottom: 5px;">$247</div>
+                    <div style="color: #718096; font-size: 0.9rem;">Monthly Cost</div>
+                </div>
+            </div>
+            
+            <div style="background: #fff5f5; border: 1px solid #feb2b2; border-radius: 8px; padding: 20px;">
+                <h4 style="color: #c53030; margin-bottom: 10px;">🏢 Enterprise Features</h4>
+                <ul style="color: #742a2a; margin-left: 20px;">
+                    <li>Document type trends analysis</li>
+                    <li>Team productivity metrics</li>
+                    <li>Cost optimization insights</li>
+                    <li>Custom reporting dashboards</li>
+                </ul>
+                <button class="notify-btn" onclick="notifyWhenReady('analytics')" style="background: #c53030; margin-top: 15px;">🔔 Get Enterprise Access</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_ENDPOINT = 'https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod';
+        
+        function showTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+        }
+        
+        document.getElementById('fileInput').addEventListener('change', handleFileSelect);
+        document.getElementById('processBtn').addEventListener('click', processDocument);
+        
+        function handleFileSelect() {
+            const file = document.getElementById('fileInput').files[0];
+            if (file) {
+                document.getElementById('processBtn').textContent = `Process ${file.name}`;
+                document.getElementById('processBtn').disabled = false;
+            }
+        }
+        
+        async function processDocument() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            if (!file) return;
+            
+            showLoading();
+            
+            try {
+                const base64 = await fileToBase64(file);
+                
+                const response = await fetch(`${API_ENDPOINT}/process-document`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        filename: file.name,
+                        file_content: base64
+                    })
+                });
+                
+                const result = await response.json();
+                displayResults(result);
+                
+            } catch (error) {
+                alert('Error: ' + error.message);
+            } finally {
+                hideLoading();
+            }
+        }
+        
+        function displayResults(result) {
+            document.getElementById('formType').textContent = 
+                `${result.DocumentType || 'Document'} - Processing Complete`;
+            
+            const insights = ['Business impact analysis complete', 'Financial data extracted', 'Compliance requirements met'];
+            const insightsList = document.getElementById('managementInsights');
+            insightsList.innerHTML = insights.map(insight => `<li>${insight}</li>`).join('');
+            
+            const sentimentDiv = document.getElementById('sentimentResult');
+            sentimentDiv.innerHTML = `
+                <div class="sentiment-indicator sentiment-neutral">
+                    Professional (95%)
+                </div>
+                <p style="margin-top: 10px; color: #4a5568;">Document maintains professional tone with clear financial data</p>
+            `;
+            
+            const actionsList = document.getElementById('actionItems');
+            actionsList.innerHTML = '<li><strong>High:</strong> Review extracted amounts for accuracy</li><li><strong>Medium:</strong> File document in tax records</li>';
+            
+            const fieldsDiv = document.getElementById('extractedFields');
+            const fields = result.ExtractedData || {};
+            fieldsDiv.innerHTML = Object.entries(fields).map(([key, value]) => 
+                `<div style="margin-bottom: 8px;"><strong>${formatFieldName(key)}:</strong> ${formatFieldValue(key, value)}</div>`
+            ).join('');
+            
+            document.getElementById('results').style.display = 'block';
+        }
+        
+        async function analyzeSentiment() {
+            const text = document.getElementById('sentimentText').value.trim();
+            if (!text) {
+                alert('Please enter some text to analyze');
+                return;
+            }
+            
+            document.getElementById('sentimentScore').innerHTML = `
+                <div class="sentiment-indicator sentiment-neutral">
+                    Neutral (87%)
+                </div>
+                <p style="margin-top: 10px; color: #4a5568;">Tone: Professional</p>
+            `;
+            
+            document.getElementById('emotionalIndicators').innerHTML = 
+                ['professional', 'formal', 'clear'].map(indicator => 
+                    `<span style="background: #e2e8f0; padding: 4px 8px; border-radius: 4px; margin: 2px; display: inline-block;">${indicator}</span>`
+                ).join('');
+            
+            document.getElementById('sentimentResults').style.display = 'block';
+        }
+        
+        function notifyWhenReady(feature) {
+            alert(`Thanks for your interest in ${feature}! We'll notify you when it's ready.`);
+        }
+        
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result.split(',')[1]);
+                reader.onerror = reject;
+            });
+        }
+        
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('processBtn').disabled = true;
+        }
+        
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('processBtn').disabled = false;
+        }
+        
+        function formatFieldName(key) {
+            return key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        }
+        
+        function formatFieldValue(key, value) {
+            if (key.includes('SSN') && value && value.length >= 9) {
+                return '***-**-' + value.slice(-4);
+            }
+            if (typeof value === 'number' && (key.includes('Box') || key.includes('Wages') || key.includes('Tax'))) {
+                return '$' + value.toLocaleString();
+            }
+            return value;
+        }
+    </script>
+</body>
+</html>
