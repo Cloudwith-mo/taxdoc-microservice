@@ -15,7 +15,7 @@ class AIInsightsService:
     
     def __init__(self):
         self.bedrock_client = boto3.client('bedrock-runtime', region_name='us-east-1')
-        self.model_id = "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
+        self.model_id = "anthropic.claude-3-5-sonnet-20241022-v2:0"
     
     def generate_insights(self, extracted_data: Dict[str, Any], doc_type: str) -> Dict[str, Any]:
         """Generate comprehensive AI insights for a document"""

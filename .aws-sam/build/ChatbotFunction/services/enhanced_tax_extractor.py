@@ -18,7 +18,7 @@ class EnhancedTaxExtractor:
     def __init__(self):
         self.bedrock_client = boto3.client('bedrock-runtime', region_name='us-east-1')
         self.textract_client = boto3.client('textract')
-        self.model_id = "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
+        self.model_id = "anthropic.claude-3-5-sonnet-20241022-v2:0"
         
         # W-2 field definitions with all boxes
         self.w2_fields = {
@@ -71,16 +71,17 @@ class EnhancedTaxExtractor:
         except Exception as e:
             logger.warning(f"Layer 1 failed: {e}")
         
-        # Layer 2: Bedrock Claude (intelligent fallback for missing fields)
-        missing_fields = self._get_missing_fields(final_data, doc_type)
-        if missing_fields:
-            try:
-                layer2_data = self._layer2_bedrock_claude(textract_response, doc_type, missing_fields)
-                layers_used.append("bedrock_claude")
-                final_data.update(layer2_data)
-                logger.info(f"Layer 2 filled {len(layer2_data)} missing fields")
-            except Exception as e:
-                logger.warning(f"Layer 2 failed: {e}")
+        # Layer 2: Bedrock Claude (comprehensive extraction for all fields)
+        try:
+            layer2_data = self._layer2_bedrock_claude(textract_response, doc_type, [])
+            layers_used.append("bedrock_claude")
+            # Merge with Layer 1, prioritizing Layer 1 results
+            for key, value in layer2_data.items():
+                if key not in final_data or final_data[key] is None:
+                    final_data[key] = value
+            logger.info(f"Layer 2 extracted {len(layer2_data)} total fields")
+        except Exception as e:
+            logger.warning(f"Layer 2 failed: {e}")
         
         # Layer 3: Regex patterns (safety net for critical fields)
         critical_missing = self._get_critical_missing_fields(final_data, doc_type)
@@ -155,7 +156,7 @@ class EnhancedTaxExtractor:
         
         text_content = self._extract_text_from_textract(textract_response)
         
-        # Enhanced prompt for comprehensive W-2 extraction
+        # Always extract ALL fields for comprehensive results
         prompt = f"""Extract ALL possible fields from this W-2 tax form. Analyze the document text carefully and extract:
 
 EMPLOYEE INFO:
