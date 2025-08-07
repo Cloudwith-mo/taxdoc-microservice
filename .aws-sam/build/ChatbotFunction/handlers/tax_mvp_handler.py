@@ -6,6 +6,7 @@ import json
 import boto3
 import base64
 import os
+import time
 from typing import Dict, Any
 import logging
 
@@ -28,6 +29,7 @@ from services.enhanced_tax_extractor import EnhancedTaxExtractor
 from services.ai_insights_service import AIInsightsService
 from services.sentiment_service import SentimentService
 from services.chatbot_service import ChatbotService
+from services.cloudwatch_metrics import CloudWatchMetrics
 
 def lambda_handler(event, context):
     """
@@ -152,6 +154,10 @@ def store_document_metadata(result: Dict[str, Any], filename: str):
 def process_tax_document(file_bytes: bytes, filename: str) -> Dict[str, Any]:
     """Process tax document through extraction pipeline"""
     
+    # Initialize metrics
+    metrics = CloudWatchMetrics()
+    start_time = time.time()
+    
     # Step 1: OCR with Textract
     logger.info(f"Processing document: {filename}")
     
@@ -192,7 +198,26 @@ def process_tax_document(file_bytes: bytes, filename: str) -> Dict[str, Any]:
     chatbot_service = ChatbotService()
     document_summary = chatbot_service.get_document_summary(extracted_data, doc_type)
     
-    # Step 7: Format response with all enhancements
+    # Step 7: Send CloudWatch metrics
+    processing_time = time.time() - start_time
+    layers_used = extracted_data.get('layers_used', [])
+    
+    metrics.put_document_processed(doc_type, processing_time, success=True)
+    metrics.put_extraction_metrics(
+        doc_type,
+        textract_used='textract' in layers_used,
+        claude_used='claude' in layers_used,
+        regex_used='regex' in layers_used
+    )
+    
+    # Calculate average confidence
+    fields = extracted_data.get('fields', {})
+    confidences = [field.get('confidence', 0) for field in fields.values() if isinstance(field, dict)]
+    avg_confidence = sum(confidences) / len(confidences) if confidences else 0
+    
+    metrics.put_confidence_metrics(doc_type, avg_confidence * 100, len(fields))
+    
+    # Step 8: Format response with all enhancements
     return {
         'success': True,
         'filename': filename,
@@ -209,6 +234,7 @@ def process_tax_document(file_bytes: bytes, filename: str) -> Dict[str, Any]:
             'insights_generated': True,
             'sentiment_analyzed': True,
             'chatbot_enabled': True,
+            'processing_time': processing_time,
             'version': 'enhanced-mvp-v2'
         }
     }

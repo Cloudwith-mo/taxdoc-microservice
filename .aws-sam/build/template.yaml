@@ -73,6 +73,10 @@ Resources:
           Resource:
           - arn:aws:bedrock:us-east-1::foundation-model/us.anthropic.claude-3-5-sonnet-20241022-v2:0
           - Fn::Sub: arn:aws:bedrock:us-east-1:${AWS::AccountId}:*
+        - Effect: Allow
+          Action:
+          - cloudwatch:PutMetricData
+          Resource: '*'
       Events:
         ProcessDocument:
           Type: Api
