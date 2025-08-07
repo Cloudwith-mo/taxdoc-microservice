@@ -74,12 +74,15 @@ class EnhancedTaxExtractor:
         # Layer 2: Bedrock Claude (comprehensive extraction for all fields)
         try:
             layer2_data = self._layer2_bedrock_claude(textract_response, doc_type, [])
-            layers_used.append("bedrock_claude")
-            # Merge with Layer 1, prioritizing Layer 1 results
-            for key, value in layer2_data.items():
-                if key not in final_data or final_data[key] is None:
-                    final_data[key] = value
-            logger.info(f"Layer 2 extracted {len(layer2_data)} total fields")
+            if layer2_data:  # Only add to layers_used if we got data
+                layers_used.append("bedrock_claude")
+                # Merge with Layer 1, prioritizing Layer 1 results for existing fields
+                for key, value in layer2_data.items():
+                    if key not in final_data or final_data[key] is None:
+                        final_data[key] = value
+                logger.info(f"Layer 2 extracted {len(layer2_data)} total fields: {list(layer2_data.keys())}")
+            else:
+                logger.warning("Layer 2 returned no data")
         except Exception as e:
             logger.warning(f"Layer 2 failed: {e}")
         
@@ -231,9 +234,17 @@ JSON:"""
             # Extract JSON from response
             json_match = re.search(r'\{.*\}', content, re.DOTALL)
             if json_match:
-                extracted = json.loads(json_match.group())
-                logger.info(f"Claude extracted {len(extracted)} fields")
-                return extracted
+                try:
+                    extracted = json.loads(json_match.group())
+                    # Filter out null values and metadata fields
+                    filtered = {k: v for k, v in extracted.items() 
+                              if v is not None and k not in ['layers_used', 'confidence_scores', 'extraction_method', 'total_fields_extracted']}
+                    logger.info(f"Claude extracted {len(filtered)} fields: {list(filtered.keys())}")
+                    return filtered
+                except json.JSONDecodeError as e:
+                    logger.error(f"JSON decode error: {e}")
+                    logger.error(f"Raw content: {content}")
+                    return {}
             
         except Exception as e:
             logger.error(f"Bedrock extraction failed: {e}")
