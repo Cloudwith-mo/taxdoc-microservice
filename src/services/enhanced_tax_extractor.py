@@ -71,16 +71,14 @@ class EnhancedTaxExtractor:
         except Exception as e:
             logger.warning(f"Layer 1 failed: {e}")
         
-        # Layer 2: Bedrock Claude (comprehensive extraction for all fields)
+        # Layer 2: Bedrock Claude (primary comprehensive extraction)
         try:
             layer2_data = self._layer2_bedrock_claude(textract_response, doc_type, [])
-            if layer2_data:  # Only add to layers_used if we got data
+            if layer2_data:
                 layers_used.append("bedrock_claude")
-                # Merge with Layer 1, prioritizing Layer 1 results for existing fields
-                for key, value in layer2_data.items():
-                    if key not in final_data or final_data[key] is None:
-                        final_data[key] = value
-                logger.info(f"Layer 2 extracted {len(layer2_data)} total fields: {list(layer2_data.keys())}")
+                # Use Claude as primary, merge with any Layer 1 data
+                final_data.update(layer2_data)
+                logger.info(f"Layer 2 extracted {len(layer2_data)} fields: {list(layer2_data.keys())}")
             else:
                 logger.warning("Layer 2 returned no data")
         except Exception as e:
@@ -159,62 +157,38 @@ class EnhancedTaxExtractor:
         
         text_content = self._extract_text_from_textract(textract_response)
         
-        # Always extract ALL fields for comprehensive results
-        prompt = f"""Extract ALL possible fields from this W-2 tax form. Analyze the document text carefully and extract:
+        # Extract using exact expected format
+        prompt = f"""Extract ALL W-2 fields from this document. Return JSON with these exact field names:
 
-EMPLOYEE INFO:
-- employee_first_name: First name from box e
-- employee_last_name: Last name from box f  
-- employee_address: Full address from box f
-- employee_ssn: Social Security Number from box a
-
-EMPLOYER INFO:
-- employer_name: Company name from box c
-- employer_address: Company address from box c
-- employer_ein: EIN from box b
-- control_number: Control number from box d
-
-WAGES & TAXES (boxes 1-11):
-- wages_income: Box 1 wages, tips, other compensation
-- federal_withheld: Box 2 federal income tax withheld
-- social_security_wages: Box 3 social security wages
-- social_security_tax: Box 4 social security tax withheld
-- medicare_wages: Box 5 medicare wages and tips
-- medicare_tax: Box 6 medicare tax withheld
-- social_security_tips: Box 7 social security tips
-- allocated_tips: Box 8 allocated tips
-- dependent_care_benefits: Box 10 dependent care benefits
-- nonqualified_plans: Box 11 nonqualified plans
-
-BOX 12 CODES:
-- box12_codes: Array of objects with code and amount from box 12
-
-CHECKBOXES (box 13):
-- statutory_employee: Statutory employee checkbox
-- retirement_plan: Retirement plan checkbox
-- third_party_sick_pay: Third-party sick pay checkbox
-
-STATE/LOCAL (boxes 15-20):
-- state: State abbreviation from box 15
-- state_wages: State wages from box 16
-- state_income_tax: State income tax from box 17
-- local_wages: Local wages from box 18
-- local_income_tax: Local income tax from box 19
-- locality_name: Locality name from box 20
-
-OTHER:
-- other_deductions: Box 14 other deductions
-- employer_state_id: Employer's state ID number
+{{
+  "a": "Employee's social security number",
+  "b": "Employer identification number (EIN)", 
+  "c": "Employer's name, address, and ZIP code",
+  "d": "Control number",
+  "e": "Employee's first name and initial",
+  "f": "Employee's address and ZIP code",
+  "1": "Wages, tips, other compensation",
+  "2": "Federal income tax withheld",
+  "3": "Social security wages",
+  "4": "Social security tax withheld",
+  "5": "Medicare wages and tips",
+  "6": "Medicare tax withheld",
+  "15": "State",
+  "16": "State wages, tips, etc.",
+  "17": "State income tax",
+  "18": "Local wages, tips, etc.",
+  "19": "Local income tax",
+  "20": "Locality name",
+  "box12": [{{"code": "D", "amount": "1500.00"}}],
+  "employer_state_id": "Employer's state ID number",
+  "first_name": "Employee first name only",
+  "last_name": "Employee last name only"
+}}
 
 Document text:
 {text_content}
 
-Return ONLY a JSON object with ALL extracted values. Use null for missing values.
-For currency amounts: return numeric values without $ or commas.
-For Box 12: return as array like [{{"code": "D", "amount": 1500.00}}]
-For checkboxes: return true/false based on if marked.
-
-JSON:"""
+Extract ALL values. Keep currency format with commas. Return ONLY JSON:"""
 
         try:
             bedrock_request = {
