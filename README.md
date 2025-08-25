@@ -4,27 +4,38 @@ An advanced AWS-based microservice that automatically processes 11+ document typ
 
 ## 🚀 Live Production System
 
-### **Web Application**
-🌐 **Frontend**: http://taxdoc-web-app-prod-1754284862.s3-website-us-east-1.amazonaws.com/
+### **Web Applications**
+🌐 **Production Frontend**: http://taxdoc-web-app-prod-1754284862.s3-website-us-east-1.amazonaws.com/
+🌐 **MVP Frontend**: http://drdoc-mvp-frontend-prod.s3-website-us-east-1.amazonaws.com/
+🌐 **Enhanced MVP 2.0**: http://taxdoc-mvp-web-1754513919.s3-website-us-east-1.amazonaws.com/mvp2-enhanced.html
 
 ### **Enhanced API Endpoints**
-🔗 **Base URL**: https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod
+🔗 **Production API**: https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod
+🔗 **MVP API**: https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/mvp
 
 **Available Endpoints:**
-- **Process Document**: `POST /process-document` (Three-layer AI extraction)
+- **Process Document**: `POST /process-document` (Three-layer AI extraction + AI insights)
 - **Get Results**: `GET /result/{doc_id}`
 - **Download Excel**: `GET /download-excel/{doc_id}`
+- **AI Chat**: `POST /chat` (Natural language Q&A about documents)
+- **Analytics**: `GET /analytics` (Processing metrics and insights)
 
 **Direct API Usage:**
 ```bash
-# Upload and process a document with enhanced three-layer pipeline
+# Upload and process a document with AI insights
 curl -X POST "https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod/process-document" \
   -H "Content-Type: application/json" \
-  -d '{"filename": "document.pdf", "file_content": "<base64_encoded_content>"}'
+  -d '{"filename": "document.pdf", "file_content": "<base64_encoded_content>"}'  
+
+# Chat with your documents
+curl -X POST "https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod/chat" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "What is the total income from my W-2?", "doc_id": "your-doc-id"}'
 ```
 
-## 🎯 Three-Layer AI Extraction Pipeline
+## 🎯 AI-Powered Document Processing
 
+### **Three-Layer Extraction Pipeline**
 **Layer 1: Textract Queries** (Primary)
 - Natural language queries for structured extraction
 - 99% confidence on W-2, 98% on 1099-NEC
@@ -39,6 +50,27 @@ curl -X POST "https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod/proces
 - Pattern-based extraction for critical fields
 - Ensures no important data is missed
 - Last resort processing
+
+### **AI Features Suite**
+**AI Insights Generation**
+- Dynamic management insights from extracted data
+- Financial trend analysis and recommendations
+- Action items and compliance alerts
+
+**Sentiment Analysis**
+- Universal sentiment analysis for any document type
+- Confidence scoring and emotional tone detection
+- Business impact assessment
+
+**Natural Language Q&A**
+- Chat with your documents using natural language
+- Cross-document analysis and comparisons
+- Conversation history and context awareness
+
+**Analytics Dashboard**
+- Processing metrics and performance insights
+- Cost optimization recommendations
+- Team productivity analytics
 
 ## 📋 Supported Document Types (11+)
 
@@ -85,15 +117,17 @@ S3 Upload → SQS Queue → Lambda Processor → Three-Layer Extraction → Dyna
 - **React/Amplify** → Dynamic multi-form frontend
 
 ### **Infrastructure Stack**
-- **Main Stack**: `DrDoc-Enhanced-Final-prod`
-- **Monitoring Stack**: `DrDoc-Monitoring-prod`
+- **Main Stack**: `DrDoc-Templates-prod`
+- **Production Frontend**: `taxdoc-web-app-prod-1754284862`
+- **MVP Frontend**: `drdoc-mvp-frontend-prod`
 - **S3 Bucket**: `drdoc-uploads-prod-995805900737`
 - **DynamoDB Table**: `DrDocDocuments-prod`
 - **SQS Queue**: `DrDoc-Processing-prod`
-- **API Gateway**: With throttling (100 burst, 20/sec rate)
+- **API Gateway**: Dual endpoints (prod/mvp) with throttling
+- **Bedrock**: Claude v4 integration for AI features
 - **CloudWatch**: Dashboard and automated alerts
 
-## 🔄 Processing Flow
+## 🔄 Enhanced Processing Flow
 
 1. **Document Upload** → S3 bucket triggers Lambda
 2. **Classification** → AI-powered document type detection
@@ -101,16 +135,23 @@ S3 Upload → SQS Queue → Lambda Processor → Three-Layer Extraction → Dyna
    - Textract Queries (high precision)
    - Claude 4 LLM (intelligent fallback)
    - Regex patterns (safety net)
-4. **Orchestration** → Confidence-based result merging
-5. **Storage** → DynamoDB with metadata
-6. **Response** → JSON with confidence scores and source attribution
+4. **AI Insights Generation** → Dynamic insights from extracted data
+5. **Orchestration** → Confidence-based result merging
+6. **Storage** → DynamoDB with metadata and AI insights
+7. **Response** → JSON with confidence scores, AI insights, and chat capabilities
 
 ## 🚀 Quick Start
 
 ### **Use the Live System**
+**Production System (Full Features):**
 1. Visit: http://taxdoc-web-app-prod-1754284862.s3-website-us-east-1.amazonaws.com/
 2. Upload any supported document
-3. View extracted data with confidence indicators
+3. View extracted data with AI insights and analytics
+
+**MVP System (Core Features + AI):**
+1. Visit: http://drdoc-mvp-frontend-prod.s3-website-us-east-1.amazonaws.com/
+2. Upload documents for streamlined processing
+3. Access AI insights, sentiment analysis, and chat features
 
 ### **Local Development**
 ```bash
@@ -150,12 +191,16 @@ python3 scripts/test_multi_form_extraction.py
 - Field grouping by document sections
 - Responsive design for all devices
 
-**User Experience:**
+**AI-Enhanced User Experience:**
 - Drag-and-drop document upload
-- Real-time processing status
+- **Batch upload processing** (multiple files at once)
+- Real-time processing status with AI insights
+- Multi-tab interface (Processing/AI Insights/Sentiment/Analytics)
+- Natural language chat with documents
 - Confidence-based review recommendations
 - Excel export functionality
 - Cross-validation indicators
+- Email upload support (taxflowsai@gmail.com)
 
 ## ⚙️ Configuration
 
@@ -292,8 +337,12 @@ python3 scripts/test_all_images.py
 - [x] Three-layer extraction pipeline
 - [x] 11+ document type support
 - [x] Claude 4 LLM integration
-- [x] Multi-form React frontend
-- [x] Production deployment
+- [x] AI insights generation
+- [x] Natural language Q&A chatbot
+- [x] Sentiment analysis
+- [x] Analytics dashboard
+- [x] Multi-form React frontend with AI tabs
+- [x] Dual production deployment (prod + MVP)
 - [x] Confidence scoring system
 
 **Planned 🔄**
@@ -325,9 +374,13 @@ MIT License - see LICENSE file for details
 
 ## 📞 Support
 
-**Live System:**
-- 🌐 Web App: http://taxdoc-web-app-prod-1754284862.s3-website-us-east-1.amazonaws.com/
-- 🔗 Enhanced API: https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod
+**Live Systems:**
+- 🌐 **Enhanced MVP 2.0**: http://taxdoc-mvp-web-1754513919.s3-website-us-east-1.amazonaws.com/mvp2-enhanced.html
+- 🌐 Production Web App: http://taxdoc-web-app-prod-1754284862.s3-website-us-east-1.amazonaws.com/
+- 🌐 MVP Web App: http://drdoc-mvp-frontend-prod.s3-website-us-east-1.amazonaws.com/
+- 🔗 Production API: https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod
+- 🔗 MVP API: https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/mvp
+- 📂 GitHub Repository: https://github.com/Cloudwith-mo/taxdoc-microservice.git
 
 **Documentation:**
 - 📋 Technical Architecture: [TECHNICAL_ARCHITECTURE.md](TECHNICAL_ARCHITECTURE.md)
@@ -338,4 +391,4 @@ MIT License - see LICENSE file for details
 - Create GitHub issue
 - Email: support@taxflowsai.com
 
-🎯 **The production system is live and ready to process your documents with 87-99% accuracy!**
+🎯 **Both production systems are live with AI-powered document processing, insights generation, and natural language Q&A capabilities - achieving 87-99% accuracy with intelligent AI assistance!**
