@@ -991,8 +991,13 @@
                 document.getElementById('processBtn').textContent = `Process ${file.name}`;
                 document.getElementById('processBtn').disabled = false;
                 
-                // Show preview for images
+                // Store image data for preview
                 if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        selectedFile.imageData = e.target.result;
+                    };
+                    reader.readAsDataURL(file);
                     showFilePreview(file);
                 }
                 
@@ -1850,16 +1855,26 @@
                 
                 fileList.innerHTML = '';
                 for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    // Store image data for each file
+                    if (file.type.startsWith('image/')) {
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            file.imageData = e.target.result;
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                    
                     const fileDiv = document.createElement('div');
                     fileDiv.style.cssText = 'padding: 8px; background: #f7fafc; margin: 5px 0; border-radius: 4px;';
-                    fileDiv.textContent = `${i + 1}. ${files[i].name} (${(files[i].size / 1024 / 1024).toFixed(2)} MB)`;
+                    fileDiv.textContent = `${i + 1}. ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`;
                     fileList.appendChild(fileDiv);
                 }
                 
                 batchPreview.style.display = 'block';
                 document.getElementById('processBtn').textContent = `Process ${files.length} files`;
                 document.getElementById('processBtn').disabled = false;
-                selectedFile = files; // This is a FileList object
+                selectedFile = files;
                 hideResults();
                 hideError();
             }
@@ -2113,7 +2128,7 @@
                 card.style.cssText = 'display: flex; gap: 15px; align-items: flex-start;';
                 
                 // Get document preview
-                const previewSrc = getDocumentPreview(doc.filename, doc.documentType);
+                const previewSrc = getDocumentPreview(doc);
                 
                 card.innerHTML = `
                     <div class="doc-preview" style="flex-shrink: 0;">
@@ -2138,16 +2153,8 @@
             });
         }
         
-        function getDocumentPreview(filename, docType) {
-            // For demo purposes, return sample images based on document type
-            if (docType.toLowerCase().includes('w-2') || docType.toLowerCase().includes('w2')) {
-                return 'https://www.irs.gov/pub/irs-pdf/fw2.pdf'; // Fallback to generic document icon
-            }
-            if (docType.toLowerCase().includes('1099')) {
-                return 'https://www.irs.gov/pub/irs-pdf/f1099nec.pdf'; // Fallback to generic document icon
-            }
-            // Generic document preview
-            return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIwIiBoZWlnaHQ9IjE1MCIgdmlld0JveD0iMCAwIDEyMCAxNTAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIxMjAiIGhlaWdodD0iMTUwIiBmaWxsPSIjRjdGQUZDIi8+CjxwYXRoIGQ9Ik00MCA2MEg4MFY2NEg0MFY2MFpNNDAgNzJIODBWNzZINDBWNzJaTTQwIDg0SDgwVjg4SDQwVjg0WiIgZmlsbD0iIzlDQTNBRiIvPgo8cGF0aCBkPSJNNTUgNDBINjVWNTBINTVWNDBaIiBmaWxsPSIjNjY3RUVBIi8+Cjx0ZXh0IHg9IjYwIiB5PSIxMjAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM5Q0EzQUYiIGZvbnQtc2l6ZT0iMTIiPkRvY3VtZW50PC90ZXh0Pgo8L3N2Zz4K';
+        function getDocumentPreview(doc) {
+            return doc.imageData || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIwIiBoZWlnaHQ9IjE1MCIgdmlld0JveD0iMCAwIDEyMCAxNTAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIxMjAiIGhlaWdodD0iMTUwIiBmaWxsPSIjRjdGQUZDIi8+CjxwYXRoIGQ9Ik00MCA2MEg4MFY2NEg0MFY2MFpNNDAgNzJIODBWNzZINDBWNzJaTTQwIDg0SDgwVjg4SDQwVjg0WiIgZmlsbD0iIzlDQTNBRiIvPgo8cGF0aCBkPSJNNTUgNDBINjVWNTBINTVWNDBaIiBmaWxsPSIjNjY3RUVBIi8+Cjx0ZXh0IHg9IjYwIiB5PSIxMjAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM5Q0EzQUYiIGZvbnQtc2l6ZT0iMTIiPkRvY3VtZW50PC90ZXh0Pgo8L3N2Zz4K';
         }
         
         async function downloadDocExcel(documentId, filename) {
@@ -2325,7 +2332,7 @@
             
             const extractedData = doc.extractedData?.data || {};
             const fieldCount = Object.keys(extractedData).filter(k => !['confidence_scores', 'layers_used', 'extraction_method'].includes(k)).length;
-            const previewSrc = getDocumentPreview(doc.filename, doc.documentType);
+            const previewSrc = getDocumentPreview(doc);
             
             modal.innerHTML = `
                 <div style="background: white; border-radius: 12px; max-width: 1200px; width: 95%; max-height: 95%; overflow: hidden; margin: 20px; display: flex; flex-direction: column;">
