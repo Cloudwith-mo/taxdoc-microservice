@@ -2110,20 +2110,44 @@
                 
                 const card = document.createElement('div');
                 card.className = 'document-card';
+                card.style.cssText = 'display: flex; gap: 15px; align-items: flex-start;';
+                
+                // Get document preview
+                const previewSrc = getDocumentPreview(doc.filename, doc.documentType);
+                
                 card.innerHTML = `
-                    <h4>${doc.filename}</h4>
-                    <p><strong>Type:</strong> ${doc.documentType}</p>
-                    <p><strong>Fields Extracted:</strong> ${fieldCount}</p>
-                    <p><strong>Processed:</strong> ${new Date(doc.timestamp).toLocaleDateString()}</p>
-                    <p><strong>Confidence:</strong> ${Math.round(doc.confidence * 100)}%</p>
-                    <div style="margin-top: 15px; display: flex; gap: 8px; flex-wrap: wrap;">
-                        <button class="btn btn-primary" onclick="viewDocumentPopup(${index})" style="font-size: 0.9rem;">👁️ View</button>
-                        <button class="btn btn-secondary" onclick="downloadDocExcel('${doc.documentId}', '${doc.filename}')" style="font-size: 0.9rem;">📊 Excel</button>
-                        <button class="btn btn-secondary" onclick="downloadDocCSV('${doc.documentId}', '${doc.filename}')" style="font-size: 0.9rem;">📋 CSV</button>
+                    <div class="doc-preview" style="flex-shrink: 0;">
+                        <img src="${previewSrc}" alt="${doc.filename}" style="width: 120px; height: 150px; object-fit: cover; border-radius: 8px; border: 2px solid #e2e8f0;" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIwIiBoZWlnaHQ9IjE1MCIgdmlld0JveD0iMCAwIDEyMCAxNTAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIxMjAiIGhlaWdodD0iMTUwIiBmaWxsPSIjRjdGQUZDIi8+CjxwYXRoIGQ9Ik00MCA2MEg4MFY2NEg0MFY2MFpNNDAgNzJIODBWNzZINDBWNzJaTTQwIDg0SDgwVjg4SDQwVjg0WiIgZmlsbD0iIzlDQTNBRiIvPgo8cGF0aCBkPSJNNTUgNDBINjVWNTBINTVWNDBaIiBmaWxsPSIjNjY3RUVBIi8+Cjx0ZXh0IHg9IjYwIiB5PSIxMjAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM5Q0EzQUYiIGZvbnQtc2l6ZT0iMTIiPkRvY3VtZW50PC90ZXh0Pgo8L3N2Zz4K'">
+                    </div>
+                    <div class="doc-details" style="flex: 1;">
+                        <h4 style="margin: 0 0 8px 0; color: #2d3748;">${doc.filename}</h4>
+                        <div style="display: grid; gap: 4px; margin-bottom: 15px; font-size: 0.9rem;">
+                            <div><strong>Type:</strong> <span style="color: #667eea;">${doc.documentType}</span></div>
+                            <div><strong>Fields:</strong> ${fieldCount} extracted</div>
+                            <div><strong>Confidence:</strong> <span style="color: ${doc.confidence > 0.9 ? '#48bb78' : doc.confidence > 0.7 ? '#ed8936' : '#e53e3e'};">${Math.round(doc.confidence * 100)}%</span></div>
+                            <div><strong>Processed:</strong> ${new Date(doc.timestamp).toLocaleDateString()}</div>
+                        </div>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <button class="btn btn-primary" onclick="viewDocumentPopup(${index})" style="font-size: 0.9rem;">👁️ View</button>
+                            <button class="btn btn-secondary" onclick="downloadDocExcel('${doc.documentId}', '${doc.filename}')" style="font-size: 0.9rem;">📊 Excel</button>
+                            <button class="btn btn-secondary" onclick="downloadDocCSV('${doc.documentId}', '${doc.filename}')" style="font-size: 0.9rem;">📋 CSV</button>
+                        </div>
                     </div>
                 `;
                 grid.appendChild(card);
             });
+        }
+        
+        function getDocumentPreview(filename, docType) {
+            // For demo purposes, return sample images based on document type
+            if (docType.toLowerCase().includes('w-2') || docType.toLowerCase().includes('w2')) {
+                return 'https://www.irs.gov/pub/irs-pdf/fw2.pdf'; // Fallback to generic document icon
+            }
+            if (docType.toLowerCase().includes('1099')) {
+                return 'https://www.irs.gov/pub/irs-pdf/f1099nec.pdf'; // Fallback to generic document icon
+            }
+            // Generic document preview
+            return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIwIiBoZWlnaHQ9IjE1MCIgdmlld0JveD0iMCAwIDEyMCAxNTAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIxMjAiIGhlaWdodD0iMTUwIiBmaWxsPSIjRjdGQUZDIi8+CjxwYXRoIGQ9Ik00MCA2MEg4MFY2NEg0MFY2MFpNNDAgNzJIODBWNzZINDBWNzJaTTQwIDg0SDgwVjg4SDQwVjg0WiIgZmlsbD0iIzlDQTNBRiIvPgo8cGF0aCBkPSJNNTUgNDBINjVWNTBINTVWNDBaIiBmaWxsPSIjNjY3RUVBIi8+Cjx0ZXh0IHg9IjYwIiB5PSIxMjAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM5Q0EzQUYiIGZvbnQtc2l6ZT0iMTIiPkRvY3VtZW50PC90ZXh0Pgo8L3N2Zz4K';
         }
         
         async function downloadDocExcel(documentId, filename) {
@@ -2301,10 +2325,11 @@
             
             const extractedData = doc.extractedData?.data || {};
             const fieldCount = Object.keys(extractedData).filter(k => !['confidence_scores', 'layers_used', 'extraction_method'].includes(k)).length;
+            const previewSrc = getDocumentPreview(doc.filename, doc.documentType);
             
             modal.innerHTML = `
-                <div style="background: white; padding: 30px; border-radius: 12px; max-width: 800px; width: 90%; max-height: 90%; overflow-y: auto; margin: 20px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 15px;">
+                <div style="background: white; border-radius: 12px; max-width: 1200px; width: 95%; max-height: 95%; overflow: hidden; margin: 20px; display: flex; flex-direction: column;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 20px; border-bottom: 2px solid #e2e8f0;">
                         <div>
                             <h2 style="margin: 0; color: #2d3748;">${doc.filename}</h2>
                             <p style="margin: 5px 0 0 0; color: #666;">${doc.documentType} • ${fieldCount} fields • ${Math.round(doc.confidence * 100)}% confidence</p>
@@ -2312,37 +2337,46 @@
                         <button onclick="closeDocumentModal()" style="background: #e2e8f0; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 1.2rem;">✕</button>
                     </div>
                     
-                    <div style="margin-bottom: 20px;">
-                        <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-                            <button class="btn btn-primary" onclick="downloadModalExcel('${doc.documentId}', '${doc.filename}')">📊 Download Excel</button>
-                            <button class="btn btn-secondary" onclick="downloadModalCSV('${doc.documentId}', '${doc.filename}')">📋 Download CSV</button>
-                            <button class="btn btn-secondary" onclick="downloadModalJSON('${doc.documentId}', '${doc.filename}')">📄 Download JSON</button>
+                    <div style="padding: 20px; display: flex; gap: 20px; flex: 1; overflow: hidden;">
+                        <div style="flex: 1; max-width: 400px;">
+                            <h3 style="margin: 0 0 15px 0; color: #2d3748;">Document Preview</h3>
+                            <div style="background: #f7fafc; border-radius: 8px; padding: 15px; text-align: center;">
+                                <img src="${previewSrc}" alt="${doc.filename}" style="max-width: 100%; max-height: 500px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjQwMCIgdmlld0JveD0iMCAwIDMwMCA0MDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMDAiIGhlaWdodD0iNDAwIiBmaWxsPSIjRjdGQUZDIiBzdHJva2U9IiNFMkU4RjAiIHN0cm9rZS13aWR0aD0iMiIvPgo8cGF0aCBkPSJNMTAwIDEwMEgyMDBWMTEwSDEwMFYxMDBaTTEwMCAxMzBIMjAwVjE0MEgxMDBWMTMwWk0xMDAgMTYwSDIwMFYxNzBIMTAwVjE2MFpNMTAwIDE5MEgyMDBWMjAwSDEwMFYxOTBaTTEwMCAyMjBIMjAwVjIzMEgxMDBWMjIwWiIgZmlsbD0iIzlDQTNBRiIvPgo8cGF0aCBkPSJNMTM1IDYwSDE2NVY5MEgxMzVWNjBaIiBmaWxsPSIjNjY3RUVBIi8+Cjx0ZXh0IHg9IjE1MCIgeT0iMzIwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjOUNBM0FGIiBmb250LXNpemU9IjE4Ij5Eb2N1bWVudCBQcmV2aWV3PC90ZXh0Pgo8dGV4dCB4PSIxNTAiIHk9IjM0NSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzlDQTNBRiIgZm9udC1zaXplPSIxNCI+Tm90IEF2YWlsYWJsZTwvdGV4dD4KPHN2Zz4K'">
+                            </div>
+                            <div style="margin-top: 15px; display: flex; gap: 8px; justify-content: center;">
+                                <button class="btn btn-primary" onclick="downloadModalExcel('${doc.documentId}', '${doc.filename}')" style="font-size: 0.9rem;">📊 Excel</button>
+                                <button class="btn btn-secondary" onclick="downloadModalCSV('${doc.documentId}', '${doc.filename}')" style="font-size: 0.9rem;">📋 CSV</button>
+                                <button class="btn btn-secondary" onclick="downloadModalJSON('${doc.documentId}', '${doc.filename}')" style="font-size: 0.9rem;">📄 JSON</button>
+                            </div>
                         </div>
-                    </div>
-                    
-                    <div class="modal-field-grid" style="display: grid; gap: 12px;">
-                        ${Object.entries(extractedData).filter(([key]) => !['confidence_scores', 'layers_used', 'extraction_method'].includes(key)).map(([key, value]) => {
-                            const confidence = doc.extractedData?.confidence_scores?.[key] || 0.95;
-                            return `
-                                <div style="background: #f7fafc; padding: 16px; border-radius: 8px; border-left: 4px solid #667eea;">
-                                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                                        <div style="flex: 1;">
-                                            <div style="font-weight: 600; color: #4a5568; font-size: 0.9rem; margin-bottom: 4px;">${formatFieldName(key)}</div>
-                                            <div style="color: #2d3748; font-size: 1.1rem;">${formatFieldValue(key, value)}</div>
-                                        </div>
-                                        <div style="text-align: right;">
-                                            <div class="confidence-badge ${getConfidenceClass(confidence)}" style="padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; font-weight: 600;">
-                                                ${Math.round(confidence * 100)}%
+                        
+                        <div style="flex: 1; overflow-y: auto;">
+                            <h3 style="margin: 0 0 15px 0; color: #2d3748;">Extracted Data</h3>
+                            <div class="modal-field-grid" style="display: grid; gap: 12px;">
+                                ${Object.entries(extractedData).filter(([key]) => !['confidence_scores', 'layers_used', 'extraction_method'].includes(key)).map(([key, value]) => {
+                                    const confidence = doc.extractedData?.confidence_scores?.[key] || 0.95;
+                                    return `
+                                        <div style="background: #f7fafc; padding: 16px; border-radius: 8px; border-left: 4px solid #667eea;">
+                                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                                <div style="flex: 1;">
+                                                    <div style="font-weight: 600; color: #4a5568; font-size: 0.9rem; margin-bottom: 4px;">${formatFieldName(key)}</div>
+                                                    <div style="color: #2d3748; font-size: 1.1rem;">${formatFieldValue(key, value)}</div>
+                                                </div>
+                                                <div style="text-align: right;">
+                                                    <div class="confidence-badge ${getConfidenceClass(confidence)}" style="padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; font-weight: 600;">
+                                                        ${Math.round(confidence * 100)}%
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                </div>
-                            `;
-                        }).join('')}
-                    </div>
-                    
-                    <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e2e8f0; font-size: 0.9rem; color: #666;">
-                        Processed: ${new Date(doc.timestamp).toLocaleString()}
+                                    `;
+                                }).join('')}
+                            </div>
+                            
+                            <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e2e8f0; font-size: 0.9rem; color: #666;">
+                                Processed: ${new Date(doc.timestamp).toLocaleString()}
+                            </div>
+                        </div>
                     </div>
                 </div>
             `;
