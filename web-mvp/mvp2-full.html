@@ -1276,10 +1276,11 @@
                                         ${result.status === 'completed' ? '✅ Successfully processed' : '❌ ' + result.error}
                                     </div>
                                 </div>
-                                <div>
+                                <div style="display: flex; gap: 5px;">
                                     ${result.status === 'completed' ? `
-                                        <button class="btn btn-secondary" onclick="downloadBatchResult('${result.documentId}', '${result.filename}')" style="margin-right: 5px;">📊 Excel</button>
-                                        <button class="btn btn-secondary" onclick="downloadBatchCSV('${result.documentId}', '${result.filename}')">📋 CSV</button>
+                                        <button class="btn btn-primary" onclick="viewBatchResult('${result.documentId}', '${result.filename}')" style="font-size: 0.9rem;">👁️ View</button>
+                                        <button class="btn btn-secondary" onclick="downloadBatchResult('${result.documentId}', '${result.filename}')" style="font-size: 0.9rem;">📊 Excel</button>
+                                        <button class="btn btn-secondary" onclick="downloadBatchCSV('${result.documentId}', '${result.filename}')" style="font-size: 0.9rem;">📋 CSV</button>
                                     ` : ''}
                                 </div>
                             </div>
@@ -1291,6 +1292,32 @@
             const progressDiv = document.getElementById('batchProgress');
             if (progressDiv) {
                 progressDiv.replaceWith(resultsDiv);
+            }
+        }
+        
+        async function viewBatchResult(documentId, filename) {
+            try {
+                const response = await fetch(`${API_BASE}/result/${documentId}`);
+                const resultData = await response.json();
+                
+                if (resultData.data) {
+                    // Set current data for viewing
+                    currentDocumentId = documentId;
+                    currentExtractionData = resultData;
+                    
+                    // Create a temporary selected file object
+                    selectedFile = { name: filename };
+                    
+                    // Show results in the main results area
+                    showResults(resultData);
+                    
+                    // Scroll to results
+                    document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
+                } else {
+                    showNotification('No extraction data available for this document.');
+                }
+            } catch (error) {
+                showNotification('Failed to load document results: ' + error.message);
             }
         }
         
