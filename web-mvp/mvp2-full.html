@@ -755,20 +755,6 @@
                     <p>No documents processed yet. Import documents to get started!</p>
                 </div>
             </div>
-            
-            <div class="chat-container" style="margin-top: 30px;">
-                <h3>💬 AI Assistant</h3>
-                <div class="chat-messages" id="chatMessages">
-                    <div style="text-align: center; color: #718096; padding: 40px;">
-                        <div style="font-size: 3rem; margin-bottom: 16px;">🤖</div>
-                        <p>Hi! Ask me about your documents or general tax questions!</p>
-                    </div>
-                </div>
-                <div class="chat-input-area">
-                    <input type="text" class="chat-input" id="chatInput" placeholder="Ask about your documents or tax questions..." />
-                    <button class="send-btn" onclick="sendMessage()" id="sendBtn">📤</button>
-                </div>
-            </div>
         </div>
         
         <div class="tab-content" id="exports-tab">
@@ -921,6 +907,8 @@
         let isEditMode = false;
         let editedData = {};
         let isBlocked = false;
+        let batchResults = [];
+        let allExports = [];
         
         // Subscription tiers
         const TIERS = {
@@ -1135,24 +1123,228 @@
         
         async function processBatchFiles(fileList) {
             const files = Array.from(fileList);
-            let processed = 0;
-            let failed = 0;
+            batchResults = [];
             
             showNotification(`Processing ${files.length} files...`);
+            showBatchProgress(files);
             
-            for (const file of files) {
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const result = {
+                    filename: file.name,
+                    status: 'processing',
+                    timestamp: new Date().toISOString(),
+                    error: null,
+                    documentId: null,
+                    extractedData: null
+                };
+                
+                batchResults.push(result);
+                updateBatchProgress(i, 'processing');
+                
                 try {
-                    await processSingleFile(file);
-                    processed++;
-                    showNotification(`Processed ${processed}/${files.length} files`);
+                    const documentId = await processSingleFileForBatch(file);
+                    result.status = 'completed';
+                    result.documentId = documentId;
+                    updateBatchProgress(i, 'completed');
                 } catch (error) {
-                    failed++;
-                    console.error(`Failed to process ${file.name}:`, error);
+                    result.status = 'failed';
+                    result.error = error.message;
+                    updateBatchProgress(i, 'failed');
                 }
             }
             
             hideLoading();
-            showNotification(`Batch complete: ${processed} processed, ${failed} failed`);
+            showBatchResults();
+            const completed = batchResults.filter(r => r.status === 'completed').length;
+            const failed = batchResults.filter(r => r.status === 'failed').length;
+            showNotification(`Batch complete: ${completed} processed, ${failed} failed`);
+        }
+        
+        async function processSingleFileForBatch(file) {
+            const base64 = await fileToBase64(file);
+            
+            const response = await fetch(`${API_BASE}/process-document`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    filename: file.name,
+                    file_content: base64
+                })
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `HTTP ${response.status}`);
+            }
+            
+            const uploadResult = await response.json();
+            const documentId = uploadResult.document_id;
+            
+            // Wait for processing
+            let attempts = 0;
+            const maxAttempts = 30;
+            
+            while (attempts < maxAttempts) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                const resultResponse = await fetch(`${API_BASE}/result/${documentId}`);
+                const resultData = await resultResponse.json();
+                
+                if (resultData.status === 'completed' && resultData.data) {
+                    monthlyUsage++;
+                    processedDocuments.push({
+                        filename: file.name,
+                        timestamp: new Date().toISOString(),
+                        documentType: resultData.document_type || 'Unknown',
+                        confidence: calculateAverageConfidence(resultData.data),
+                        documentId: documentId,
+                        extractedData: resultData
+                    });
+                    saveUserData();
+                    return documentId;
+                }
+                
+                if (resultData.status === 'failed') {
+                    throw new Error('Document processing failed');
+                }
+                
+                attempts++;
+            }
+            
+            throw new Error('Processing timeout');
+        }
+        
+        function showBatchProgress(files) {
+            const progressDiv = document.createElement('div');
+            progressDiv.id = 'batchProgress';
+            progressDiv.innerHTML = `
+                <h4>Batch Processing Progress</h4>
+                <div id="batchProgressList"></div>
+            `;
+            progressDiv.style.cssText = 'background: #f7fafc; padding: 20px; border-radius: 8px; margin: 20px 0;';
+            
+            const list = progressDiv.querySelector('#batchProgressList');
+            files.forEach((file, index) => {
+                const item = document.createElement('div');
+                item.id = `batch-item-${index}`;
+                item.innerHTML = `
+                    <span>${file.name}</span>
+                    <span id="batch-status-${index}" style="float: right; color: #666;">⏳ Waiting...</span>
+                `;
+                item.style.cssText = 'padding: 8px; border-bottom: 1px solid #e2e8f0;';
+                list.appendChild(item);
+            });
+            
+            document.getElementById('results').appendChild(progressDiv);
+            document.getElementById('results').style.display = 'block';
+        }
+        
+        function updateBatchProgress(index, status) {
+            const statusEl = document.getElementById(`batch-status-${index}`);
+            if (statusEl) {
+                switch (status) {
+                    case 'processing':
+                        statusEl.innerHTML = '🔄 Processing...';
+                        statusEl.style.color = '#667eea';
+                        break;
+                    case 'completed':
+                        statusEl.innerHTML = '✅ Completed';
+                        statusEl.style.color = '#48bb78';
+                        break;
+                    case 'failed':
+                        statusEl.innerHTML = '❌ Failed';
+                        statusEl.style.color = '#e53e3e';
+                        break;
+                }
+            }
+        }
+        
+        function showBatchResults() {
+            const resultsDiv = document.createElement('div');
+            resultsDiv.innerHTML = `
+                <h4>Batch Results</h4>
+                <div class="batch-results-grid" style="display: grid; gap: 10px; margin-top: 15px;">
+                    ${batchResults.map((result, index) => `
+                        <div class="batch-result-item" style="background: white; padding: 15px; border-radius: 8px; border-left: 4px solid ${result.status === 'completed' ? '#48bb78' : '#e53e3e'};">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <strong>${result.filename}</strong>
+                                    <div style="font-size: 0.9rem; color: #666; margin-top: 4px;">
+                                        ${result.status === 'completed' ? '✅ Successfully processed' : '❌ ' + result.error}
+                                    </div>
+                                </div>
+                                <div>
+                                    ${result.status === 'completed' ? `
+                                        <button class="btn btn-secondary" onclick="downloadBatchResult('${result.documentId}', '${result.filename}')" style="margin-right: 5px;">📊 Excel</button>
+                                        <button class="btn btn-secondary" onclick="downloadBatchCSV('${result.documentId}', '${result.filename}')">📋 CSV</button>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            
+            const progressDiv = document.getElementById('batchProgress');
+            if (progressDiv) {
+                progressDiv.replaceWith(resultsDiv);
+            }
+        }
+        
+        async function downloadBatchResult(documentId, filename) {
+            try {
+                const response = await fetch(`${API_BASE}/download-excel/${documentId}`);
+                if (response.ok) {
+                    const blob = await response.blob();
+                    downloadBlob(blob, `${filename.split('.')[0]}_extracted_data.xlsx`);
+                    addToExports('Excel', `${filename.split('.')[0]}_extracted_data.xlsx`, documentId);
+                } else {
+                    throw new Error('Excel download failed');
+                }
+            } catch (error) {
+                showNotification('Excel download failed, trying CSV...');
+                downloadBatchCSV(documentId, filename);
+            }
+        }
+        
+        async function downloadBatchCSV(documentId, filename) {
+            try {
+                const response = await fetch(`${API_BASE}/result/${documentId}`);
+                const resultData = await response.json();
+                
+                if (resultData.data) {
+                    const csvContent = generateCSV(resultData.data);
+                    const blob = new Blob([csvContent], { type: 'text/csv' });
+                    downloadBlob(blob, `${filename.split('.')[0]}_extracted_data.csv`);
+                    addToExports('CSV', `${filename.split('.')[0]}_extracted_data.csv`, documentId);
+                }
+            } catch (error) {
+                showNotification('CSV download failed: ' + error.message);
+            }
+        }
+        
+        function downloadBlob(blob, filename) {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }
+        
+        function generateCSV(data) {
+            let csvContent = 'Field,Value\n';
+            Object.entries(data).forEach(([key, value]) => {
+                if (['confidence_scores', 'layers_used', 'extraction_method'].includes(key)) return;
+                const cleanValue = String(value).replace(/"/g, '""');
+                csvContent += `"${formatFieldName(key)}","${cleanValue}"\n`;
+            });
+            return csvContent;
         }
         
         function showResults(result) {
@@ -1326,7 +1518,46 @@
         }
         
         async function handleGeneralQuestions(message) {
-            // Always return null to force Claude API call
+            const lowerMessage = message.toLowerCase();
+            
+            // Tax form questions
+            if (lowerMessage.includes('w-2') || lowerMessage.includes('w2')) {
+                return {
+                    response: "📄 **W-2 Form (Wage and Tax Statement)**\n\nA W-2 is a tax document that shows:\n• Your annual wages and salary\n• Federal, state, and local taxes withheld\n• Social Security and Medicare taxes paid\n• Other deductions (401k, health insurance, etc.)\n\n**Key boxes:**\n• Box 1: Wages, tips, other compensation\n• Box 2: Federal income tax withheld\n• Box 3: Social Security wages\n• Box 4: Social Security tax withheld\n\n💡 You'll receive a W-2 from each employer by January 31st for the previous tax year."
+                };
+            }
+            
+            if (lowerMessage.includes('1099') && !lowerMessage.includes('w-2')) {
+                return {
+                    response: "📄 **1099 Forms (Various Types)**\n\n1099 forms report various types of income:\n\n**Common types:**\n• **1099-NEC**: Non-employee compensation (freelance work)\n• **1099-INT**: Interest income from banks\n• **1099-DIV**: Dividend income from investments\n• **1099-MISC**: Miscellaneous income\n• **1099-R**: Retirement distributions\n\n**Key difference from W-2:**\n• No taxes are typically withheld\n• You may need to pay estimated taxes\n• Often requires Schedule C for business income\n\n💡 You'll receive 1099s by January 31st if you earned $600+ from a source."
+                };
+            }
+            
+            if (lowerMessage.includes('deduction') || lowerMessage.includes('write off')) {
+                return {
+                    response: "💰 **Tax Deductions**\n\nDeductions reduce your taxable income:\n\n**Standard vs. Itemized:**\n• Standard: $13,850 (single) / $27,700 (married) for 2023\n• Itemized: List specific expenses if they exceed standard\n\n**Common deductions:**\n• Mortgage interest\n• State and local taxes (up to $10,000)\n• Charitable donations\n• Medical expenses (over 7.5% of income)\n• Business expenses (if self-employed)\n\n**Business deductions:**\n• Home office expenses\n• Business meals (50%)\n• Travel expenses\n• Equipment and supplies\n\n💡 Keep receipts and records for all deductions!"
+                };
+            }
+            
+            if (lowerMessage.includes('deadline') || lowerMessage.includes('when') && lowerMessage.includes('file')) {
+                return {
+                    response: "📅 **Tax Filing Deadlines**\n\n**Individual Returns (Form 1040):**\n• **April 15, 2024** for 2023 tax year\n• Can request 6-month extension to October 15\n• Extension is for filing, not payment!\n\n**Quarterly Estimated Taxes:**\n• Q1: April 15\n• Q2: June 15\n• Q3: September 15\n• Q4: January 15 (next year)\n\n**Business Returns:**\n• Partnerships/S-Corps: March 15\n• C-Corporations: April 15\n\n**Important documents needed:**\n• W-2s and 1099s (received by January 31)\n• Previous year's tax return\n• Receipts for deductions\n\n⚠️ File even if you can't pay - penalties are higher for not filing!"
+                };
+            }
+            
+            if (lowerMessage.includes('refund') || lowerMessage.includes('owe')) {
+                return {
+                    response: "💵 **Tax Refunds vs. Owing**\n\n**You get a refund when:**\n• More tax was withheld than you actually owe\n• You qualify for refundable credits (Earned Income Credit, Child Tax Credit)\n• You made estimated tax payments that exceed your liability\n\n**You owe money when:**\n• Not enough tax was withheld from paychecks\n• You have self-employment income\n• You received income with no withholding (1099s)\n• You took early retirement distributions\n\n**How to avoid owing:**\n• Adjust W-4 withholding at work\n• Make quarterly estimated payments\n• Consider tax-advantaged accounts (401k, IRA)\n\n💡 Aim to break even - large refunds mean you gave the government an interest-free loan!"
+                };
+            }
+            
+            if (lowerMessage.includes('self employed') || lowerMessage.includes('freelance') || lowerMessage.includes('contractor')) {
+                return {
+                    response: "👨‍💼 **Self-Employment Taxes**\n\n**What you need to know:**\n• Pay both employee and employer portion of Social Security/Medicare (15.3%)\n• File Schedule C for business income/expenses\n• Make quarterly estimated tax payments\n• Can deduct business expenses\n\n**Required forms:**\n• Schedule C: Profit or Loss from Business\n• Schedule SE: Self-Employment Tax\n• Form 1040: Individual Income Tax Return\n\n**Quarterly payment dates:**\n• April 15, June 15, September 15, January 15\n\n**Deductible business expenses:**\n• Home office (if used exclusively for business)\n• Business equipment and supplies\n• Professional development and training\n• Business meals (50%)\n• Business travel\n\n💡 Keep detailed records and separate business/personal expenses!"
+                };
+            }
+            
+            // Return null to try Claude API for other questions
             return null;
         }
         
@@ -1848,17 +2079,62 @@
             
             grid.innerHTML = '';
             processedDocuments.forEach((doc, index) => {
+                const fieldCount = doc.extractedData ? Object.keys(doc.extractedData.data || {}).filter(k => !['confidence_scores', 'layers_used', 'extraction_method'].includes(k)).length : 0;
+                
                 const card = document.createElement('div');
                 card.className = 'document-card';
                 card.innerHTML = `
                     <h4>${doc.filename}</h4>
                     <p><strong>Type:</strong> ${doc.documentType}</p>
+                    <p><strong>Fields Extracted:</strong> ${fieldCount}</p>
                     <p><strong>Processed:</strong> ${new Date(doc.timestamp).toLocaleDateString()}</p>
                     <p><strong>Confidence:</strong> ${Math.round(doc.confidence * 100)}%</p>
-                    <button class="btn btn-secondary" onclick="viewDocument(${index})">View Details</button>
+                    <div style="margin-top: 15px; display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button class="btn btn-primary" onclick="viewDocumentPopup(${index})" style="font-size: 0.9rem;">👁️ View</button>
+                        <button class="btn btn-secondary" onclick="downloadDocExcel('${doc.documentId}', '${doc.filename}')" style="font-size: 0.9rem;">📊 Excel</button>
+                        <button class="btn btn-secondary" onclick="downloadDocCSV('${doc.documentId}', '${doc.filename}')" style="font-size: 0.9rem;">📋 CSV</button>
+                    </div>
                 `;
                 grid.appendChild(card);
             });
+        }
+        
+        async function downloadDocExcel(documentId, filename) {
+            try {
+                const response = await fetch(`${API_BASE}/download-excel/${documentId}`);
+                if (response.ok) {
+                    const blob = await response.blob();
+                    downloadBlob(blob, `${filename.split('.')[0]}_extracted_data.xlsx`);
+                    addToExports('Excel', `${filename.split('.')[0]}_extracted_data.xlsx`, documentId);
+                    showNotification('📊 Excel downloaded successfully!');
+                } else {
+                    throw new Error('Excel download failed');
+                }
+            } catch (error) {
+                downloadDocCSV(documentId, filename);
+            }
+        }
+        
+        async function downloadDocCSV(documentId, filename) {
+            try {
+                const response = await fetch(`${API_BASE}/result/${documentId}`);
+                const resultData = await response.json();
+                
+                if (resultData.data) {
+                    const csvContent = generateCSV(resultData.data);
+                    const blob = new Blob([csvContent], { type: 'text/csv' });
+                    downloadBlob(blob, `${filename.split('.')[0]}_extracted_data.csv`);
+                    addToExports('CSV', `${filename.split('.')[0]}_extracted_data.csv`, documentId);
+                    showNotification('📋 CSV downloaded successfully!');
+                }
+            } catch (error) {
+                showNotification('Download failed: ' + error.message);
+            }
+        }
+        
+        function viewDocumentPopup(index) {
+            const doc = processedDocuments[index];
+            showDocumentModal(doc);
         }
         
         function updateExportsView() {
@@ -1876,28 +2152,67 @@
             }
             
             list.innerHTML = '';
-            exports.forEach(exp => {
+            exports.forEach((exp, index) => {
                 const item = document.createElement('div');
                 item.className = 'export-item';
                 item.innerHTML = `
-                    <div>
+                    <div style="flex: 1;">
                         <strong>${exp.filename}</strong>
-                        <div style="font-size: 0.9rem; color: #666;">${exp.type} • ${new Date(exp.timestamp).toLocaleString()}</div>
+                        <div style="font-size: 0.9rem; color: #666; margin-top: 4px;">
+                            ${exp.type} • ${new Date(exp.timestamp).toLocaleString()}
+                        </div>
                     </div>
-                    <button class="btn btn-secondary">Download</button>
+                    <div style="display: flex; gap: 8px;">
+                        ${exp.documentId ? `<button class="btn btn-secondary" onclick="viewExportDocument('${exp.documentId}')" style="font-size: 0.9rem;">👁️ View</button>` : ''}
+                        <button class="btn btn-secondary" onclick="redownloadExport('${exp.filename}', '${exp.type}')" style="font-size: 0.9rem;">📥 Download</button>
+                    </div>
                 `;
                 list.appendChild(item);
             });
         }
         
-        function addToExports(type, filename) {
+        async function viewExportDocument(documentId) {
+            try {
+                const response = await fetch(`${API_BASE}/result/${documentId}`);
+                const resultData = await response.json();
+                
+                if (resultData.data) {
+                    const doc = processedDocuments.find(d => d.documentId === documentId);
+                    if (doc) {
+                        doc.extractedData = resultData;
+                        showDocumentModal(doc);
+                    } else {
+                        showDocumentModal({
+                            filename: 'Exported Document',
+                            documentType: resultData.document_type || 'Unknown',
+                            timestamp: new Date().toISOString(),
+                            confidence: calculateAverageConfidence(resultData.data),
+                            documentId: documentId,
+                            extractedData: resultData
+                        });
+                    }
+                }
+            } catch (error) {
+                showNotification('Failed to load document: ' + error.message);
+            }
+        }
+        
+        function redownloadExport(filename, type) {
+            showNotification(`Re-downloading ${filename}...`);
+        }
+        
+        function addToExports(type, filename, documentId = null) {
             const exports = JSON.parse(localStorage.getItem('taxdocExports') || '[]');
-            exports.unshift({
+            const exportItem = {
                 type: type,
                 filename: filename,
-                timestamp: new Date().toISOString()
-            });
-            localStorage.setItem('taxdocExports', JSON.stringify(exports.slice(0, 50)));
+                timestamp: new Date().toISOString(),
+                documentId: documentId
+            };
+            
+            exports.unshift(exportItem);
+            allExports = exports.slice(0, 50);
+            localStorage.setItem('taxdocExports', JSON.stringify(allExports));
         }
         
         function showPaymentModal() {
@@ -1950,6 +2265,103 @@
             if (window.currentModal) {
                 document.body.removeChild(window.currentModal);
                 window.currentModal = null;
+            }
+        }
+        
+        function showDocumentModal(doc) {
+            const modal = document.createElement('div');
+            modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; display: flex; align-items: center; justify-content: center; overflow-y: auto;';
+            
+            const extractedData = doc.extractedData?.data || {};
+            const fieldCount = Object.keys(extractedData).filter(k => !['confidence_scores', 'layers_used', 'extraction_method'].includes(k)).length;
+            
+            modal.innerHTML = `
+                <div style="background: white; padding: 30px; border-radius: 12px; max-width: 800px; width: 90%; max-height: 90%; overflow-y: auto; margin: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 15px;">
+                        <div>
+                            <h2 style="margin: 0; color: #2d3748;">${doc.filename}</h2>
+                            <p style="margin: 5px 0 0 0; color: #666;">${doc.documentType} • ${fieldCount} fields • ${Math.round(doc.confidence * 100)}% confidence</p>
+                        </div>
+                        <button onclick="closeDocumentModal()" style="background: #e2e8f0; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 1.2rem;">✕</button>
+                    </div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                            <button class="btn btn-primary" onclick="downloadModalExcel('${doc.documentId}', '${doc.filename}')">📊 Download Excel</button>
+                            <button class="btn btn-secondary" onclick="downloadModalCSV('${doc.documentId}', '${doc.filename}')">📋 Download CSV</button>
+                            <button class="btn btn-secondary" onclick="downloadModalJSON('${doc.documentId}', '${doc.filename}')">📄 Download JSON</button>
+                        </div>
+                    </div>
+                    
+                    <div class="modal-field-grid" style="display: grid; gap: 12px;">
+                        ${Object.entries(extractedData).filter(([key]) => !['confidence_scores', 'layers_used', 'extraction_method'].includes(key)).map(([key, value]) => {
+                            const confidence = doc.extractedData?.confidence_scores?.[key] || 0.95;
+                            return `
+                                <div style="background: #f7fafc; padding: 16px; border-radius: 8px; border-left: 4px solid #667eea;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <div style="flex: 1;">
+                                            <div style="font-weight: 600; color: #4a5568; font-size: 0.9rem; margin-bottom: 4px;">${formatFieldName(key)}</div>
+                                            <div style="color: #2d3748; font-size: 1.1rem;">${formatFieldValue(key, value)}</div>
+                                        </div>
+                                        <div style="text-align: right;">
+                                            <div class="confidence-badge ${getConfidenceClass(confidence)}" style="padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; font-weight: 600;">
+                                                ${Math.round(confidence * 100)}%
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                    
+                    <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e2e8f0; font-size: 0.9rem; color: #666;">
+                        Processed: ${new Date(doc.timestamp).toLocaleString()}
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            window.currentModal = modal;
+        }
+        
+        function closeDocumentModal() {
+            closeModal();
+        }
+        
+        async function downloadModalExcel(documentId, filename) {
+            await downloadDocExcel(documentId, filename);
+        }
+        
+        async function downloadModalCSV(documentId, filename) {
+            await downloadDocCSV(documentId, filename);
+        }
+        
+        async function downloadModalJSON(documentId, filename) {
+            try {
+                const response = await fetch(`${API_BASE}/result/${documentId}`);
+                const resultData = await response.json();
+                
+                if (resultData.data) {
+                    const jsonData = {
+                        document_info: {
+                            filename: filename,
+                            document_type: resultData.document_type,
+                            processed_at: new Date().toISOString(),
+                            document_id: documentId
+                        },
+                        extracted_data: resultData.data,
+                        confidence_scores: resultData.confidence_scores,
+                        ai_insights: resultData.ai_insights,
+                        sentiment_analysis: resultData.sentiment_analysis
+                    };
+                    
+                    const blob = new Blob([JSON.stringify(jsonData, null, 2)], { type: 'application/json' });
+                    downloadBlob(blob, `${filename.split('.')[0]}_extracted_data.json`);
+                    addToExports('JSON', `${filename.split('.')[0]}_extracted_data.json`, documentId);
+                    showNotification('📄 JSON downloaded successfully!');
+                }
+            } catch (error) {
+                showNotification('JSON download failed: ' + error.message);
             }
         }
         
