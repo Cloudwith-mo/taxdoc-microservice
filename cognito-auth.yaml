@@ -1,0 +1,49 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  DrDocUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: DrDoc-Users-prod
+      AutoVerifiedAttributes:
+        - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Required: true
+          Mutable: true
+        - Name: name
+          AttributeDataType: String
+          Required: true
+          Mutable: true
+        - Name: tier
+          AttributeDataType: String
+          Required: false
+          Mutable: true
+
+  DrDocUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref DrDocUserPool
+      ClientName: DrDoc-Web-Client
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ADMIN_NO_SRP_AUTH
+        - USER_PASSWORD_AUTH
+      SupportedIdentityProviders:
+        - COGNITO
+
+Outputs:
+  UserPoolId:
+    Value: !Ref DrDocUserPool
+    Export:
+      Name: DrDoc-UserPool-Id
+  UserPoolClientId:
+    Value: !Ref DrDocUserPoolClient
+    Export:
+      Name: DrDoc-UserPool-Client-Id

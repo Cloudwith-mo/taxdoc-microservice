@@ -1,0 +1,64 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  StripeCheckoutFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: DrDoc-StripeCheckout-prod
+      Runtime: python3.9
+      Handler: stripe_checkout.lambda_handler
+      Code:
+        ZipFile: |
+          import json
+          def lambda_handler(event, context):
+              return {'statusCode': 200, 'body': json.dumps('Placeholder')}
+      Environment:
+        Variables:
+          STRIPE_SECRET_KEY: sk_test_51234567890
+      Role: !GetAtt StripeCheckoutRole.Arn
+
+  StripeCheckoutRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  StripeCheckoutApiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: svea4ri2tk
+      ParentId: !Ref StripeCheckoutV2Resource
+      PathPart: checkout
+
+  StripeCheckoutV2Resource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: svea4ri2tk
+      ParentId: 8ywrqhqhd8
+      PathPart: stripe
+
+  StripeCheckoutMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: svea4ri2tk
+      ResourceId: !Ref StripeCheckoutApiResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${StripeCheckoutFunction.Arn}/invocations
+
+  StripeCheckoutPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref StripeCheckoutFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:svea4ri2tk/*/POST/v2/stripe/checkout
