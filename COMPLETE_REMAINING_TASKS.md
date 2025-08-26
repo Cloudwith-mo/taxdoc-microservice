@@ -37,7 +37,7 @@ REAL_WEBHOOK_SECRET="whsec_1234567890abcdef..."  # Replace with actual secret
 aws lambda update-function-configuration \
   --function-name DrDoc-StripeHandler-prod \
   --environment Variables='{
-    "STRIPE_SECRET_KEY":"sk_test_YOUR_STRIPE_SECRET_KEY_HERE",
+    "STRIPE_SECRET_KEY":"sk_test_PLACEHOLDER_KEY",
     "STRIPE_WEBHOOK_SECRET":"'$REAL_WEBHOOK_SECRET'",
     "USERS_TABLE":"DrDocUsers-prod",
     "ENVIRONMENT":"prod"
