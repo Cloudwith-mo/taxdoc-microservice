@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TaxDoc MVP 2.0 - Full Production Version</title>
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1.24.min.js"></script>
+    <script src="https://js.stripe.com/v3/"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
@@ -673,13 +675,21 @@
             <div class="user-info" id="userInfo" style="display: none;">
                 <span id="userName">👋 Welcome!</span>
                 <span class="tier-badge tier-free" id="userTier">🆓 Free</span>
+                <div class="usage-meter" id="usageMeter" style="margin-left: 15px; display: flex; align-items: center; gap: 8px;">
+                    <div class="usage-pill" style="background: #e2e8f0; padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; display: flex; align-items: center; gap: 6px;">
+                        <span id="usageText">0/20 this month</span>
+                        <div class="usage-bar-mini" style="width: 40px; height: 4px; background: #cbd5e0; border-radius: 2px; overflow: hidden;">
+                            <div id="usageBarMini" style="height: 100%; background: linear-gradient(90deg, #48bb78, #38a169); width: 0%; transition: width 0.3s ease;"></div>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" onclick="showPaymentModal()" id="upgradeBtn" style="font-size: 0.8rem; padding: 4px 8px;">💎 Upgrade</button>
+                </div>
             </div>
             <div class="auth-buttons" id="authButtons">
                 <button class="btn btn-primary" onclick="showAuthModal('login')">🔐 Sign In</button>
                 <button class="btn btn-secondary" onclick="showAuthModal('register')">📝 Sign Up</button>
             </div>
             <div class="auth-buttons" id="userActions" style="display: none;">
-                <button class="btn btn-secondary" onclick="showPaymentModal()" id="upgradeBtn">💎 Upgrade</button>
                 <button class="btn btn-secondary" onclick="logout()">🚪 Logout</button>
             </div>
         </div>
@@ -694,10 +704,10 @@
         </div>
         
         <div class="tab-content active" id="import-tab">
-            <div class="upload-methods" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+            <div class="upload-methods" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
                 <div class="upload-area" onclick="document.getElementById('fileInput').click()">
                     <div class="upload-icon">📱</div>
-                    <div class="upload-text">Drag & Drop Upload</div>
+                    <div class="upload-text">Single Upload</div>
                     <div class="upload-subtext">📷 Photos • 📄 PDFs • 🖼️ Images</div>
                 </div>
                 
@@ -705,6 +715,18 @@
                     <div class="upload-icon">📁</div>
                     <div class="upload-text">Batch Upload</div>
                     <div class="upload-subtext">📎 Multiple files at once</div>
+                </div>
+                
+                <div class="upload-area" onclick="document.getElementById('folderInput').click()">
+                    <div class="upload-icon">📂</div>
+                    <div class="upload-text">Folder Upload</div>
+                    <div class="upload-subtext">📁 Entire folders</div>
+                </div>
+                
+                <div class="upload-area" onclick="document.getElementById('zipInput').click()">
+                    <div class="upload-icon">🗜️</div>
+                    <div class="upload-text">ZIP Upload</div>
+                    <div class="upload-subtext">📦 Compressed archives</div>
                 </div>
             </div>
             
@@ -726,6 +748,17 @@
             
             <input type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg,.heic" />
             <input type="file" id="batchInput" accept=".pdf,.png,.jpg,.jpeg,.heic" multiple style="display: none;" />
+            <input type="file" id="folderInput" webkitdirectory multiple style="display: none;" />
+            <input type="file" id="zipInput" accept=".zip" style="display: none;" />
+            
+            <div class="upload-queue" id="uploadQueue" style="display: none; margin-top: 15px;">
+                <h4>Upload Queue</h4>
+                <div id="queueList"></div>
+                <div class="queue-actions" style="margin-top: 10px; display: flex; gap: 10px;">
+                    <button class="btn btn-primary" onclick="processQueue()">🚀 Process All</button>
+                    <button class="btn btn-secondary" onclick="clearQueue()">🗑️ Clear Queue</button>
+                </div>
+            </div>
             
             <button class="process-btn" id="processBtn" disabled>Select files to process</button>
             
@@ -749,6 +782,28 @@
         </div>
         
         <div class="tab-content" id="documents-tab">
+            <div class="documents-controls" style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                <div class="filters" style="display: flex; gap: 10px; align-items: center;">
+                    <select id="typeFilter" onchange="filterDocuments()" style="padding: 6px; border: 1px solid #cbd5e0; border-radius: 4px;">
+                        <option value="">All Types</option>
+                        <option value="W-2">W-2</option>
+                        <option value="1099">1099</option>
+                        <option value="Receipt">Receipt</option>
+                        <option value="Invoice">Invoice</option>
+                    </select>
+                    <select id="confidenceFilter" onchange="filterDocuments()" style="padding: 6px; border: 1px solid #cbd5e0; border-radius: 4px;">
+                        <option value="">All Confidence</option>
+                        <option value="0.9">≥90%</option>
+                        <option value="0.8">≥80%</option>
+                        <option value="0.7">≥70%</option>
+                    </select>
+                    <input type="text" id="searchFilter" placeholder="Search filename..." onkeyup="filterDocuments()" style="padding: 6px; border: 1px solid #cbd5e0; border-radius: 4px; width: 200px;">
+                </div>
+                <div class="bulk-actions" id="bulkActions" style="display: none;">
+                    <button class="btn btn-primary" onclick="bulkExport()">📤 Export Selected</button>
+                    <button class="btn btn-secondary" onclick="bulkDelete()">🗑️ Delete Selected</button>
+                </div>
+            </div>
             <div class="documents-grid" id="documentsGrid">
                 <div style="text-align: center; color: #718096; padding: 40px;">
                     <div style="font-size: 3rem; margin-bottom: 16px;">📄</div>
@@ -758,6 +813,10 @@
         </div>
         
         <div class="tab-content" id="exports-tab">
+            <div class="export-controls" style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0;">📤 Export History</h3>
+                <button class="btn btn-primary" onclick="showExportAllModal()">📦 Export All Documents</button>
+            </div>
             <div class="exports-list" id="exportsList">
                 <div style="text-align: center; color: #718096; padding: 40px;">
                     <div style="font-size: 3rem; margin-bottom: 16px;">📤</div>
@@ -896,6 +955,36 @@
         // Configuration - Real API endpoints
         const API_BASE = 'https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod';
         
+        // Cognito Configuration
+        const COGNITO_CONFIG = {
+            UserPoolId: 'us-east-1_PS10IVBQX',
+            ClientId: '53g5cvu3vl6jofqa4qsuce7b8g',
+            Region: 'us-east-1'
+        };
+        
+        // Initialize AWS SDK (will be loaded when needed)
+        let cognitoIdentityServiceProvider = null;
+        
+        // Load AWS SDK when needed
+        function initAWS() {
+            if (!cognitoIdentityServiceProvider && window.AWS) {
+                AWS.config.region = COGNITO_CONFIG.Region;
+                cognitoIdentityServiceProvider = new AWS.CognitoIdentityServiceProvider();
+            }
+            return cognitoIdentityServiceProvider;
+        }
+        
+        // Initialize Stripe (will be loaded when needed)
+        let stripe = null;
+        
+        // Load Stripe when needed
+        function initStripe() {
+            if (!stripe && window.Stripe) {
+                stripe = Stripe('pk_test_51234567890'); // Replace with real publishable key
+            }
+            return stripe;
+        }
+        
         // State management
         let currentUser = null;
         let userTier = 'free';
@@ -909,6 +998,9 @@
         let isBlocked = false;
         let batchResults = [];
         let allExports = [];
+        let uploadQueue = [];
+        let filteredDocuments = [];
+        let selectedDocuments = [];
         
         // Subscription tiers
         const TIERS = {
@@ -933,6 +1025,8 @@
             
             fileInput.addEventListener('change', handleFileSelect);
             document.getElementById('batchInput').addEventListener('change', handleBatchSelect);
+            document.getElementById('folderInput').addEventListener('change', handleFolderSelect);
+            document.getElementById('zipInput').addEventListener('change', handleZipSelect);
             processBtn.addEventListener('click', processDocument);
             chatInput.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') sendMessage();
@@ -1097,9 +1191,11 @@
                         processedDocuments.push({
                             filename: file.name,
                             timestamp: new Date().toISOString(),
-                            documentType: resultData.document_type || 'Unknown',
+                            documentType: resultData.document_type || resultData.data?.document_type || 'Document',
                             confidence: calculateAverageConfidence(resultData.data),
-                            documentId: documentId
+                            documentId: documentId,
+                            extractedData: resultData,
+                            imageData: selectedFile.imageData || null
                         });
                         saveUserData();
                         updateAnalytics();
@@ -1203,10 +1299,11 @@
                     processedDocuments.push({
                         filename: file.name,
                         timestamp: new Date().toISOString(),
-                        documentType: resultData.document_type || 'Unknown',
+                        documentType: resultData.document_type || resultData.data?.document_type || 'Document',
                         confidence: calculateAverageConfidence(resultData.data),
                         documentId: documentId,
-                        extractedData: resultData
+                        extractedData: resultData,
+                        imageData: file.imageData || null
                     });
                     saveUserData();
                     return documentId;
@@ -1711,12 +1808,38 @@
                 userTier === 'premium' ? 'Unlimited' : `${monthlyUsage}/20`;
         }
         
+        function updateUsageMeter() {
+            const tierLimit = TIERS[userTier]?.limit || 20;
+            const usageText = document.getElementById('usageText');
+            const usageBarMini = document.getElementById('usageBarMini');
+            
+            if (tierLimit === -1) {
+                usageText.textContent = 'Unlimited';
+                usageBarMini.style.width = '100%';
+                usageBarMini.style.background = 'linear-gradient(90deg, #48bb78, #38a169)';
+            } else {
+                usageText.textContent = `${monthlyUsage}/${tierLimit} this month`;
+                const percentage = (monthlyUsage / tierLimit) * 100;
+                usageBarMini.style.width = Math.min(percentage, 100) + '%';
+                
+                // Change color based on usage
+                if (percentage >= 90) {
+                    usageBarMini.style.background = 'linear-gradient(90deg, #e53e3e, #c53030)';
+                } else if (percentage >= 75) {
+                    usageBarMini.style.background = 'linear-gradient(90deg, #ed8936, #dd6b20)';
+                } else {
+                    usageBarMini.style.background = 'linear-gradient(90deg, #48bb78, #38a169)';
+                }
+            }
+        }
+        
         function updateAuthUI() {
             const authButtons = document.getElementById('authButtons');
             const userActions = document.getElementById('userActions');
             const userInfo = document.getElementById('userInfo');
             const userName = document.getElementById('userName');
             const userTierEl = document.getElementById('userTier');
+            const usageMeter = document.getElementById('usageMeter');
             
             if (currentUser) {
                 authButtons.style.display = 'none';
@@ -1727,41 +1850,136 @@
                 userTierEl.className = `tier-badge tier-${currentUser.tier}`;
                 userTier = currentUser.tier;
                 
+                // Update usage meter
+                updateUsageMeter();
+                usageMeter.style.display = 'flex';
+                
                 document.getElementById('upgradeBtn').style.display = 
-                    currentUser.tier === 'premium' ? 'none' : 'block';
+                    currentUser.tier === 'premium' ? 'none' : 'inline-block';
             } else {
                 authButtons.style.display = 'flex';
                 userActions.style.display = 'none';
                 userInfo.style.display = 'none';
+                usageMeter.style.display = 'none';
             }
             
             updateAnalytics();
         }
         
-        // Mock authentication for demo
-        function showAuthModal(mode) {
-            const email = prompt(`Enter email for ${mode}:`);
-            if (email) {
-                currentUser = {
-                    email: email,
-                    name: email.split('@')[0],
-                    tier: 'free'
-                };
-                updateAuthUI();
-                saveUserData();
-                alert(`🎉 Welcome ${currentUser.name}! You're signed in with a Free account.`);
+        // Real Cognito authentication
+        async function showAuthModal(mode) {
+            const cognito = initAWS();
+            if (!cognito) {
+                alert('Authentication service not available. Please refresh the page.');
+                return;
+            }
+            
+            if (mode === 'register') {
+                const email = prompt('Enter email:');
+                const password = prompt('Enter password (min 8 chars, uppercase, lowercase, number):');
+                const name = prompt('Enter your name:');
+                
+                if (email && password && name) {
+                    try {
+                        await cognito.signUp({
+                            ClientId: COGNITO_CONFIG.ClientId,
+                            Username: email,
+                            Password: password,
+                            UserAttributes: [
+                                { Name: 'email', Value: email },
+                                { Name: 'name', Value: name }
+                            ]
+                        }).promise();
+                        
+                        alert('✅ Registration successful! Check your email for verification.');
+                        const code = prompt('Enter verification code from email:');
+                        
+                        if (code) {
+                            await cognito.confirmSignUp({
+                                ClientId: COGNITO_CONFIG.ClientId,
+                                Username: email,
+                                ConfirmationCode: code
+                            }).promise();
+                            
+                            alert('🎉 Account verified! You can now sign in.');
+                        }
+                    } catch (error) {
+                        alert(`Registration failed: ${error.message}`);
+                    }
+                }
+            } else {
+                const email = prompt('Enter email:');
+                const password = prompt('Enter password:');
+                
+                if (email && password) {
+                    try {
+                        const authResult = await cognito.initiateAuth({
+                            ClientId: COGNITO_CONFIG.ClientId,
+                            AuthFlow: 'USER_PASSWORD_AUTH',
+                            AuthParameters: {
+                                USERNAME: email,
+                                PASSWORD: password
+                            }
+                        }).promise();
+                        
+                        const accessToken = authResult.AuthenticationResult.AccessToken;
+                        
+                        // Get user attributes
+                        const userInfo = await cognito.getUser({
+                            AccessToken: accessToken
+                        }).promise();
+                        
+                        const nameAttr = userInfo.UserAttributes.find(attr => attr.Name === 'name');
+                        const tierAttr = userInfo.UserAttributes.find(attr => attr.Name === 'custom:tier');
+                        
+                        currentUser = {
+                            email: email,
+                            name: nameAttr ? nameAttr.Value : email.split('@')[0],
+                            tier: tierAttr ? tierAttr.Value : 'free',
+                            accessToken: accessToken
+                        };
+                        
+                        updateAuthUI();
+                        saveUserData();
+                        alert(`🎉 Welcome ${currentUser.name}!`);
+                        
+                    } catch (error) {
+                        alert(`Sign in failed: ${error.message}`);
+                    }
+                }
             }
         }
         
-        function showPaymentModal() {
-            if (confirm('Upgrade to Premium for $29/month?\n\n✅ Unlimited documents\n✅ AI insights\n✅ Priority support')) {
-                if (currentUser) {
-                    currentUser.tier = 'premium';
-                    userTier = 'premium';
-                    updateAuthUI();
-                    saveUserData();
-                    alert('🎉 Upgraded to Premium! You now have unlimited processing.');
-                }
+        async function showPaymentModal() {
+            if (!currentUser) {
+                alert('Please sign in first to upgrade your plan.');
+                showAuthModal('login');
+                return;
+            }
+            
+            const cognito = initAWS();
+            if (!cognito) {
+                alert('Authentication service not available.');
+                return;
+            }
+            
+            try {
+                // Update user tier in Cognito
+                await cognito.updateUserAttributes({
+                    AccessToken: currentUser.accessToken,
+                    UserAttributes: [
+                        { Name: 'custom:tier', Value: 'premium' }
+                    ]
+                }).promise();
+                
+                currentUser.tier = 'premium';
+                userTier = 'premium';
+                updateAuthUI();
+                saveUserData();
+                alert('🎉 Upgraded to Premium! You now have unlimited processing.');
+                
+            } catch (error) {
+                alert(`Upgrade failed: ${error.message}`);
             }
         }
         
@@ -2144,8 +2362,8 @@
                         </div>
                         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                             <button class="btn btn-primary" onclick="viewDocumentPopup(${index})" style="font-size: 0.9rem;">👁️ View</button>
-                            <button class="btn btn-secondary" onclick="downloadDocExcel('${doc.documentId}', '${doc.filename}')" style="font-size: 0.9rem;">📊 Excel</button>
-                            <button class="btn btn-secondary" onclick="downloadDocCSV('${doc.documentId}', '${doc.filename}')" style="font-size: 0.9rem;">📋 CSV</button>
+                            <button class="btn btn-secondary" onclick="showExportDrawer('${doc.documentId}', '${doc.filename}')" style="font-size: 0.9rem;">📤 Export</button>
+                            <input type="checkbox" class="doc-checkbox" data-doc-id="${doc.documentId}" style="margin-left: 8px;" onchange="updateBulkActions()">
                         </div>
                     </div>
                 `;
@@ -2154,7 +2372,20 @@
         }
         
         function getDocumentPreview(doc) {
-            return doc.imageData || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIwIiBoZWlnaHQ9IjE1MCIgdmlld0JveD0iMCAwIDEyMCAxNTAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIxMjAiIGhlaWdodD0iMTUwIiBmaWxsPSIjRjdGQUZDIi8+CjxwYXRoIGQ9Ik00MCA2MEg4MFY2NEg0MFY2MFpNNDAgNzJIODBWNzZINDBWNzJaTTQwIDg0SDgwVjg4SDQwVjg0WiIgZmlsbD0iIzlDQTNBRiIvPgo8cGF0aCBkPSJNNTUgNDBINjVWNTBINTVWNDBaIiBmaWxsPSIjNjY3RUVBIi8+Cjx0ZXh0IHg9IjYwIiB5PSIxMjAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM5Q0EzQUYiIGZvbnQtc2l6ZT0iMTIiPkRvY3VtZW50PC90ZXh0Pgo8L3N2Zz4K';
+            // First try the stored imageData
+            if (doc.imageData && doc.imageData.startsWith('data:image/')) {
+                return doc.imageData;
+            }
+            
+            // Fallback to document type specific placeholder
+            const docType = (doc.documentType || '').toLowerCase();
+            if (docType.includes('w-2')) {
+                return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjQwMCIgdmlld0JveD0iMCAwIDMwMCA0MDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMDAiIGhlaWdodD0iNDAwIiBmaWxsPSIjRjdGQUZDIiBzdHJva2U9IiNFMkU4RjAiIHN0cm9rZS13aWR0aD0iMiIvPgo8dGV4dCB4PSIxNTAiIHk9IjUwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjNjY3RUVBIiBmb250LXNpemU9IjI0IiBmb250LXdlaWdodD0iYm9sZCI+Vy0yIEZvcm08L3RleHQ+CjxyZWN0IHg9IjMwIiB5PSI4MCIgd2lkdGg9IjI0MCIgaGVpZ2h0PSIyMCIgZmlsbD0iI0U5RjVGRiIvPgo8cmVjdCB4PSIzMCIgeT0iMTEwIiB3aWR0aD0iMjQwIiBoZWlnaHQ9IjIwIiBmaWxsPSIjRTlGNUZGIi8+CjxyZWN0IHg9IjMwIiB5PSIxNDAiIHdpZHRoPSIyNDAiIGhlaWdodD0iMjAiIGZpbGw9IiNFOUY1RkYiLz4KPHN2Zz4K';
+            } else if (docType.includes('1099')) {
+                return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjQwMCIgdmlld0JveD0iMCAwIDMwMCA0MDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMDAiIGhlaWdodD0iNDAwIiBmaWxsPSIjRkVGNUU3IiBzdHJva2U9IiNGNkFENTUiIHN0cm9rZS13aWR0aD0iMiIvPgo8dGV4dCB4PSIxNTAiIHk9IjUwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjRjZBRDU1IiBmb250LXNpemU9IjI0IiBmb250LXdlaWdodD0iYm9sZCI+MTA5OSBGb3JtPC90ZXh0Pgo8cmVjdCB4PSIzMCIgeT0iODAiIHdpZHRoPSIyNDAiIGhlaWdodD0iMjAiIGZpbGw9IiNGRUY1RTciLz4KPHN2Zz4K';
+            } else {
+                return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjQwMCIgdmlld0JveD0iMCAwIDMwMCA0MDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMDAiIGhlaWdodD0iNDAwIiBmaWxsPSIjRjdGQUZDIiBzdHJva2U9IiNFMkU4RjAiIHN0cm9rZS13aWR0aD0iMiIvPgo8cGF0aCBkPSJNMTAwIDEwMEgyMDBWMTEwSDEwMFYxMDBaTTEwMCAxMzBIMjAwVjE0MEgxMDBWMTMwWk0xMDAgMTYwSDIwMFYxNzBIMTAwVjE2MFpNMTAwIDE5MEgyMDBWMjAwSDEwMFYxOTBaTTEwMCAyMjBIMjAwVjIzMEgxMDBWMjIwWiIgZmlsbD0iIzlDQTNBRiIvPgo8cGF0aCBkPSJNMTM1IDYwSDE2NVY5MEgxMzVWNjBaIiBmaWxsPSIjNjY3RUVBIi8+Cjx0ZXh0IHg9IjE1MCIgeT0iMzIwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjOUNBM0FGIiBmb250LXNpemU9IjE4Ij5Eb2N1bWVudDwvdGV4dD4KPHN2Zz4K';
+            }
         }
         
         async function downloadDocExcel(documentId, filename) {
@@ -2190,9 +2421,55 @@
             }
         }
         
-        function viewDocumentPopup(index) {
+        async function viewDocumentPopup(index) {
             const doc = processedDocuments[index];
-            showDocumentModal(doc);
+            
+            // Ensure we have the latest extracted data
+            if (doc.documentId && (!doc.extractedData || !doc.extractedData.data)) {
+                try {
+                    const response = await fetch(`${API_BASE}/result/${doc.documentId}`);
+                    const resultData = await response.json();
+                    if (resultData.data) {
+                        doc.extractedData = resultData;
+                        // Update the stored document
+                        processedDocuments[index] = doc;
+                        saveUserData();
+                    }
+                } catch (error) {
+                    console.error('Failed to load document data:', error);
+                }
+            }
+            
+            showExportModal(doc);
+        }
+        
+        async function downloadDocJSON(documentId, filename) {
+            try {
+                const response = await fetch(`${API_BASE}/result/${documentId}`);
+                const resultData = await response.json();
+                
+                if (resultData.data) {
+                    const jsonData = {
+                        document_info: {
+                            filename: filename,
+                            document_type: resultData.document_type,
+                            processed_at: new Date().toISOString(),
+                            document_id: documentId
+                        },
+                        extracted_data: resultData.data,
+                        confidence_scores: resultData.confidence_scores,
+                        ai_insights: resultData.ai_insights,
+                        sentiment_analysis: resultData.sentiment_analysis
+                    };
+                    
+                    const blob = new Blob([JSON.stringify(jsonData, null, 2)], { type: 'application/json' });
+                    downloadBlob(blob, `${filename.split('.')[0]}_extracted_data.json`);
+                    addToExports('JSON', `${filename.split('.')[0]}_extracted_data.json`, documentId);
+                    showNotification('📄 JSON downloaded successfully!');
+                }
+            } catch (error) {
+                showNotification('Download failed: ' + error.message);
+            }
         }
         
         function updateExportsView() {
@@ -2238,15 +2515,16 @@
                     const doc = processedDocuments.find(d => d.documentId === documentId);
                     if (doc) {
                         doc.extractedData = resultData;
-                        showDocumentModal(doc);
+                        showExportModal(doc);
                     } else {
-                        showDocumentModal({
+                        showExportModal({
                             filename: 'Exported Document',
-                            documentType: resultData.document_type || 'Unknown',
+                            documentType: resultData.document_type || resultData.data?.document_type || 'Document',
                             timestamp: new Date().toISOString(),
                             confidence: calculateAverageConfidence(resultData.data),
                             documentId: documentId,
-                            extractedData: resultData
+                            extractedData: resultData,
+                            imageData: null
                         });
                     }
                 }
@@ -2326,13 +2604,18 @@
             }
         }
         
-        function showDocumentModal(doc) {
+        function showExportModal(doc) {
             const modal = document.createElement('div');
             modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; display: flex; align-items: center; justify-content: center; overflow-y: auto;';
             
             const extractedData = doc.extractedData?.data || {};
             const fieldCount = Object.keys(extractedData).filter(k => !['confidence_scores', 'layers_used', 'extraction_method'].includes(k)).length;
             const previewSrc = getDocumentPreview(doc);
+            
+            // Debug log
+            console.log('Document data:', doc);
+            console.log('Extracted data:', extractedData);
+            console.log('Field count:', fieldCount);
             
             modal.innerHTML = `
                 <div style="background: white; border-radius: 12px; max-width: 1200px; width: 95%; max-height: 95%; overflow: hidden; margin: 20px; display: flex; flex-direction: column;">
@@ -2360,7 +2643,7 @@
                         <div style="flex: 1; overflow-y: auto;">
                             <h3 style="margin: 0 0 15px 0; color: #2d3748;">Extracted Data</h3>
                             <div class="modal-field-grid" style="display: grid; gap: 12px;">
-                                ${Object.entries(extractedData).filter(([key]) => !['confidence_scores', 'layers_used', 'extraction_method'].includes(key)).map(([key, value]) => {
+                                ${fieldCount > 0 ? Object.entries(extractedData).filter(([key]) => !['confidence_scores', 'layers_used', 'extraction_method'].includes(key)).map(([key, value]) => {
                                     const confidence = doc.extractedData?.confidence_scores?.[key] || 0.95;
                                     return `
                                         <div style="background: #f7fafc; padding: 16px; border-radius: 8px; border-left: 4px solid #667eea;">
@@ -2377,7 +2660,13 @@
                                             </div>
                                         </div>
                                     `;
-                                }).join('')}
+                                }).join('') : `
+                                    <div style="text-align: center; color: #718096; padding: 40px;">
+                                        <div style="font-size: 2rem; margin-bottom: 16px;">📄</div>
+                                        <p>No extracted data available for this document.</p>
+                                        <p style="font-size: 0.9rem; margin-top: 10px;">The document may still be processing or there was an error during extraction.</p>
+                                    </div>
+                                `}
                             </div>
                             
                             <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e2e8f0; font-size: 0.9rem; color: #666;">
@@ -2552,7 +2841,13 @@
             }
         }
         
-        function upgradePlan(plan) {
+        async function upgradePlan(plan) {
+            if (!currentUser) {
+                alert('Please sign in first to upgrade your plan.');
+                showAuthModal('login');
+                return;
+            }
+            
             if (plan === 'enterprise') {
                 alert('🏢 Enterprise Plan\n\nContact our sales team for custom pricing and features:\n\n📧 sales@taxflowsai.com\n📞 1-800-TAXFLOW\n\nWe\'ll set up a demo and discuss your specific needs!');
                 return;
@@ -2560,16 +2855,35 @@
             
             const planInfo = TIERS[plan];
             if (confirm(`Upgrade to ${planInfo.name}?\n\n💰 Price: $${planInfo.price}/month\n📄 Documents: ${planInfo.limit === -1 ? 'Unlimited' : planInfo.limit + ' per month'}\n\n✅ Advanced AI extraction\n✅ Priority support\n✅ Multiple export formats`)) {
-                if (currentUser) {
+                try {
+                    // Create Stripe checkout session
+                    const response = await fetch(`${API_BASE}/v2/stripe/checkout`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${currentUser.accessToken}`
+                        },
+                        body: JSON.stringify({
+                            plan: plan,
+                            email: currentUser.email
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        const { checkout_url } = await response.json();
+                        window.location.href = checkout_url;
+                    } else {
+                        throw new Error('Failed to create checkout session');
+                    }
+                } catch (error) {
+                    alert(`Upgrade failed: ${error.message}`);
+                    // Fallback to mock upgrade for demo
                     currentUser.tier = plan;
                     userTier = plan;
                     updateAuthUI();
                     saveUserData();
                     updateSubscriptionsView();
-                    alert(`🎉 Successfully upgraded to ${planInfo.name}!\n\nYou now have ${planInfo.limit === -1 ? 'unlimited' : planInfo.limit} documents per month.`);
-                } else {
-                    alert('Please sign in first to upgrade your plan.');
-                    showAuthModal('login');
+                    alert(`🎉 Demo upgrade to ${planInfo.name}! (Stripe integration pending)`);
                 }
             }
         }

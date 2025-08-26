@@ -1,0 +1,20 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  DrDocAlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: drdoc-alerts-prod
+      DisplayName: DrDoc Processing Alerts
+      
+  DrDocAlertsSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      TopicArn: !Ref DrDocAlertsTopic
+      Endpoint: support@taxflowsai.com
+
+Outputs:
+  SNSTopicArn:
+    Value: !Ref DrDocAlertsTopic
+    Export:
+      Name: DrDoc-SNS-Topic-Arn

@@ -10,7 +10,7 @@ Parameters:
 
 Globals:
   Function:
-    Timeout: 30
+    Timeout: 60
     MemorySize: 512
     Runtime: python3.9
 
@@ -73,7 +73,8 @@ Resources:
                 - bedrock:InvokeModel
                 - bedrock:ListFoundationModels
               Resource: 
-                - 'arn:aws:bedrock:us-east-1::foundation-model/us.anthropic.claude-3-5-sonnet-20241022-v2:0'
+                - 'arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-5-sonnet-20240620-v1:0'
+                - 'arn:aws:bedrock:us-east-1::foundation-model/*'
                 - !Sub 'arn:aws:bedrock:us-east-1:${AWS::AccountId}:*'
             - Effect: Allow
               Action:
@@ -135,7 +136,8 @@ Resources:
                 - bedrock:InvokeModel
                 - bedrock:ListFoundationModels
               Resource: 
-                - 'arn:aws:bedrock:us-east-1::foundation-model/us.anthropic.claude-3-5-sonnet-20241022-v2:0'
+                - 'arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-5-sonnet-20240620-v1:0'
+                - 'arn:aws:bedrock:us-east-1::foundation-model/*'
                 - !Sub 'arn:aws:bedrock:us-east-1:${AWS::AccountId}:*'
       Events:
         ChatbotPost:

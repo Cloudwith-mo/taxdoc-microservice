@@ -4,6 +4,10 @@ from typing import Dict, Any
 import sys
 import os
 
+# SNS client for notifications
+sns = boto3.client('sns')
+SNS_TOPIC_ARN = 'arn:aws:sns:us-east-1:995805900737:drdoc-alerts-prod'
+
 # Add the src directory to the path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
@@ -122,6 +126,16 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             print("Storing results to DynamoDB...")
             storage.save_document_metadata(result)
             print("Processing completed successfully")
+            
+            # Send success notification
+            try:
+                sns.publish(
+                    TopicArn=SNS_TOPIC_ARN,
+                    Subject=f'Document Processed: {doc_type}',
+                    Message=f'Successfully processed {key} as {doc_type} with {len(formatted_data)} fields extracted.'
+                )
+            except Exception as e:
+                print(f"Failed to send SNS notification: {e}")
         
             return {
                 'statusCode': 200,
@@ -146,6 +160,16 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             storage.save_document_metadata(error_result)
         except:
             print("Failed to store error result")
+            
+        # Send error notification
+        try:
+            sns.publish(
+                TopicArn=SNS_TOPIC_ARN,
+                Subject='Document Processing Failed',
+                Message=f'Failed to process {key if "key" in locals() else "unknown"}: {str(e)}'
+            )
+        except Exception as sns_error:
+            print(f"Failed to send error SNS notification: {sns_error}")
         
         return {
             'statusCode': 500,

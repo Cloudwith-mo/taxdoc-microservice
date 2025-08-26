@@ -1,0 +1,115 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Export resources for TaxDoc V2 - S3 bucket and lifecycle policies'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: prod
+    AllowedValues: [dev, staging, prod]
+
+Resources:
+  # Export S3 Bucket
+  ExportBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'drdoc-exports-${Environment}-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteExportsAfter24Hours
+            Status: Enabled
+            ExpirationInDays: 1
+            Prefix: exports/
+          - Id: DeleteTempFilesAfter1Hour
+            Status: Enabled
+            ExpirationInDays: 1
+            Prefix: temp/
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET, PUT, POST]
+            AllowedOrigins: ['*']
+            MaxAge: 3600
+
+  # Export Lambda Role
+  ExportLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'DrDoc-ExportLambda-Role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ExportPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub 'arn:aws:s3:::drdoc-uploads-${Environment}-${AWS::AccountId}/*'
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:PutObjectAcl
+                Resource: !Sub '${ExportBucket}/*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource: 
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/DrDocExportJobs-${Environment}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/DrDocDocuments-${Environment}'
+
+  # CloudWatch Alarms
+  LambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'DrDoc-Lambda-Errors-${Environment}'
+      AlarmDescription: 'DrDoc Lambda function errors'
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Sub 'DrDoc-ProcessDocument-${Environment}'
+
+  APIErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'DrDoc-API-Errors-${Environment}'
+      AlarmDescription: 'DrDoc API Gateway errors'
+      MetricName: 4XXError
+      Namespace: AWS/ApiGateway
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+
+Outputs:
+  ExportBucketName:
+    Description: 'S3 bucket for exports'
+    Value: !Ref ExportBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-ExportBucket'
+  
+  ExportLambdaRoleArn:
+    Description: 'IAM role for export Lambda'
+    Value: !GetAtt ExportLambdaRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ExportLambdaRole'
