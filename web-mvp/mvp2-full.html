@@ -1097,9 +1097,11 @@
                         processedDocuments.push({
                             filename: file.name,
                             timestamp: new Date().toISOString(),
-                            documentType: resultData.document_type || 'Unknown',
+                            documentType: resultData.document_type || resultData.data?.document_type || 'Document',
                             confidence: calculateAverageConfidence(resultData.data),
-                            documentId: documentId
+                            documentId: documentId,
+                            extractedData: resultData,
+                            imageData: selectedFile.imageData || null
                         });
                         saveUserData();
                         updateAnalytics();
@@ -1203,10 +1205,11 @@
                     processedDocuments.push({
                         filename: file.name,
                         timestamp: new Date().toISOString(),
-                        documentType: resultData.document_type || 'Unknown',
+                        documentType: resultData.document_type || resultData.data?.document_type || 'Document',
                         confidence: calculateAverageConfidence(resultData.data),
                         documentId: documentId,
-                        extractedData: resultData
+                        extractedData: resultData,
+                        imageData: file.imageData || null
                     });
                     saveUserData();
                     return documentId;
@@ -2144,8 +2147,7 @@
                         </div>
                         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                             <button class="btn btn-primary" onclick="viewDocumentPopup(${index})" style="font-size: 0.9rem;">👁️ View</button>
-                            <button class="btn btn-secondary" onclick="downloadDocExcel('${doc.documentId}', '${doc.filename}')" style="font-size: 0.9rem;">📊 Excel</button>
-                            <button class="btn btn-secondary" onclick="downloadDocCSV('${doc.documentId}', '${doc.filename}')" style="font-size: 0.9rem;">📋 CSV</button>
+                            <button class="btn btn-secondary" onclick="downloadDocJSON('${doc.documentId}', '${doc.filename}')" style="font-size: 0.9rem;">📄 JSON</button>
                         </div>
                     </div>
                 `;
@@ -2192,7 +2194,36 @@
         
         function viewDocumentPopup(index) {
             const doc = processedDocuments[index];
-            showDocumentModal(doc);
+            showExportModal(doc);
+        }
+        
+        async function downloadDocJSON(documentId, filename) {
+            try {
+                const response = await fetch(`${API_BASE}/result/${documentId}`);
+                const resultData = await response.json();
+                
+                if (resultData.data) {
+                    const jsonData = {
+                        document_info: {
+                            filename: filename,
+                            document_type: resultData.document_type,
+                            processed_at: new Date().toISOString(),
+                            document_id: documentId
+                        },
+                        extracted_data: resultData.data,
+                        confidence_scores: resultData.confidence_scores,
+                        ai_insights: resultData.ai_insights,
+                        sentiment_analysis: resultData.sentiment_analysis
+                    };
+                    
+                    const blob = new Blob([JSON.stringify(jsonData, null, 2)], { type: 'application/json' });
+                    downloadBlob(blob, `${filename.split('.')[0]}_extracted_data.json`);
+                    addToExports('JSON', `${filename.split('.')[0]}_extracted_data.json`, documentId);
+                    showNotification('📄 JSON downloaded successfully!');
+                }
+            } catch (error) {
+                showNotification('Download failed: ' + error.message);
+            }
         }
         
         function updateExportsView() {
@@ -2238,15 +2269,16 @@
                     const doc = processedDocuments.find(d => d.documentId === documentId);
                     if (doc) {
                         doc.extractedData = resultData;
-                        showDocumentModal(doc);
+                        showExportModal(doc);
                     } else {
-                        showDocumentModal({
+                        showExportModal({
                             filename: 'Exported Document',
-                            documentType: resultData.document_type || 'Unknown',
+                            documentType: resultData.document_type || resultData.data?.document_type || 'Document',
                             timestamp: new Date().toISOString(),
                             confidence: calculateAverageConfidence(resultData.data),
                             documentId: documentId,
-                            extractedData: resultData
+                            extractedData: resultData,
+                            imageData: null
                         });
                     }
                 }
@@ -2326,7 +2358,7 @@
             }
         }
         
-        function showDocumentModal(doc) {
+        function showExportModal(doc) {
             const modal = document.createElement('div');
             modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; display: flex; align-items: center; justify-content: center; overflow-y: auto;';
             
