@@ -1,0 +1,461 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'TaxDoc v2.5 Export Resources - S3 bucket, DynamoDB tables, and Lambda functions for exports'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: prod
+    AllowedValues: [dev, staging, prod]
+    Description: Environment name
+
+Resources:
+  # S3 Bucket for Exports
+  ExportsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'drdoc-exports-${Environment}-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteExportsAfter24Hours
+            Status: Enabled
+            ExpirationInDays: 1
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      NotificationConfiguration:
+        CloudWatchConfigurations:
+          - Event: s3:ObjectCreated:*
+            CloudWatchConfiguration:
+              LogGroupName: !Ref ExportLogsGroup
+
+  # DynamoDB Table for Export Jobs
+  ExportJobsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'DrDocExportJobs-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: jobId
+          AttributeType: S
+        - AttributeName: userEmail
+          AttributeType: S
+        - AttributeName: createdAt
+          AttributeType: S
+      KeySchema:
+        - AttributeName: jobId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: UserEmailIndex
+          KeySchema:
+            - AttributeName: userEmail
+              KeyType: HASH
+            - AttributeName: createdAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+
+  # DynamoDB Table for Export Logs
+  ExportLogsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'DrDocExportLogs-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: logId
+          AttributeType: S
+        - AttributeName: userEmail
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: logId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: UserEmailIndex
+          KeySchema:
+            - AttributeName: userEmail
+              KeyType: HASH
+            - AttributeName: timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  # DynamoDB Table for Batch Processing
+  BatchTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'DrDocBatches-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: batchId
+          AttributeType: S
+        - AttributeName: userEmail
+          AttributeType: S
+        - AttributeName: createdAt
+          AttributeType: S
+      KeySchema:
+        - AttributeName: batchId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: UserEmailIndex
+          KeySchema:
+            - AttributeName: userEmail
+              KeyType: HASH
+            - AttributeName: createdAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+
+  # SNS Topics for Notifications
+  DocReadyTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'drdoc-doc-ready-${Environment}'
+      DisplayName: 'Document Ready Notifications'
+
+  DocFailedTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'drdoc-doc-failed-${Environment}'
+      DisplayName: 'Document Failed Notifications'
+
+  BatchCompletedTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'drdoc-batch-completed-${Environment}'
+      DisplayName: 'Batch Completed Notifications'
+
+  # CloudWatch Log Groups
+  ExportLogsGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/s3/drdoc-exports-${Environment}'
+      RetentionInDays: 7
+
+  ExportLambdaLogsGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/DrDoc-ExportHandler-${Environment}'
+      RetentionInDays: 14
+
+  BatchLambdaLogsGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/DrDoc-BatchHandler-${Environment}'
+      RetentionInDays: 14
+
+  NotificationLambdaLogsGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/DrDoc-NotificationHandler-${Environment}'
+      RetentionInDays: 14
+
+  # IAM Role for Export Lambda
+  ExportLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'DrDoc-ExportLambda-Role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ExportPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: 
+                  - !Sub '${ExportsBucket}/*'
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !GetAtt ExportsBucket.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource:
+                  - !GetAtt ExportJobsTable.Arn
+                  - !GetAtt ExportLogsTable.Arn
+                  - !Sub '${ExportJobsTable.Arn}/index/*'
+                  - !Sub '${ExportLogsTable.Arn}/index/*'
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+
+  # IAM Role for Batch Lambda
+  BatchLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'DrDoc-BatchLambda-Role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: BatchPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: 
+                  - !Sub 'arn:aws:s3:::drdoc-uploads-${Environment}-${AWS::AccountId}/*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt BatchTable.Arn
+                  - !Sub '${BatchTable.Arn}/index/*'
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                Resource: !Sub 'arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:DrDoc-Processing-${Environment}'
+
+  # IAM Role for Notification Lambda
+  NotificationLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'DrDoc-NotificationLambda-Role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: NotificationPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource:
+                  - !Ref DocReadyTopic
+                  - !Ref DocFailedTopic
+                  - !Ref BatchCompletedTopic
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource: '*'
+
+  # EventBridge Rule for Monthly Quota Reset
+  QuotaResetRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub 'DrDoc-QuotaReset-${Environment}'
+      Description: 'Reset monthly quotas on the 1st of each month'
+      ScheduleExpression: 'cron(5 0 1 * ? *)'  # 00:05 UTC on 1st of month
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt QuotaResetLambda.Arn
+          Id: QuotaResetTarget
+
+  # Lambda for Monthly Quota Reset
+  QuotaResetLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'DrDoc-QuotaReset-${Environment}'
+      Runtime: python3.9
+      Handler: entitlement_middleware.quota_reset_handler
+      Code:
+        ZipFile: |
+          import json
+          def quota_reset_handler(event, context):
+              return {'statusCode': 200, 'body': json.dumps('Quota reset placeholder')}
+      Role: !GetAtt QuotaResetLambdaRole.Arn
+      Environment:
+        Variables:
+          USERS_TABLE: !Sub 'DrDocUsers-${Environment}'
+          ENVIRONMENT: !Ref Environment
+      Timeout: 300
+
+  # IAM Role for Quota Reset Lambda
+  QuotaResetLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'DrDoc-QuotaResetLambda-Role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: QuotaResetPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:Scan
+                  - dynamodb:UpdateItem
+                Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/DrDocUsers-${Environment}'
+
+  # Permission for EventBridge to invoke Lambda
+  QuotaResetLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref QuotaResetLambda
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt QuotaResetRule.Arn
+
+  # CloudWatch Alarms
+  ExportBucketSizeAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'DrDoc-ExportBucketSize-${Environment}'
+      AlarmDescription: 'Monitor export bucket size'
+      MetricName: BucketSizeBytes
+      Namespace: AWS/S3
+      Statistic: Average
+      Period: 86400  # 24 hours
+      EvaluationPeriods: 1
+      Threshold: 10737418240  # 10 GB
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: BucketName
+          Value: !Ref ExportsBucket
+        - Name: StorageType
+          Value: StandardStorage
+
+  ExportJobsTableThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'DrDoc-ExportJobsThrottle-${Environment}'
+      AlarmDescription: 'Monitor DynamoDB throttling'
+      MetricName: ThrottledRequests
+      Namespace: AWS/DynamoDB
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: TableName
+          Value: !Ref ExportJobsTable
+
+Outputs:
+  ExportsBucketName:
+    Description: 'Name of the exports S3 bucket'
+    Value: !Ref ExportsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-ExportsBucket'
+
+  ExportsBucketArn:
+    Description: 'ARN of the exports S3 bucket'
+    Value: !GetAtt ExportsBucket.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ExportsBucketArn'
+
+  ExportJobsTableName:
+    Description: 'Name of the export jobs DynamoDB table'
+    Value: !Ref ExportJobsTable
+    Export:
+      Name: !Sub '${AWS::StackName}-ExportJobsTable'
+
+  ExportLogsTableName:
+    Description: 'Name of the export logs DynamoDB table'
+    Value: !Ref ExportLogsTable
+    Export:
+      Name: !Sub '${AWS::StackName}-ExportLogsTable'
+
+  BatchTableName:
+    Description: 'Name of the batch processing DynamoDB table'
+    Value: !Ref BatchTable
+    Export:
+      Name: !Sub '${AWS::StackName}-BatchTable'
+
+  DocReadyTopicArn:
+    Description: 'ARN of the document ready SNS topic'
+    Value: !Ref DocReadyTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-DocReadyTopic'
+
+  DocFailedTopicArn:
+    Description: 'ARN of the document failed SNS topic'
+    Value: !Ref DocFailedTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-DocFailedTopic'
+
+  BatchCompletedTopicArn:
+    Description: 'ARN of the batch completed SNS topic'
+    Value: !Ref BatchCompletedTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-BatchCompletedTopic'
+
+  ExportLambdaRoleArn:
+    Description: 'ARN of the export Lambda execution role'
+    Value: !GetAtt ExportLambdaRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ExportLambdaRole'
+
+  BatchLambdaRoleArn:
+    Description: 'ARN of the batch Lambda execution role'
+    Value: !GetAtt BatchLambdaRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-BatchLambdaRole'
+
+  NotificationLambdaRoleArn:
+    Description: 'ARN of the notification Lambda execution role'
+    Value: !GetAtt NotificationLambdaRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-NotificationLambdaRole'

@@ -675,13 +675,21 @@
             <div class="user-info" id="userInfo" style="display: none;">
                 <span id="userName">👋 Welcome!</span>
                 <span class="tier-badge tier-free" id="userTier">🆓 Free</span>
+                <div class="usage-meter" id="usageMeter" style="margin-left: 15px; display: flex; align-items: center; gap: 8px;">
+                    <div class="usage-pill" style="background: #e2e8f0; padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; display: flex; align-items: center; gap: 6px;">
+                        <span id="usageText">0/20 this month</span>
+                        <div class="usage-bar-mini" style="width: 40px; height: 4px; background: #cbd5e0; border-radius: 2px; overflow: hidden;">
+                            <div id="usageBarMini" style="height: 100%; background: linear-gradient(90deg, #48bb78, #38a169); width: 0%; transition: width 0.3s ease;"></div>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" onclick="showPaymentModal()" id="upgradeBtn" style="font-size: 0.8rem; padding: 4px 8px;">💎 Upgrade</button>
+                </div>
             </div>
             <div class="auth-buttons" id="authButtons">
                 <button class="btn btn-primary" onclick="showAuthModal('login')">🔐 Sign In</button>
                 <button class="btn btn-secondary" onclick="showAuthModal('register')">📝 Sign Up</button>
             </div>
             <div class="auth-buttons" id="userActions" style="display: none;">
-                <button class="btn btn-secondary" onclick="showPaymentModal()" id="upgradeBtn">💎 Upgrade</button>
                 <button class="btn btn-secondary" onclick="logout()">🚪 Logout</button>
             </div>
         </div>
@@ -696,10 +704,10 @@
         </div>
         
         <div class="tab-content active" id="import-tab">
-            <div class="upload-methods" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+            <div class="upload-methods" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
                 <div class="upload-area" onclick="document.getElementById('fileInput').click()">
                     <div class="upload-icon">📱</div>
-                    <div class="upload-text">Drag & Drop Upload</div>
+                    <div class="upload-text">Single Upload</div>
                     <div class="upload-subtext">📷 Photos • 📄 PDFs • 🖼️ Images</div>
                 </div>
                 
@@ -707,6 +715,18 @@
                     <div class="upload-icon">📁</div>
                     <div class="upload-text">Batch Upload</div>
                     <div class="upload-subtext">📎 Multiple files at once</div>
+                </div>
+                
+                <div class="upload-area" onclick="document.getElementById('folderInput').click()">
+                    <div class="upload-icon">📂</div>
+                    <div class="upload-text">Folder Upload</div>
+                    <div class="upload-subtext">📁 Entire folders</div>
+                </div>
+                
+                <div class="upload-area" onclick="document.getElementById('zipInput').click()">
+                    <div class="upload-icon">🗜️</div>
+                    <div class="upload-text">ZIP Upload</div>
+                    <div class="upload-subtext">📦 Compressed archives</div>
                 </div>
             </div>
             
@@ -728,6 +748,17 @@
             
             <input type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg,.heic" />
             <input type="file" id="batchInput" accept=".pdf,.png,.jpg,.jpeg,.heic" multiple style="display: none;" />
+            <input type="file" id="folderInput" webkitdirectory multiple style="display: none;" />
+            <input type="file" id="zipInput" accept=".zip" style="display: none;" />
+            
+            <div class="upload-queue" id="uploadQueue" style="display: none; margin-top: 15px;">
+                <h4>Upload Queue</h4>
+                <div id="queueList"></div>
+                <div class="queue-actions" style="margin-top: 10px; display: flex; gap: 10px;">
+                    <button class="btn btn-primary" onclick="processQueue()">🚀 Process All</button>
+                    <button class="btn btn-secondary" onclick="clearQueue()">🗑️ Clear Queue</button>
+                </div>
+            </div>
             
             <button class="process-btn" id="processBtn" disabled>Select files to process</button>
             
@@ -751,6 +782,28 @@
         </div>
         
         <div class="tab-content" id="documents-tab">
+            <div class="documents-controls" style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                <div class="filters" style="display: flex; gap: 10px; align-items: center;">
+                    <select id="typeFilter" onchange="filterDocuments()" style="padding: 6px; border: 1px solid #cbd5e0; border-radius: 4px;">
+                        <option value="">All Types</option>
+                        <option value="W-2">W-2</option>
+                        <option value="1099">1099</option>
+                        <option value="Receipt">Receipt</option>
+                        <option value="Invoice">Invoice</option>
+                    </select>
+                    <select id="confidenceFilter" onchange="filterDocuments()" style="padding: 6px; border: 1px solid #cbd5e0; border-radius: 4px;">
+                        <option value="">All Confidence</option>
+                        <option value="0.9">≥90%</option>
+                        <option value="0.8">≥80%</option>
+                        <option value="0.7">≥70%</option>
+                    </select>
+                    <input type="text" id="searchFilter" placeholder="Search filename..." onkeyup="filterDocuments()" style="padding: 6px; border: 1px solid #cbd5e0; border-radius: 4px; width: 200px;">
+                </div>
+                <div class="bulk-actions" id="bulkActions" style="display: none;">
+                    <button class="btn btn-primary" onclick="bulkExport()">📤 Export Selected</button>
+                    <button class="btn btn-secondary" onclick="bulkDelete()">🗑️ Delete Selected</button>
+                </div>
+            </div>
             <div class="documents-grid" id="documentsGrid">
                 <div style="text-align: center; color: #718096; padding: 40px;">
                     <div style="font-size: 3rem; margin-bottom: 16px;">📄</div>
@@ -760,6 +813,10 @@
         </div>
         
         <div class="tab-content" id="exports-tab">
+            <div class="export-controls" style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0;">📤 Export History</h3>
+                <button class="btn btn-primary" onclick="showExportAllModal()">📦 Export All Documents</button>
+            </div>
             <div class="exports-list" id="exportsList">
                 <div style="text-align: center; color: #718096; padding: 40px;">
                     <div style="font-size: 3rem; margin-bottom: 16px;">📤</div>
@@ -905,12 +962,28 @@
             Region: 'us-east-1'
         };
         
-        // Initialize AWS SDK
-        AWS.config.region = COGNITO_CONFIG.Region;
-        const cognitoIdentityServiceProvider = new AWS.CognitoIdentityServiceProvider();
+        // Initialize AWS SDK (will be loaded when needed)
+        let cognitoIdentityServiceProvider = null;
         
-        // Initialize Stripe
-        const stripe = Stripe('pk_test_51234567890'); // Replace with real publishable key
+        // Load AWS SDK when needed
+        function initAWS() {
+            if (!cognitoIdentityServiceProvider && window.AWS) {
+                AWS.config.region = COGNITO_CONFIG.Region;
+                cognitoIdentityServiceProvider = new AWS.CognitoIdentityServiceProvider();
+            }
+            return cognitoIdentityServiceProvider;
+        }
+        
+        // Initialize Stripe (will be loaded when needed)
+        let stripe = null;
+        
+        // Load Stripe when needed
+        function initStripe() {
+            if (!stripe && window.Stripe) {
+                stripe = Stripe('pk_test_51234567890'); // Replace with real publishable key
+            }
+            return stripe;
+        }
         
         // State management
         let currentUser = null;
@@ -925,6 +998,9 @@
         let isBlocked = false;
         let batchResults = [];
         let allExports = [];
+        let uploadQueue = [];
+        let filteredDocuments = [];
+        let selectedDocuments = [];
         
         // Subscription tiers
         const TIERS = {
@@ -949,6 +1025,8 @@
             
             fileInput.addEventListener('change', handleFileSelect);
             document.getElementById('batchInput').addEventListener('change', handleBatchSelect);
+            document.getElementById('folderInput').addEventListener('change', handleFolderSelect);
+            document.getElementById('zipInput').addEventListener('change', handleZipSelect);
             processBtn.addEventListener('click', processDocument);
             chatInput.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') sendMessage();
@@ -1730,12 +1808,38 @@
                 userTier === 'premium' ? 'Unlimited' : `${monthlyUsage}/20`;
         }
         
+        function updateUsageMeter() {
+            const tierLimit = TIERS[userTier]?.limit || 20;
+            const usageText = document.getElementById('usageText');
+            const usageBarMini = document.getElementById('usageBarMini');
+            
+            if (tierLimit === -1) {
+                usageText.textContent = 'Unlimited';
+                usageBarMini.style.width = '100%';
+                usageBarMini.style.background = 'linear-gradient(90deg, #48bb78, #38a169)';
+            } else {
+                usageText.textContent = `${monthlyUsage}/${tierLimit} this month`;
+                const percentage = (monthlyUsage / tierLimit) * 100;
+                usageBarMini.style.width = Math.min(percentage, 100) + '%';
+                
+                // Change color based on usage
+                if (percentage >= 90) {
+                    usageBarMini.style.background = 'linear-gradient(90deg, #e53e3e, #c53030)';
+                } else if (percentage >= 75) {
+                    usageBarMini.style.background = 'linear-gradient(90deg, #ed8936, #dd6b20)';
+                } else {
+                    usageBarMini.style.background = 'linear-gradient(90deg, #48bb78, #38a169)';
+                }
+            }
+        }
+        
         function updateAuthUI() {
             const authButtons = document.getElementById('authButtons');
             const userActions = document.getElementById('userActions');
             const userInfo = document.getElementById('userInfo');
             const userName = document.getElementById('userName');
             const userTierEl = document.getElementById('userTier');
+            const usageMeter = document.getElementById('usageMeter');
             
             if (currentUser) {
                 authButtons.style.display = 'none';
@@ -1746,12 +1850,17 @@
                 userTierEl.className = `tier-badge tier-${currentUser.tier}`;
                 userTier = currentUser.tier;
                 
+                // Update usage meter
+                updateUsageMeter();
+                usageMeter.style.display = 'flex';
+                
                 document.getElementById('upgradeBtn').style.display = 
-                    currentUser.tier === 'premium' ? 'none' : 'block';
+                    currentUser.tier === 'premium' ? 'none' : 'inline-block';
             } else {
                 authButtons.style.display = 'flex';
                 userActions.style.display = 'none';
                 userInfo.style.display = 'none';
+                usageMeter.style.display = 'none';
             }
             
             updateAnalytics();
@@ -1759,6 +1868,12 @@
         
         // Real Cognito authentication
         async function showAuthModal(mode) {
+            const cognito = initAWS();
+            if (!cognito) {
+                alert('Authentication service not available. Please refresh the page.');
+                return;
+            }
+            
             if (mode === 'register') {
                 const email = prompt('Enter email:');
                 const password = prompt('Enter password (min 8 chars, uppercase, lowercase, number):');
@@ -1766,7 +1881,7 @@
                 
                 if (email && password && name) {
                     try {
-                        await cognitoIdentityServiceProvider.signUp({
+                        await cognito.signUp({
                             ClientId: COGNITO_CONFIG.ClientId,
                             Username: email,
                             Password: password,
@@ -1780,7 +1895,7 @@
                         const code = prompt('Enter verification code from email:');
                         
                         if (code) {
-                            await cognitoIdentityServiceProvider.confirmSignUp({
+                            await cognito.confirmSignUp({
                                 ClientId: COGNITO_CONFIG.ClientId,
                                 Username: email,
                                 ConfirmationCode: code
@@ -1798,7 +1913,7 @@
                 
                 if (email && password) {
                     try {
-                        const authResult = await cognitoIdentityServiceProvider.initiateAuth({
+                        const authResult = await cognito.initiateAuth({
                             ClientId: COGNITO_CONFIG.ClientId,
                             AuthFlow: 'USER_PASSWORD_AUTH',
                             AuthParameters: {
@@ -1810,7 +1925,7 @@
                         const accessToken = authResult.AuthenticationResult.AccessToken;
                         
                         // Get user attributes
-                        const userInfo = await cognitoIdentityServiceProvider.getUser({
+                        const userInfo = await cognito.getUser({
                             AccessToken: accessToken
                         }).promise();
                         
@@ -1842,9 +1957,15 @@
                 return;
             }
             
+            const cognito = initAWS();
+            if (!cognito) {
+                alert('Authentication service not available.');
+                return;
+            }
+            
             try {
                 // Update user tier in Cognito
-                await cognitoIdentityServiceProvider.updateUserAttributes({
+                await cognito.updateUserAttributes({
                     AccessToken: currentUser.accessToken,
                     UserAttributes: [
                         { Name: 'custom:tier', Value: 'premium' }
@@ -2241,7 +2362,8 @@
                         </div>
                         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                             <button class="btn btn-primary" onclick="viewDocumentPopup(${index})" style="font-size: 0.9rem;">👁️ View</button>
-                            <button class="btn btn-secondary" onclick="downloadDocJSON('${doc.documentId}', '${doc.filename}')" style="font-size: 0.9rem;">📄 JSON</button>
+                            <button class="btn btn-secondary" onclick="showExportDrawer('${doc.documentId}', '${doc.filename}')" style="font-size: 0.9rem;">📤 Export</button>
+                            <input type="checkbox" class="doc-checkbox" data-doc-id="${doc.documentId}" style="margin-left: 8px;" onchange="updateBulkActions()">
                         </div>
                     </div>
                 `;
