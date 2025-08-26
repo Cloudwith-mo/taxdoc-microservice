@@ -71,7 +71,7 @@ Resources:
           - bedrock:InvokeModel
           - bedrock:ListFoundationModels
           Resource:
-          - arn:aws:bedrock:us-east-1::foundation-model/us.anthropic.claude-3-5-sonnet-20241022-v2:0
+          - arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0
           - Fn::Sub: arn:aws:bedrock:us-east-1:${AWS::AccountId}:*
         - Effect: Allow
           Action:
@@ -141,7 +141,7 @@ Resources:
           - bedrock:InvokeModel
           - bedrock:ListFoundationModels
           Resource:
-          - arn:aws:bedrock:us-east-1::foundation-model/us.anthropic.claude-3-5-sonnet-20241022-v2:0
+          - arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0
           - Fn::Sub: arn:aws:bedrock:us-east-1:${AWS::AccountId}:*
       Events:
         ChatbotPost:

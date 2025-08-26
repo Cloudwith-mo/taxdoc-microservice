@@ -18,7 +18,7 @@ class EnhancedTaxExtractor:
     def __init__(self):
         self.bedrock_client = boto3.client('bedrock-runtime', region_name='us-east-1')
         self.textract_client = boto3.client('textract')
-        self.model_id = "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
+        self.model_id = "anthropic.claude-3-5-sonnet-20240620-v1:0"
         
         # W-2 field definitions with all boxes
         self.w2_fields = {
@@ -62,23 +62,50 @@ class EnhancedTaxExtractor:
         confidence_scores = {}
         final_data = {}
         
-        # Layer 1: Textract Queries (high precision)
-        try:
-            layer1_data = self._layer1_textract_queries(textract_response, doc_type)
-            layers_used.append("textract_queries")
-            final_data.update(layer1_data)
-            logger.info(f"Layer 1 extracted {len(layer1_data)} fields")
-        except Exception as e:
-            logger.warning(f"Layer 1 failed: {e}")
-        
-        # Layer 2: Bedrock Claude (intelligent fallback for missing fields)
-        missing_fields = self._get_missing_fields(final_data, doc_type)
-        if missing_fields:
+        # For W-2 documents, prioritize Claude extraction for comprehensive fields
+        if doc_type == "W-2":
+            # Layer 2: Bedrock Claude (PRIMARY for comprehensive extraction)
             try:
-                layer2_data = self._layer2_bedrock_claude(textract_response, doc_type, missing_fields)
-                layers_used.append("bedrock_claude")
-                final_data.update(layer2_data)
-                logger.info(f"Layer 2 filled {len(layer2_data)} missing fields")
+                layer2_data = self._layer2_bedrock_claude(textract_response, doc_type, [])
+                if layer2_data:
+                    layers_used.append("bedrock_claude")
+                    final_data.update(layer2_data)
+                    logger.info(f"Layer 2 (Claude) extracted {len(layer2_data)} fields: {list(layer2_data.keys())}")
+                else:
+                    logger.warning("Layer 2 (Claude) returned no data")
+            except Exception as e:
+                logger.error(f"Layer 2 (Claude) failed: {e}")
+            
+            # Layer 1: Textract Queries (supplement Claude results)
+            try:
+                layer1_data = self._layer1_textract_queries(textract_response, doc_type)
+                if layer1_data:
+                    layers_used.append("textract_queries")
+                    # Only add fields not already extracted by Claude
+                    for key, value in layer1_data.items():
+                        if key not in final_data or final_data[key] is None:
+                            final_data[key] = value
+                    logger.info(f"Layer 1 supplemented with {len(layer1_data)} fields")
+            except Exception as e:
+                logger.warning(f"Layer 1 failed: {e}")
+        else:
+            # For non-W-2 documents, use original order
+            # Layer 1: Textract Queries
+            try:
+                layer1_data = self._layer1_textract_queries(textract_response, doc_type)
+                layers_used.append("textract_queries")
+                final_data.update(layer1_data)
+                logger.info(f"Layer 1 extracted {len(layer1_data)} fields")
+            except Exception as e:
+                logger.warning(f"Layer 1 failed: {e}")
+            
+            # Layer 2: Bedrock Claude
+            try:
+                layer2_data = self._layer2_bedrock_claude(textract_response, doc_type, [])
+                if layer2_data:
+                    layers_used.append("bedrock_claude")
+                    final_data.update(layer2_data)
+                    logger.info(f"Layer 2 extracted {len(layer2_data)} fields")
             except Exception as e:
                 logger.warning(f"Layer 2 failed: {e}")
         
@@ -87,9 +114,10 @@ class EnhancedTaxExtractor:
         if critical_missing:
             try:
                 layer3_data = self._layer3_regex_patterns(textract_response, doc_type, critical_missing)
-                layers_used.append("regex_patterns")
-                final_data.update(layer3_data)
-                logger.info(f"Layer 3 filled {len(layer3_data)} critical fields")
+                if layer3_data:
+                    layers_used.append("regex_patterns")
+                    final_data.update(layer3_data)
+                    logger.info(f"Layer 3 filled {len(layer3_data)} critical fields")
             except Exception as e:
                 logger.warning(f"Layer 3 failed: {e}")
         
@@ -101,7 +129,7 @@ class EnhancedTaxExtractor:
             'layers_used': layers_used,
             'confidence_scores': confidence_scores,
             'extraction_method': 'three_layer_pipeline',
-            'total_fields_extracted': len([v for v in processed_data.values() if v is not None])
+            'total_fields_extracted': len([v for v in processed_data.values() if v is not None and v != ''])
         })
         
         return processed_data
@@ -112,105 +140,92 @@ class EnhancedTaxExtractor:
         if doc_type != "W-2":
             return {}
         
-        # Define W-2 queries for high-confidence fields
-        queries = [
-            "What is the employee's social security number?",
-            "What is the employer identification number or EIN?", 
-            "What are the wages, tips, and other compensation in box 1?",
-            "What is the federal income tax withheld in box 2?",
-            "What are the social security wages in box 3?",
-            "What is the social security tax withheld in box 4?",
-            "What are the medicare wages and tips in box 5?",
-            "What is the medicare tax withheld in box 6?",
-            "What is the employee's name?",
-            "What is the employer's name?"
-        ]
-        
-        # Extract text for queries (simplified - in real implementation would use Textract queries API)
+        # Extract text for analysis
         text_content = self._extract_text_from_textract(textract_response)
         
         # Parse key fields using text analysis
         result = {}
         
         # Extract SSN
-        ssn_match = re.search(r'\b\d{3}-\d{2}-\d{4}\b', text_content)
+        ssn_match = re.search(r'\b\d{3}-?\d{2}-?\d{4}\b', text_content)
         if ssn_match:
-            result['employee_ssn'] = ssn_match.group()
+            result['a'] = ssn_match.group()
         
         # Extract EIN  
-        ein_match = re.search(r'\b\d{2}-\d{7}\b', text_content)
+        ein_match = re.search(r'\b\d{2}-?\d{7}\b', text_content)
         if ein_match:
-            result['employer_ein'] = ein_match.group()
+            result['b'] = ein_match.group()
         
         # Extract currency amounts with better context
-        result['wages_income'] = self._extract_currency_with_context(text_content, ['wages', 'box 1', 'compensation'])
-        result['federal_withheld'] = self._extract_currency_with_context(text_content, ['federal', 'withheld', 'box 2'])
-        result['social_security_wages'] = self._extract_currency_with_context(text_content, ['social security wages', 'box 3'])
-        result['medicare_wages'] = self._extract_currency_with_context(text_content, ['medicare wages', 'box 5'])
+        wages = self._extract_currency_with_context(text_content, ['wages', 'box 1', 'compensation'])
+        if wages:
+            result['1'] = str(wages)
+            
+        federal = self._extract_currency_with_context(text_content, ['federal', 'withheld', 'box 2'])
+        if federal:
+            result['2'] = str(federal)
+            
+        ss_wages = self._extract_currency_with_context(text_content, ['social security wages', 'box 3'])
+        if ss_wages:
+            result['3'] = str(ss_wages)
+            
+        medicare = self._extract_currency_with_context(text_content, ['medicare wages', 'box 5'])
+        if medicare:
+            result['5'] = str(medicare)
         
         return {k: v for k, v in result.items() if v is not None}
     
     def _layer2_bedrock_claude(self, textract_response: Dict[str, Any], doc_type: str, missing_fields: List[str]) -> Dict[str, Any]:
         """Layer 2: Use Bedrock Claude for intelligent extraction of missing fields"""
         
+        if doc_type != "W-2":
+            return {}
+            
         text_content = self._extract_text_from_textract(textract_response)
         
+        if not text_content.strip():
+            logger.warning("No text content found for Claude extraction")
+            return {}
+        
         # Enhanced prompt for comprehensive W-2 extraction
-        prompt = f"""Extract ALL possible fields from this W-2 tax form. Analyze the document text carefully and extract:
+        prompt = f"""You are a tax document expert. Extract ALL W-2 form fields from this document text.
 
-EMPLOYEE INFO:
-- employee_first_name: First name from box e
-- employee_last_name: Last name from box f  
-- employee_address: Full address from box f
-- employee_ssn: Social Security Number from box a
+Return ONLY a JSON object with these exact field names (use empty string "" if field not found):
 
-EMPLOYER INFO:
-- employer_name: Company name from box c
-- employer_address: Company address from box c
-- employer_ein: EIN from box b
-- control_number: Control number from box d
+{{
+  "a": "Employee's social security number (format: XXX-XX-XXXX)",
+  "b": "Employer identification number EIN (format: XX-XXXXXXX)", 
+  "c": "Employer's name, address, and ZIP code (full text)",
+  "d": "Control number",
+  "e": "Employee's first name and middle initial",
+  "f": "Employee's last name and address with ZIP code",
+  "1": "Wages, tips, other compensation (Box 1 amount)",
+  "2": "Federal income tax withheld (Box 2 amount)",
+  "3": "Social security wages (Box 3 amount)",
+  "4": "Social security tax withheld (Box 4 amount)",
+  "5": "Medicare wages and tips (Box 5 amount)",
+  "6": "Medicare tax withheld (Box 6 amount)",
+  "15": "State abbreviation (Box 15)",
+  "16": "State wages, tips, etc. (Box 16 amount)",
+  "17": "State income tax (Box 17 amount)",
+  "18": "Local wages, tips, etc. (Box 18 amount)",
+  "19": "Local income tax (Box 19 amount)",
+  "20": "Locality name (Box 20)",
+  "box12": [{{"code": "letter code", "amount": "dollar amount"}}],
+  "employer_state_id": "Employer's state ID number",
+  "first_name": "Employee first name only",
+  "last_name": "Employee last name only"
+}}
 
-WAGES & TAXES (boxes 1-11):
-- wages_income: Box 1 wages, tips, other compensation
-- federal_withheld: Box 2 federal income tax withheld
-- social_security_wages: Box 3 social security wages
-- social_security_tax: Box 4 social security tax withheld
-- medicare_wages: Box 5 medicare wages and tips
-- medicare_tax: Box 6 medicare tax withheld
-- social_security_tips: Box 7 social security tips
-- allocated_tips: Box 8 allocated tips
-- dependent_care_benefits: Box 10 dependent care benefits
-- nonqualified_plans: Box 11 nonqualified plans
-
-BOX 12 CODES:
-- box12_codes: Array of objects with code and amount from box 12
-
-CHECKBOXES (box 13):
-- statutory_employee: Statutory employee checkbox
-- retirement_plan: Retirement plan checkbox
-- third_party_sick_pay: Third-party sick pay checkbox
-
-STATE/LOCAL (boxes 15-20):
-- state: State abbreviation from box 15
-- state_wages: State wages from box 16
-- state_income_tax: State income tax from box 17
-- local_wages: Local wages from box 18
-- local_income_tax: Local income tax from box 19
-- locality_name: Locality name from box 20
-
-OTHER:
-- other_deductions: Box 14 other deductions
-- employer_state_id: Employer's state ID number
-
-Document text:
+Document OCR Text:
 {text_content}
 
-Return ONLY a JSON object with ALL extracted values. Use null for missing values.
-For currency amounts: return numeric values without $ or commas.
-For Box 12: return as array like [{{"code": "D", "amount": 1500.00}}]
-For checkboxes: return true/false based on if marked.
-
-JSON:"""
+IMPORTANT: 
+- Extract ALL fields even if some are empty
+- Keep currency amounts as strings with commas (e.g., "50,000.00")
+- Use exact format shown above
+- Return ONLY the JSON object, no other text
+"""
 
         try:
             bedrock_request = {
@@ -219,23 +234,53 @@ JSON:"""
                 "messages": [{"role": "user", "content": prompt}]
             }
             
-            response = self.bedrock_client.invoke_model(
-                modelId=self.model_id,
-                body=json.dumps(bedrock_request)
-            )
+            logger.info(f"Calling Bedrock Claude with model: {self.model_id}")
+            
+            # Add retry logic for throttling
+            import time
+            max_retries = 2
+            for attempt in range(max_retries):
+                try:
+                    response = self.bedrock_client.invoke_model(
+                        modelId=self.model_id,
+                        body=json.dumps(bedrock_request)
+                    )
+                    break
+                except Exception as e:
+                    if 'ThrottlingException' in str(e) and attempt < max_retries - 1:
+                        logger.warning(f"Throttled, waiting {2 ** attempt} seconds...")
+                        time.sleep(2 ** attempt)
+                        continue
+                    else:
+                        raise e
             
             response_body = json.loads(response['body'].read())
             content = response_body['content'][0]['text']
             
+            logger.info(f"Claude response length: {len(content)}")
+            
             # Extract JSON from response
             json_match = re.search(r'\{.*\}', content, re.DOTALL)
             if json_match:
-                extracted = json.loads(json_match.group())
-                logger.info(f"Claude extracted {len(extracted)} fields")
-                return extracted
+                try:
+                    extracted = json.loads(json_match.group())
+                    # Filter out empty strings and null values
+                    filtered = {k: v for k, v in extracted.items() 
+                              if v is not None and v != "" and k not in ['layers_used', 'confidence_scores', 'extraction_method', 'total_fields_extracted']}
+                    logger.info(f"Claude successfully extracted {len(filtered)} non-empty fields: {list(filtered.keys())}")
+                    return filtered
+                except json.JSONDecodeError as e:
+                    logger.error(f"JSON decode error: {e}")
+                    logger.error(f"Raw Claude response: {content[:500]}...")
+                    return {}
+            else:
+                logger.error(f"No JSON found in Claude response: {content[:200]}...")
+                return {}
             
         except Exception as e:
             logger.error(f"Bedrock extraction failed: {e}")
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
         
         return {}
     
@@ -310,7 +355,10 @@ JSON:"""
     
     def _get_critical_missing_fields(self, current_data: Dict[str, Any], doc_type: str) -> List[str]:
         """Get critical fields that must be extracted"""
-        critical_fields = ['wages_income', 'federal_withheld', 'employee_ssn', 'employer_ein']
+        if doc_type == "W-2":
+            critical_fields = ['1', '2', 'a', 'b']  # Box 1, Box 2, SSN, EIN
+        else:
+            critical_fields = ['wages_income', 'federal_withheld', 'employee_ssn', 'employer_ein']
         return [field for field in critical_fields if field not in current_data or current_data[field] is None]
     
     def _post_process_data(self, data: Dict[str, Any], doc_type: str) -> Dict[str, Any]:
