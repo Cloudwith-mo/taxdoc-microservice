@@ -3,41 +3,18 @@
   "version": "2.0.0",
   "private": true,
   "dependencies": {
-    "@aws-amplify/ui-react": "^6.0.0",
-    "@stripe/stripe-js": "^2.4.0",
-    "aws-amplify": "^6.0.0",
-    "axios": "^1.6.0",
-    "browser-image-compression": "^2.0.2",
-    "konva": "^9.3.22",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-dropzone": "^14.3.8",
-    "react-konva": "^18.2.10",
-    "react-pdf": "^7.7.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.3.0",
+    "react-dropzone": "^14.2.3",
     "react-scripts": "5.0.1"
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
-  },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
+    "build": "react-scripts build"
   },
   "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
+    "production": [">0.2%", "not dead", "not op_mini all"],
+    "development": ["last 1 chrome version", "last 1 firefox version", "last 1 safari version"]
   }
 }
