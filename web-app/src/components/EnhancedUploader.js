@@ -1,214 +1,204 @@
 import React, { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
+import API_CONFIG from '../config/api';
 
-const EnhancedUploader = ({ onResults, userTier = 'free' }) => {
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [error, setError] = useState(null);
-  const [preview, setPreview] = useState(null);
+const EnhancedUploader = ({ onUploadComplete, onBatchComplete }) => {
+  const [uploading, setUploading] = useState(false);
+  const [batchMode, setBatchMode] = useState(false);
+  const [files, setFiles] = useState([]);
+  const [progress, setProgress] = useState({});
 
   const onDrop = useCallback((acceptedFiles) => {
-    const file = acceptedFiles[0];
-    if (file) {
-      setSelectedFile(file);
-      setError(null);
-      
-      // Create preview for images
-      if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = () => setPreview(reader.result);
-        reader.readAsDataURL(file);
-      } else {
-        setPreview(null);
+    if (batchMode) {
+      setFiles(prev => [...prev, ...acceptedFiles.map(file => ({
+        file,
+        id: Date.now() + Math.random(),
+        status: 'pending'
+      }))]);
+    } else {
+      // Single file upload
+      if (acceptedFiles.length > 0) {
+        uploadSingleFile(acceptedFiles[0]);
       }
     }
-  }, []);
+  }, [batchMode]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
-      'image/*': ['.jpeg', '.jpg', '.png', '.heic'],
-      'application/pdf': ['.pdf']
+      'application/pdf': ['.pdf'],
+      'image/*': ['.png', '.jpg', '.jpeg']
     },
-    maxSize: 10 * 1024 * 1024, // 10MB limit
-    multiple: false
+    multiple: batchMode
   });
 
-  const compressImage = (file) => {
-    return new Promise((resolve) => {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      const img = new Image();
-      
-      img.onload = () => {
-        const maxWidth = 1920;
-        const maxHeight = 1080;
-        let { width, height } = img;
-        
-        if (width > maxWidth || height > maxHeight) {
-          const ratio = Math.min(maxWidth / width, maxHeight / height);
-          width *= ratio;
-          height *= ratio;
-        }
-        
-        canvas.width = width;
-        canvas.height = height;
-        ctx.drawImage(img, 0, 0, width, height);
-        
-        canvas.toBlob(resolve, 'image/jpeg', 0.8);
-      };
-      
-      img.src = URL.createObjectURL(file);
-    });
-  };
-
-  const processDocument = async () => {
-    if (!selectedFile) {
-      setError('Please select a document to upload');
-      return;
-    }
-
-    setIsProcessing(true);
-    setError(null);
-
+  const uploadSingleFile = async (file) => {
+    setUploading(true);
+    
     try {
-      let fileToProcess = selectedFile;
+      const base64 = await fileToBase64(file);
       
-      // Compress images if needed
-      if (selectedFile.type.startsWith('image/') && selectedFile.size > 2 * 1024 * 1024) {
-        fileToProcess = await compressImage(selectedFile);
-      }
-
-      const base64Content = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result.split(',')[1]);
-        reader.onerror = reject;
-        reader.readAsDataURL(fileToProcess);
-      });
-
-      const response = await fetch('https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod/process-document', {
+      const response = await fetch(`${API_CONFIG.BASE_URL}/process-document-enhanced`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('cognitoToken') || ''}`
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          filename: selectedFile.name,
-          file_content: base64Content,
-          user_tier: userTier
+          filename: file.name,
+          file_content: base64,
+          enable_ai: true,
+          user_id: localStorage.getItem('user_id') || 'anonymous'
         })
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Processing failed');
+      const result = await response.json();
+      
+      if (response.ok) {
+        onUploadComplete(result);
+      } else {
+        throw new Error(result.error || 'Upload failed');
       }
-
-      const uploadResult = await response.json();
-      const documentId = uploadResult.document_id;
-      
-      // Poll for results
-      let attempts = 0;
-      const maxAttempts = 30;
-      
-      const pollForResults = async () => {
-        try {
-          const resultResponse = await fetch(`https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod/result/${documentId}`);
-          const resultData = await resultResponse.json();
-          
-          if (resultData.status === 'completed' && resultData.data) {
-            onResults(resultData);
-            return;
-          }
-          
-          if (resultData.status === 'failed') {
-            throw new Error('Document processing failed');
-          }
-          
-          attempts++;
-          if (attempts < maxAttempts) {
-            setTimeout(pollForResults, 1000);
-          } else {
-            throw new Error('Processing timeout - please try again');
-          }
-        } catch (pollError) {
-          setError(`Processing failed: ${pollError.message}`);
-          setIsProcessing(false);
-        }
-      };
-      
-      setTimeout(pollForResults, 2000);
-
-    } catch (err) {
-      setError(`Processing failed: ${err.message}`);
-      setIsProcessing(false);
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert('Upload failed: ' + error.message);
+    } finally {
+      setUploading(false);
     }
+  };
+
+  const uploadBatch = async () => {
+    if (files.length === 0) return;
+    
+    setUploading(true);
+    
+    try {
+      // Convert all files to base64
+      const fileData = await Promise.all(
+        files.map(async ({ file }) => ({
+          filename: file.name,
+          file_content: await fileToBase64(file)
+        }))
+      );
+
+      const response = await fetch(`${API_CONFIG.BASE_URL}/batch-upload-enhanced`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          files: fileData,
+          user_id: localStorage.getItem('user_id') || 'anonymous'
+        })
+      });
+
+      const result = await response.json();
+      
+      if (response.ok) {
+        // Start polling for batch status
+        pollBatchStatus(result.batch_id);
+      } else {
+        throw new Error(result.error || 'Batch upload failed');
+      }
+    } catch (error) {
+      console.error('Batch upload error:', error);
+      alert('Batch upload failed: ' + error.message);
+      setUploading(false);
+    }
+  };
+
+  const pollBatchStatus = async (batchId) => {
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await fetch(`${API_CONFIG.BASE_URL}/batch-status/${batchId}`);
+        const status = await response.json();
+        
+        setProgress(status);
+        
+        if (status.status === 'completed' || status.status === 'failed') {
+          clearInterval(pollInterval);
+          setUploading(false);
+          onBatchComplete(status);
+        }
+      } catch (error) {
+        console.error('Status polling error:', error);
+        clearInterval(pollInterval);
+        setUploading(false);
+      }
+    }, 2000);
+  };
+
+  const fileToBase64 = (file) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const removeFile = (id) => {
+    setFiles(files.filter(f => f.id !== id));
   };
 
   return (
     <div className="enhanced-uploader">
-      <div 
-        {...getRootProps()} 
-        className={`dropzone ${isDragActive ? 'active' : ''} ${selectedFile ? 'has-file' : ''}`}
-      >
-        <input {...getInputProps()} />
-        
-        {preview ? (
-          <div className="file-preview">
-            <img src={preview} alt="Preview" className="preview-image" />
-            <div className="file-info">
-              <span className="file-name">📎 {selectedFile.name}</span>
-              <span className="file-size">({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)</span>
-            </div>
-          </div>
-        ) : selectedFile ? (
-          <div className="file-info">
-            <div className="file-icon">📄</div>
-            <span className="file-name">📎 {selectedFile.name}</span>
-            <span className="file-size">({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)</span>
-          </div>
-        ) : (
-          <div className="upload-prompt">
-            <div className="upload-icon">
-              {isDragActive ? '📤' : '📷'}
-            </div>
-            <div className="upload-text">
-              {isDragActive ? (
-                <p>Drop your document here...</p>
-              ) : (
-                <>
-                  <p><strong>Drag & drop a photo or document</strong></p>
-                  <p>or click to browse</p>
-                  <div className="supported-formats">
-                    📱 Photos (JPEG, PNG, HEIC) • 📄 PDFs • 🖼️ Images
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        )}
+      <div className="upload-mode-toggle">
+        <button 
+          className={!batchMode ? 'active' : ''}
+          onClick={() => setBatchMode(false)}
+        >
+          Single Upload
+        </button>
+        <button 
+          className={batchMode ? 'active' : ''}
+          onClick={() => setBatchMode(true)}
+        >
+          Batch Upload
+        </button>
       </div>
 
-      <button 
-        onClick={processDocument}
-        disabled={!selectedFile || isProcessing}
-        className="process-button enhanced"
+      <div 
+        {...getRootProps()} 
+        className={`dropzone ${isDragActive ? 'active' : ''} ${uploading ? 'uploading' : ''}`}
       >
-        {isProcessing ? (
-          <>
-            <span className="spinner">⏳</span>
-            Processing Document...
-          </>
-        ) : (
-          <>
-            🤖 Extract Data with AI
-          </>
-        )}
-      </button>
+        <input {...getInputProps()} />
+        <div className="dropzone-content">
+          <div className="upload-icon">📤</div>
+          <h3>
+            {batchMode ? 'Drop multiple files here' : 'Drop your document here'}
+          </h3>
+          <p>or click to browse</p>
+          <p className="file-types">Supports PDF, PNG, JPG</p>
+        </div>
+      </div>
 
-      {error && (
-        <div className="error-message">
-          {error}
+      {batchMode && files.length > 0 && (
+        <div className="batch-files">
+          <h4>Files to Process ({files.length})</h4>
+          <div className="file-list">
+            {files.map(({ file, id, status }) => (
+              <div key={id} className="file-item">
+                <span className="file-name">{file.name}</span>
+                <span className={`file-status ${status}`}>{status}</span>
+                <button onClick={() => removeFile(id)} className="remove-btn">×</button>
+              </div>
+            ))}
+          </div>
+          <button 
+            onClick={uploadBatch} 
+            disabled={uploading || files.length === 0}
+            className="batch-upload-btn"
+          >
+            {uploading ? 'Processing...' : `Process ${files.length} Files`}
+          </button>
+        </div>
+      )}
+
+      {uploading && progress.total_files && (
+        <div className="batch-progress">
+          <h4>Batch Progress</h4>
+          <div className="progress-bar">
+            <div 
+              className="progress-fill" 
+              style={{ width: `${(progress.processed_files / progress.total_files) * 100}%` }}
+            />
+          </div>
+          <p>{progress.processed_files} of {progress.total_files} files processed</p>
         </div>
       )}
     </div>

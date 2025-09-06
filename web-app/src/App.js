@@ -7,6 +7,7 @@ import ChatbotQA from './components/ChatbotQA';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
 import AIInsights from './components/AIInsights';
 import SentimentAnalysis from './components/SentimentAnalysis';
+import V2Dashboard from './components/V2Dashboard';
 import './styles/colors.css';
 import './styles/tax-theme.css';
 import './styles/tax-components.css';
@@ -34,6 +35,12 @@ function App() {
         
         <div className="nav-tabs">
           <button 
+            className={`nav-tab ${activeTab === 'v2' ? 'active' : ''}`}
+            onClick={() => setActiveTab('v2')}
+          >
+            🚀 v2.0 Migration
+          </button>
+          <button 
             className={`nav-tab ${activeTab === 'process' ? 'active' : ''}`}
             onClick={() => setActiveTab('process')}
           >
@@ -53,6 +60,8 @@ function App() {
           </button>
         </div>
       </div>
+      
+      {activeTab === 'v2' && <V2Dashboard />}
       
       {activeTab === 'process' && (
         <>

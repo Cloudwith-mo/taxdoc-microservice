@@ -1,0 +1,232 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'TaxDoc v2.0 Migration - Enhanced Features'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: prod
+    AllowedValues: [dev, staging, prod]
+
+Globals:
+  Function:
+    Timeout: 30
+    Runtime: python3.9
+    Environment:
+      Variables:
+        ENVIRONMENT: !Ref Environment
+
+Resources:
+  # Enhanced Processing Function
+  EnhancedExtractionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../src/handlers/
+      Handler: enhanced_extraction_handler.lambda_handler
+      Environment:
+        Variables:
+          UPLOAD_BUCKET: !Ref UploadBucket
+          RESULTS_TABLE: !Ref DocumentsTable
+      Events:
+        ProcessDocument:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TaxDocApi
+            Path: /process-document-enhanced
+            Method: post
+      Policies:
+        - S3FullAccessPolicy:
+            BucketName: !Ref UploadBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref DocumentsTable
+        - Statement:
+            Effect: Allow
+            Action:
+              - textract:*
+              - bedrock:InvokeModel
+            Resource: '*'
+
+  # Batch Upload Function
+  BatchUploadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../src/handlers/
+      Handler: batch_upload_enhanced.lambda_handler
+      Environment:
+        Variables:
+          BATCH_TABLE: !Ref BatchJobsTable
+          PROCESSING_QUEUE: !Ref ProcessingQueue
+      Events:
+        BatchUpload:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TaxDocApi
+            Path: /batch-upload-enhanced
+            Method: post
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref BatchJobsTable
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt ProcessingQueue.QueueName
+
+  # Enhanced Download Function
+  DownloadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../src/handlers/
+      Handler: download_enhanced.lambda_handler
+      Environment:
+        Variables:
+          RESULTS_TABLE: !Ref DocumentsTable
+      Events:
+        Download:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TaxDocApi
+            Path: /download/{doc_id}
+            Method: get
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref DocumentsTable
+        - Statement:
+            Effect: Allow
+            Action:
+              - ses:SendEmail
+            Resource: '*'
+
+  # SNS Alerts Function
+  SNSAlertsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../src/handlers/
+      Handler: sns_alerts.lambda_handler
+      Environment:
+        Variables:
+          ALERTS_TOPIC: !Ref AlertsTopic
+      Events:
+        DocumentStream:
+          Type: DynamoDB
+          Properties:
+            Stream: !GetAtt DocumentsTable.StreamArn
+            StartingPosition: LATEST
+        ProcessingQueue:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt ProcessingQueue.Arn
+      Policies:
+        - SNSPublishMessagePolicy:
+            TopicName: !GetAtt AlertsTopic.TopicName
+
+  # API Gateway
+  TaxDocApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Environment
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+
+  # DynamoDB Tables
+  DocumentsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'DrDocDocuments-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      AttributeDefinitions:
+        - AttributeName: document_id
+          AttributeType: S
+        - AttributeName: user_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: document_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: UserIndex
+          KeySchema:
+            - AttributeName: user_id
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+  BatchJobsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'BatchJobs-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: batch_id
+          AttributeType: S
+        - AttributeName: user_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: batch_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: UserBatchIndex
+          KeySchema:
+            - AttributeName: user_id
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+  # S3 Bucket
+  UploadBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'taxdoc-uploads-v2-${Environment}-${AWS::AccountId}'
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET, PUT, POST, DELETE, HEAD]
+            AllowedOrigins: ['*']
+
+  # SQS Queue
+  ProcessingQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'TaxDoc-Processing-v2-${Environment}'
+      VisibilityTimeoutSeconds: 180
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt ProcessingDLQ.Arn
+        maxReceiveCount: 3
+
+  ProcessingDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'TaxDoc-Processing-DLQ-${Environment}'
+
+  # SNS Topic
+  AlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'TaxDoc-Alerts-${Environment}'
+
+  # Email Subscription (replace with your email)
+  AlertsEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      TopicArn: !Ref AlertsTopic
+      Endpoint: admin@taxdoc.com
+
+Outputs:
+  ApiGatewayUrl:
+    Description: 'API Gateway endpoint URL'
+    Value: !Sub 'https://${TaxDocApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiUrl'
+
+  UploadBucketName:
+    Description: 'S3 bucket for uploads'
+    Value: !Ref UploadBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-UploadBucket'
+
+  DocumentsTableName:
+    Description: 'DynamoDB table for documents'
+    Value: !Ref DocumentsTable
+    Export:
+      Name: !Sub '${AWS::StackName}-DocumentsTable'

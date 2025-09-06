@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaxDoc Pro - AI-Powered Document Processing</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; }
+        
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 2rem; text-align: center; }
+        .header h1 { font-size: 2.5rem; margin-bottom: 0.5rem; }
+        .header p { font-size: 1.2rem; opacity: 0.9; }
+        
+        .nav-tabs { background: white; padding: 1rem; box-shadow: 0 2px 10px rgba(0,0,0,0.1); display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+        .nav-tab { padding: 0.75rem 1.5rem; border: none; background: #f1f5f9; border-radius: 8px; cursor: pointer; font-weight: 500; transition: all 0.3s; }
+        .nav-tab.active { background: #667eea; color: white; }
+        .nav-tab:hover { background: #e2e8f0; }
+        .nav-tab.active:hover { background: #5a67d8; }
+        
+        .container { max-width: 1200px; margin: 2rem auto; padding: 0 1rem; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        .upload-area { background: white; border: 2px dashed #cbd5e0; border-radius: 12px; padding: 3rem; text-align: center; margin-bottom: 2rem; transition: all 0.3s; }
+        .upload-area:hover { border-color: #667eea; background: #f7fafc; }
+        .upload-area.dragover { border-color: #667eea; background: #edf2f7; }
+        
+        .template-editor { background: white; border-radius: 12px; padding: 2rem; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        .template-grid { display: grid; grid-template-columns: 1fr 300px; gap: 2rem; margin-top: 1rem; }
+        .document-preview { position: relative; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+        .document-preview img { width: 100%; height: auto; display: block; }
+        .field-overlay { position: absolute; border: 2px solid #667eea; background: rgba(102, 126, 234, 0.1); cursor: pointer; }
+        
+        .field-properties { background: #f8fafc; padding: 1.5rem; border-radius: 8px; }
+        .field-item { background: white; padding: 1rem; margin-bottom: 0.5rem; border-radius: 6px; border: 1px solid #e2e8f0; }
+        
+        .batch-processor { background: white; border-radius: 12px; padding: 2rem; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        .file-list { margin-top: 1rem; }
+        .file-item { display: flex; align-items: center; justify-content: between; padding: 1rem; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 0.5rem; }
+        .status { padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.875rem; font-weight: 500; }
+        .status.pending { background: #fef3c7; color: #92400e; }
+        .status.processing { background: #dbeafe; color: #1e40af; }
+        .status.completed { background: #d1fae5; color: #065f46; }
+        .status.failed { background: #fee2e2; color: #991b1b; }
+        
+        .btn { padding: 0.75rem 1.5rem; border: none; border-radius: 8px; font-weight: 500; cursor: pointer; transition: all 0.3s; }
+        .btn-primary { background: #667eea; color: white; }
+        .btn-primary:hover { background: #5a67d8; }
+        .btn-secondary { background: #e2e8f0; color: #4a5568; }
+        .btn-secondary:hover { background: #cbd5e0; }
+        
+        .analytics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+        .metric-card { background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        .metric-value { font-size: 2rem; font-weight: 700; color: #667eea; }
+        .metric-label { color: #64748b; font-size: 0.875rem; margin-top: 0.5rem; }
+        
+        .processing-status { background: white; padding: 1.5rem; border-radius: 12px; margin-bottom: 1rem; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .progress-bar { width: 100%; height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; margin-top: 1rem; }
+        .progress-fill { height: 100%; background: #667eea; transition: width 0.3s; }
+        
+        .results-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; }
+        .result-card { background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        
+        @media (max-width: 768px) {
+            .template-grid { grid-template-columns: 1fr; }
+            .nav-tabs { flex-direction: column; }
+            .analytics-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🏛️ TaxDoc Pro</h1>
+        <p>AI-Powered Document Processing with Parseur-Level Features</p>
+    </div>
+
+    <div class="nav-tabs">
+        <button class="nav-tab active" onclick="showTab('upload')">📄 Document Upload</button>
+        <button class="nav-tab" onclick="showTab('templates')">🎨 Template Editor</button>
+        <button class="nav-tab" onclick="showTab('batch')">📚 Batch Processing</button>
+        <button class="nav-tab" onclick="showTab('analytics')">📊 Analytics</button>
+        <button class="nav-tab" onclick="showTab('integrations')">🔗 Integrations</button>
+    </div>
+
+    <div class="container">
+        <!-- Document Upload Tab -->
+        <div id="upload" class="tab-content active">
+            <div class="upload-area" id="uploadArea">
+                <h3>📤 Upload Tax Documents</h3>
+                <p>Drag & drop files here or click to select</p>
+                <p style="font-size: 0.875rem; color: #64748b; margin-top: 1rem;">Supports PDF, PNG, JPG • Max 10MB per file</p>
+                <input type="file" id="fileInput" multiple accept=".pdf,.png,.jpg,.jpeg" style="display: none;">
+            </div>
+            
+            <div id="processingStatus" class="processing-status" style="display: none;">
+                <h4>Processing Documents...</h4>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill" style="width: 0%;"></div>
+                </div>
+                <p id="statusText">Initializing...</p>
+            </div>
+
+            <div id="results" class="results-grid" style="display: none;"></div>
+        </div>
+
+        <!-- Template Editor Tab -->
+        <div id="templates" class="tab-content">
+            <div class="template-editor">
+                <h3>🎨 Visual Template Editor</h3>
+                <p>Create custom extraction templates with point-and-click field selection</p>
+                
+                <div style="margin: 1rem 0;">
+                    <input type="text" id="templateName" placeholder="Template Name" style="padding: 0.5rem; border: 1px solid #e2e8f0; border-radius: 6px; margin-right: 1rem;">
+                    <button class="btn btn-primary" onclick="saveTemplate()">Save Template</button>
+                    <button class="btn btn-secondary" onclick="loadSampleDocument()">Load Sample</button>
+                </div>
+
+                <div class="template-grid">
+                    <div class="document-preview" id="documentPreview">
+                        <div style="padding: 2rem; text-align: center; color: #64748b;">
+                            Click "Load Sample" to start creating a template
+                        </div>
+                    </div>
+                    
+                    <div class="field-properties">
+                        <h4>Template Fields</h4>
+                        <div id="fieldsList">
+                            <p style="color: #64748b; font-size: 0.875rem;">No fields defined yet</p>
+                        </div>
+                        <button class="btn btn-secondary" onclick="addField()" style="margin-top: 1rem; width: 100%;">+ Add Field</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Batch Processing Tab -->
+        <div id="batch" class="tab-content">
+            <div class="batch-processor">
+                <h3>📚 Batch Document Processing</h3>
+                <p>Upload and process multiple documents simultaneously</p>
+                
+                <div class="upload-area" onclick="document.getElementById('batchFileInput').click()">
+                    <h4>Select Multiple Files</h4>
+                    <p>Choose up to 50 documents for batch processing</p>
+                    <input type="file" id="batchFileInput" multiple accept=".pdf,.png,.jpg,.jpeg" style="display: none;">
+                </div>
+
+                <div style="margin: 1rem 0;">
+                    <button class="btn btn-primary" onclick="processBatch()" id="processBatchBtn" disabled>Process All Files</button>
+                    <button class="btn btn-secondary" onclick="exportBatchResults()" id="exportBatchBtn" disabled>Export Results</button>
+                </div>
+
+                <div class="file-list" id="batchFileList"></div>
+            </div>
+        </div>
+
+        <!-- Analytics Tab -->
+        <div id="analytics" class="tab-content">
+            <h3>📊 Processing Analytics</h3>
+            
+            <div class="analytics-grid">
+                <div class="metric-card">
+                    <div class="metric-value" id="totalDocs">0</div>
+                    <div class="metric-label">Total Documents</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" id="avgConfidence">0%</div>
+                    <div class="metric-label">Average Confidence</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" id="processingTime">0s</div>
+                    <div class="metric-label">Avg Processing Time</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" id="successRate">0%</div>
+                    <div class="metric-label">Success Rate</div>
+                </div>
+            </div>
+
+            <div style="background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
+                <h4>Document Type Distribution</h4>
+                <div id="documentTypes" style="margin-top: 1rem;">
+                    <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e2e8f0;">
+                        <span>W-2 Forms</span>
+                        <span style="font-weight: 600;">45%</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e2e8f0;">
+                        <span>1099 Forms</span>
+                        <span style="font-weight: 600;">30%</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; padding: 0.5rem 0;">
+                        <span>Receipts</span>
+                        <span style="font-weight: 600;">25%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Integrations Tab -->
+        <div id="integrations" class="tab-content">
+            <h3>🔗 Integrations & Export</h3>
+            
+            <div class="results-grid">
+                <div class="result-card">
+                    <h4>📧 Email Integration</h4>
+                    <p>Forward documents to your unique email address for automatic processing</p>
+                    <div style="background: #f8fafc; padding: 1rem; border-radius: 6px; margin: 1rem 0; font-family: monospace;">
+                        user123@ingest.taxdoc.com
+                    </div>
+                    <button class="btn btn-primary">Generate Email</button>
+                </div>
+
+                <div class="result-card">
+                    <h4>📊 Google Sheets</h4>
+                    <p>Automatically export extracted data to Google Sheets</p>
+                    <button class="btn btn-secondary" onclick="connectGoogleSheets()">Connect Sheets</button>
+                </div>
+
+                <div class="result-card">
+                    <h4>⚡ Zapier Integration</h4>
+                    <p>Connect to 5000+ apps via Zapier webhooks</p>
+                    <input type="url" placeholder="Webhook URL" style="width: 100%; padding: 0.5rem; border: 1px solid #e2e8f0; border-radius: 6px; margin: 0.5rem 0;">
+                    <button class="btn btn-primary">Save Webhook</button>
+                </div>
+
+                <div class="result-card">
+                    <h4>🔄 API Access</h4>
+                    <p>Programmatic access to document processing</p>
+                    <div style="background: #f8fafc; padding: 1rem; border-radius: 6px; margin: 1rem 0; font-family: monospace; font-size: 0.875rem;">
+                        POST /api/v1/process<br>
+                        Authorization: Bearer your-api-key
+                    </div>
+                    <button class="btn btn-secondary">Generate API Key</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentFiles = [];
+        let batchFiles = [];
+        let templates = [];
+        let currentTemplate = { name: '', fields: [] };
+
+        // Tab Management
+        function showTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        // File Upload
+        document.getElementById('uploadArea').addEventListener('click', () => {
+            document.getElementById('fileInput').click();
+        });
+
+        document.getElementById('fileInput').addEventListener('change', handleFileUpload);
+        document.getElementById('batchFileInput').addEventListener('change', handleBatchFileUpload);
+
+        // Drag and Drop
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            document.getElementById('uploadArea').addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            document.getElementById('uploadArea').addEventListener(eventName, () => {
+                document.getElementById('uploadArea').classList.add('dragover');
+            });
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            document.getElementById('uploadArea').addEventListener(eventName, () => {
+                document.getElementById('uploadArea').classList.remove('dragover');
+            });
+        });
+
+        document.getElementById('uploadArea').addEventListener('drop', (e) => {
+            const files = e.dataTransfer.files;
+            processFiles(files);
+        });
+
+        function handleFileUpload(e) {
+            processFiles(e.target.files);
+        }
+
+        function handleBatchFileUpload(e) {
+            batchFiles = Array.from(e.target.files);
+            displayBatchFiles();
+            document.getElementById('processBatchBtn').disabled = false;
+        }
+
+        async function processFiles(files) {
+            currentFiles = Array.from(files);
+            document.getElementById('processingStatus').style.display = 'block';
+            document.getElementById('results').style.display = 'none';
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                updateProgress((i / files.length) * 100, `Processing ${file.name}...`);
+                
+                try {
+                    const result = await processDocument(file);
+                    displayResult(result, file.name);
+                } catch (error) {
+                    console.error('Processing error:', error);
+                }
+            }
+
+            updateProgress(100, 'Processing complete!');
+            setTimeout(() => {
+                document.getElementById('processingStatus').style.display = 'none';
+                document.getElementById('results').style.display = 'grid';
+            }, 1000);
+        }
+
+        async function processDocument(file) {
+            // Simulate API call
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            return {
+                document_type: 'W-2',
+                confidence_score: 95,
+                extracted_data: {
+                    employee_name: { value: 'John Doe', confidence: 98 },
+                    employer_name: { value: 'Tech Corp Inc', confidence: 96 },
+                    wages: { value: '$75,000.00', confidence: 99 },
+                    federal_tax: { value: '$12,500.00', confidence: 97 }
+                }
+            };
+        }
+
+        function updateProgress(percent, text) {
+            document.getElementById('progressFill').style.width = percent + '%';
+            document.getElementById('statusText').textContent = text;
+        }
+
+        function displayResult(result, filename) {
+            const resultsContainer = document.getElementById('results');
+            const resultCard = document.createElement('div');
+            resultCard.className = 'result-card';
+            
+            resultCard.innerHTML = `
+                <h4>📄 ${filename}</h4>
+                <p><strong>Type:</strong> ${result.document_type}</p>
+                <p><strong>Confidence:</strong> ${result.confidence_score}%</p>
+                <div style="margin-top: 1rem;">
+                    ${Object.entries(result.extracted_data).map(([key, data]) => `
+                        <div style="display: flex; justify-content: space-between; padding: 0.25rem 0;">
+                            <span>${key.replace('_', ' ').toUpperCase()}:</span>
+                            <span style="font-weight: 600;">${data.value}</span>
+                        </div>
+                    `).join('')}
+                </div>
+                <div style="margin-top: 1rem;">
+                    <button class="btn btn-primary" onclick="downloadJSON('${filename}')">Download JSON</button>
+                    <button class="btn btn-secondary" onclick="downloadCSV('${filename}')">Download CSV</button>
+                </div>
+            `;
+            
+            resultsContainer.appendChild(resultCard);
+        }
+
+        // Template Editor Functions
+        function loadSampleDocument() {
+            const preview = document.getElementById('documentPreview');
+            preview.innerHTML = `
+                <img src="data:image/svg+xml;base64,${btoa(`
+                    <svg width="400" height="600" xmlns="http://www.w3.org/2000/svg">
+                        <rect width="400" height="600" fill="#f8fafc" stroke="#e2e8f0"/>
+                        <text x="200" y="50" text-anchor="middle" font-size="16" font-weight="bold">W-2 Wage and Tax Statement</text>
+                        <rect x="20" y="80" width="150" height="30" fill="white" stroke="#cbd5e0"/>
+                        <text x="25" y="100" font-size="12">Employee Name</text>
+                        <rect x="20" y="130" width="150" height="30" fill="white" stroke="#cbd5e0"/>
+                        <text x="25" y="150" font-size="12">Employer Name</text>
+                        <rect x="200" y="80" width="100" height="30" fill="white" stroke="#cbd5e0"/>
+                        <text x="205" y="100" font-size="12">Wages</text>
+                        <rect x="200" y="130" width="100" height="30" fill="white" stroke="#cbd5e0"/>
+                        <text x="205" y="150" font-size="12">Federal Tax</text>
+                    </svg>
+                `)}" alt="Sample W-2" onclick="selectField(event)">
+            `;
+        }
+
+        function selectField(event) {
+            const rect = event.target.getBoundingClientRect();
+            const x = ((event.clientX - rect.left) / rect.width * 100).toFixed(2);
+            const y = ((event.clientY - rect.top) / rect.height * 100).toFixed(2);
+            
+            const fieldName = prompt('Enter field name:');
+            if (fieldName) {
+                addFieldOverlay(x, y, fieldName);
+            }
+        }
+
+        function addFieldOverlay(x, y, name) {
+            const preview = document.getElementById('documentPreview');
+            const overlay = document.createElement('div');
+            overlay.className = 'field-overlay';
+            overlay.style.left = x + '%';
+            overlay.style.top = y + '%';
+            overlay.style.width = '15%';
+            overlay.style.height = '5%';
+            overlay.title = name;
+            
+            preview.appendChild(overlay);
+            
+            currentTemplate.fields.push({ name, x: parseFloat(x), y: parseFloat(y) });
+            updateFieldsList();
+        }
+
+        function updateFieldsList() {
+            const fieldsList = document.getElementById('fieldsList');
+            if (currentTemplate.fields.length === 0) {
+                fieldsList.innerHTML = '<p style="color: #64748b; font-size: 0.875rem;">No fields defined yet</p>';
+                return;
+            }
+            
+            fieldsList.innerHTML = currentTemplate.fields.map((field, index) => `
+                <div class="field-item">
+                    <input type="text" value="${field.name}" onchange="updateFieldName(${index}, this.value)" style="width: 100%; border: none; background: transparent;">
+                    <button onclick="removeField(${index})" style="float: right; background: #fee2e2; color: #991b1b; border: none; padding: 0.25rem 0.5rem; border-radius: 4px; cursor: pointer;">×</button>
+                </div>
+            `).join('');
+        }
+
+        function addField() {
+            const name = prompt('Enter field name:');
+            if (name) {
+                addFieldOverlay(50, 50, name);
+            }
+        }
+
+        function removeField(index) {
+            currentTemplate.fields.splice(index, 1);
+            updateFieldsList();
+            // Remove overlay from preview
+            const overlays = document.querySelectorAll('.field-overlay');
+            if (overlays[index]) overlays[index].remove();
+        }
+
+        function updateFieldName(index, newName) {
+            currentTemplate.fields[index].name = newName;
+        }
+
+        function saveTemplate() {
+            const name = document.getElementById('templateName').value;
+            if (!name) {
+                alert('Please enter a template name');
+                return;
+            }
+            
+            currentTemplate.name = name;
+            templates.push({...currentTemplate});
+            alert('Template saved successfully!');
+        }
+
+        // Batch Processing Functions
+        function displayBatchFiles() {
+            const fileList = document.getElementById('batchFileList');
+            fileList.innerHTML = batchFiles.map((file, index) => `
+                <div class="file-item">
+                    <span>${file.name}</span>
+                    <span class="status pending">Pending</span>
+                </div>
+            `).join('');
+        }
+
+        async function processBatch() {
+            document.getElementById('processBatchBtn').disabled = true;
+            const fileItems = document.querySelectorAll('#batchFileList .file-item');
+            
+            for (let i = 0; i < batchFiles.length; i++) {
+                const statusSpan = fileItems[i].querySelector('.status');
+                statusSpan.textContent = 'Processing';
+                statusSpan.className = 'status processing';
+                
+                try {
+                    await processDocument(batchFiles[i]);
+                    statusSpan.textContent = 'Completed';
+                    statusSpan.className = 'status completed';
+                } catch (error) {
+                    statusSpan.textContent = 'Failed';
+                    statusSpan.className = 'status failed';
+                }
+            }
+            
+            document.getElementById('exportBatchBtn').disabled = false;
+        }
+
+        function exportBatchResults() {
+            const results = batchFiles.map(file => ({
+                filename: file.name,
+                status: 'completed',
+                data: { /* extracted data */ }
+            }));
+            
+            const blob = new Blob([JSON.stringify(results, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'batch_results.json';
+            a.click();
+        }
+
+        // Export Functions
+        function downloadJSON(filename) {
+            const data = { filename, extracted_data: {} };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename.replace(/\.[^/.]+$/, '') + '.json';
+            a.click();
+        }
+
+        function downloadCSV(filename) {
+            const csv = 'Field,Value,Confidence\nEmployee Name,John Doe,98\nWages,$75000,99';
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename.replace(/\.[^/.]+$/, '') + '.csv';
+            a.click();
+        }
+
+        // Integration Functions
+        function connectGoogleSheets() {
+            alert('Google Sheets integration coming soon!');
+        }
+
+        // Initialize analytics
+        document.addEventListener('DOMContentLoaded', () => {
+            // Simulate analytics data
+            document.getElementById('totalDocs').textContent = '1,247';
+            document.getElementById('avgConfidence').textContent = '94%';
+            document.getElementById('processingTime').textContent = '3.2s';
+            document.getElementById('successRate').textContent = '98%';
+        });
+    </script>
+</body>
+</html>

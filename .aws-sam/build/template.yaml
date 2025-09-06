@@ -1,369 +1,266 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: TaxDoc V1 MVP - Simple tax document extraction for W-2 and 1099 forms
+Description: TaxDoc v2.0 Migration - Enhanced Features
 Parameters:
   Environment:
     Type: String
-    Default: mvp
-    Description: Environment name
+    Default: prod
+    AllowedValues:
+    - dev
+    - staging
+    - prod
 Globals:
   Function:
     Timeout: 30
-    MemorySize: 512
     Runtime: python3.9
+    Environment:
+      Variables:
+        ENVIRONMENT:
+          Ref: Environment
 Resources:
-  TaxDocBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName:
-        Fn::Sub: taxdoc-uploads-${Environment}-${AWS::AccountId}
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-        - ServerSideEncryptionByDefault:
-            SSEAlgorithm: AES256
-      LifecycleConfiguration:
-        Rules:
-        - Id: DeleteTempFiles
-          Status: Enabled
-          ExpirationInDays: 1
-  DocumentsTable:
-    Type: AWS::DynamoDB::Table
-    Properties:
-      TableName:
-        Fn::Sub: DrDocDocuments-${Environment}
-      BillingMode: PAY_PER_REQUEST
-      AttributeDefinitions:
-      - AttributeName: document_id
-        AttributeType: S
-      KeySchema:
-      - AttributeName: document_id
-        KeyType: HASH
-      TimeToLiveSpecification:
-        AttributeName: ttl
-        Enabled: true
-  TaxProcessorFunction:
+  EnhancedExtractionFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName:
-        Fn::Sub: TaxDoc-Processor-${Environment}
-      CodeUri: TaxProcessorFunction
-      Handler: handlers/tax_mvp_handler.lambda_handler
+      CodeUri: EnhancedExtractionFunction
+      Handler: enhanced_extraction_handler.lambda_handler
       Environment:
         Variables:
-          DOCUMENTS_TABLE:
+          UPLOAD_BUCKET:
+            Ref: UploadBucket
+          RESULTS_TABLE:
             Ref: DocumentsTable
-      Policies:
-      - TextractPolicy: {}
-      - S3ReadPolicy:
-          BucketName:
-            Ref: TaxDocBucket
-      - DynamoDBCrudPolicy:
-          TableName:
-            Ref: DocumentsTable
-      - Statement:
-        - Effect: Allow
-          Action:
-          - bedrock:InvokeModel
-          - bedrock:ListFoundationModels
-          Resource:
-          - arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0
-          - Fn::Sub: arn:aws:bedrock:us-east-1:${AWS::AccountId}:*
-        - Effect: Allow
-          Action:
-          - cloudwatch:PutMetricData
-          Resource: '*'
       Events:
         ProcessDocument:
           Type: Api
           Properties:
             RestApiId:
               Ref: TaxDocApi
-            Path: /process-document
+            Path: /process-document-enhanced
             Method: post
-        OptionsRequest:
+      Policies:
+      - S3FullAccessPolicy:
+          BucketName:
+            Ref: UploadBucket
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: DocumentsTable
+      - Statement:
+          Effect: Allow
+          Action:
+          - textract:*
+          - bedrock:InvokeModel
+          Resource: '*'
+    Metadata:
+      SamResourceId: EnhancedExtractionFunction
+  BatchUploadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: BatchUploadFunction
+      Handler: batch_upload_enhanced.lambda_handler
+      Environment:
+        Variables:
+          BATCH_TABLE:
+            Ref: BatchJobsTable
+          PROCESSING_QUEUE:
+            Ref: ProcessingQueue
+      Events:
+        BatchUpload:
           Type: Api
           Properties:
             RestApiId:
               Ref: TaxDocApi
-            Path: /process-document
-            Method: options
+            Path: /batch-upload-enhanced
+            Method: post
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: BatchJobsTable
+      - SQSSendMessagePolicy:
+          QueueName:
+            Fn::GetAtt:
+            - ProcessingQueue
+            - QueueName
     Metadata:
-      SamResourceId: TaxProcessorFunction
-  AnalyticsFunction:
+      SamResourceId: BatchUploadFunction
+  DownloadFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName:
-        Fn::Sub: TaxDoc-Analytics-${Environment}
-      CodeUri: AnalyticsFunction
-      Handler: handlers/analytics_handler.lambda_handler
+      CodeUri: DownloadFunction
+      Handler: download_enhanced.lambda_handler
       Environment:
         Variables:
-          DOCUMENTS_TABLE:
+          RESULTS_TABLE:
             Ref: DocumentsTable
+      Events:
+        Download:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: TaxDocApi
+            Path: /download/{doc_id}
+            Method: get
       Policies:
       - DynamoDBReadPolicy:
           TableName:
             Ref: DocumentsTable
-      - CloudWatchReadOnlyAccess
-      Events:
-        GetAnalytics:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: TaxDocApi
-            Path: /analytics
-            Method: get
-        AnalyticsOptions:
-          Type: Api
-          Properties:
-            RestApiId:
-              Ref: TaxDocApi
-            Path: /analytics
-            Method: options
+      - Statement:
+          Effect: Allow
+          Action:
+          - ses:SendEmail
+          Resource: '*'
     Metadata:
-      SamResourceId: AnalyticsFunction
-  ChatbotFunction:
+      SamResourceId: DownloadFunction
+  SNSAlertsFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName:
-        Fn::Sub: TaxDoc-Chatbot-${Environment}
-      CodeUri: ChatbotFunction
-      Handler: handlers/chatbot_handler.lambda_handler
-      Policies:
-      - Statement:
-        - Effect: Allow
-          Action:
-          - bedrock:InvokeModel
-          - bedrock:ListFoundationModels
-          Resource:
-          - arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0
-          - Fn::Sub: arn:aws:bedrock:us-east-1:${AWS::AccountId}:*
+      CodeUri: SNSAlertsFunction
+      Handler: sns_alerts.lambda_handler
+      Environment:
+        Variables:
+          ALERTS_TOPIC:
+            Ref: AlertsTopic
       Events:
-        ChatbotPost:
-          Type: Api
+        DocumentStream:
+          Type: DynamoDB
           Properties:
-            RestApiId:
-              Ref: TaxDocApi
-            Path: /chat
-            Method: post
-        ChatbotOptions:
-          Type: Api
+            Stream:
+              Fn::GetAtt:
+              - DocumentsTable
+              - StreamArn
+            StartingPosition: LATEST
+        ProcessingQueue:
+          Type: SQS
           Properties:
-            RestApiId:
-              Ref: TaxDocApi
-            Path: /chat
-            Method: options
+            Queue:
+              Fn::GetAtt:
+              - ProcessingQueue
+              - Arn
+      Policies:
+      - SNSPublishMessagePolicy:
+          TopicName:
+            Fn::GetAtt:
+            - AlertsTopic
+            - TopicName
     Metadata:
-      SamResourceId: ChatbotFunction
+      SamResourceId: SNSAlertsFunction
   TaxDocApi:
     Type: AWS::Serverless::Api
     Properties:
-      Name:
-        Fn::Sub: TaxDoc-API-${Environment}
       StageName:
         Ref: Environment
       Cors:
-        AllowMethods: '''GET, POST, OPTIONS'''
-        AllowHeaders: '''Content-Type, X-Amz-Date, Authorization, X-Api-Key, X-Amz-Security-Token'''
+        AllowMethods: '''GET,POST,PUT,DELETE,OPTIONS'''
+        AllowHeaders: '''Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'''
         AllowOrigin: '''*'''
-      DefinitionBody:
-        swagger: '2.0'
-        info:
-          title: TaxDoc MVP API
-          version: '1.0'
-        paths:
-          /chat:
-            post:
-              produces:
-              - application/json
-              responses:
-                '200':
-                  description: Success
-                  headers:
-                    Access-Control-Allow-Origin:
-                      type: string
-              x-amazon-apigateway-integration:
-                uri:
-                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ChatbotFunction.Arn}/invocations
-                httpMethod: POST
-                type: aws_proxy
-            options:
-              consumes:
-              - application/json
-              produces:
-              - application/json
-              responses:
-                '200':
-                  description: Success
-                  headers:
-                    Access-Control-Allow-Origin:
-                      type: string
-                    Access-Control-Allow-Headers:
-                      type: string
-                    Access-Control-Allow-Methods:
-                      type: string
-              x-amazon-apigateway-integration:
-                type: mock
-                requestTemplates:
-                  application/json: '{"statusCode": 200}'
-                responses:
-                  default:
-                    statusCode: 200
-                    responseParameters:
-                      method.response.header.Access-Control-Allow-Headers: '''Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'''
-                      method.response.header.Access-Control-Allow-Methods: '''POST,OPTIONS'''
-                      method.response.header.Access-Control-Allow-Origin: '''*'''
-          /analytics:
-            get:
-              produces:
-              - application/json
-              responses:
-                '200':
-                  description: Success
-                  headers:
-                    Access-Control-Allow-Origin:
-                      type: string
-              x-amazon-apigateway-integration:
-                uri:
-                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AnalyticsFunction.Arn}/invocations
-                httpMethod: POST
-                type: aws_proxy
-            options:
-              consumes:
-              - application/json
-              produces:
-              - application/json
-              responses:
-                '200':
-                  description: Success
-                  headers:
-                    Access-Control-Allow-Origin:
-                      type: string
-                    Access-Control-Allow-Headers:
-                      type: string
-                    Access-Control-Allow-Methods:
-                      type: string
-              x-amazon-apigateway-integration:
-                type: mock
-                requestTemplates:
-                  application/json: '{"statusCode": 200}'
-                responses:
-                  default:
-                    statusCode: 200
-                    responseParameters:
-                      method.response.header.Access-Control-Allow-Headers: '''Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'''
-                      method.response.header.Access-Control-Allow-Methods: '''GET,OPTIONS'''
-                      method.response.header.Access-Control-Allow-Origin: '''*'''
-          /process-document:
-            post:
-              produces:
-              - application/json
-              responses:
-                '200':
-                  description: Success
-                  headers:
-                    Access-Control-Allow-Origin:
-                      type: string
-              x-amazon-apigateway-integration:
-                uri:
-                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${TaxProcessorFunction.Arn}/invocations
-                httpMethod: POST
-                type: aws_proxy
-            options:
-              consumes:
-              - application/json
-              produces:
-              - application/json
-              responses:
-                '200':
-                  description: Success
-                  headers:
-                    Access-Control-Allow-Origin:
-                      type: string
-                    Access-Control-Allow-Headers:
-                      type: string
-                    Access-Control-Allow-Methods:
-                      type: string
-              x-amazon-apigateway-integration:
-                type: mock
-                requestTemplates:
-                  application/json: '{"statusCode": 200}'
-                responses:
-                  default:
-                    statusCode: 200
-                    responseParameters:
-                      method.response.header.Access-Control-Allow-Headers: '''Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'''
-                      method.response.header.Access-Control-Allow-Methods: '''POST,OPTIONS'''
-                      method.response.header.Access-Control-Allow-Origin: '''*'''
-  ApiGatewayInvokePermission:
-    Type: AWS::Lambda::Permission
+  DocumentsTable:
+    Type: AWS::DynamoDB::Table
     Properties:
-      FunctionName:
-        Ref: TaxProcessorFunction
-      Action: lambda:InvokeFunction
-      Principal: apigateway.amazonaws.com
-      SourceArn:
-        Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${TaxDocApi}/*/*
-  AnalyticsApiGatewayInvokePermission:
-    Type: AWS::Lambda::Permission
+      TableName:
+        Fn::Sub: DrDocDocuments-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      AttributeDefinitions:
+      - AttributeName: document_id
+        AttributeType: S
+      - AttributeName: user_id
+        AttributeType: S
+      KeySchema:
+      - AttributeName: document_id
+        KeyType: HASH
+      GlobalSecondaryIndexes:
+      - IndexName: UserIndex
+        KeySchema:
+        - AttributeName: user_id
+          KeyType: HASH
+        Projection:
+          ProjectionType: ALL
+  BatchJobsTable:
+    Type: AWS::DynamoDB::Table
     Properties:
-      FunctionName:
-        Ref: AnalyticsFunction
-      Action: lambda:InvokeFunction
-      Principal: apigateway.amazonaws.com
-      SourceArn:
-        Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${TaxDocApi}/*/*
-  ChatbotApiGatewayInvokePermission:
-    Type: AWS::Lambda::Permission
+      TableName:
+        Fn::Sub: BatchJobs-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: batch_id
+        AttributeType: S
+      - AttributeName: user_id
+        AttributeType: S
+      KeySchema:
+      - AttributeName: batch_id
+        KeyType: HASH
+      GlobalSecondaryIndexes:
+      - IndexName: UserBatchIndex
+        KeySchema:
+        - AttributeName: user_id
+          KeyType: HASH
+        Projection:
+          ProjectionType: ALL
+  UploadBucket:
+    Type: AWS::S3::Bucket
     Properties:
-      FunctionName:
-        Ref: ChatbotFunction
-      Action: lambda:InvokeFunction
-      Principal: apigateway.amazonaws.com
-      SourceArn:
-        Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${TaxDocApi}/*/*
-  TaxProcessorLogGroup:
-    Type: AWS::Logs::LogGroup
+      BucketName:
+        Fn::Sub: taxdoc-uploads-v2-${Environment}-${AWS::AccountId}
+      CorsConfiguration:
+        CorsRules:
+        - AllowedHeaders:
+          - '*'
+          AllowedMethods:
+          - GET
+          - PUT
+          - POST
+          - DELETE
+          - HEAD
+          AllowedOrigins:
+          - '*'
+  ProcessingQueue:
+    Type: AWS::SQS::Queue
     Properties:
-      LogGroupName:
-        Fn::Sub: /aws/lambda/TaxDoc-Processor-${Environment}
-      RetentionInDays: 7
-  AnalyticsLogGroup:
-    Type: AWS::Logs::LogGroup
+      QueueName:
+        Fn::Sub: TaxDoc-Processing-v2-${Environment}
+      VisibilityTimeoutSeconds: 180
+      RedrivePolicy:
+        deadLetterTargetArn:
+          Fn::GetAtt:
+          - ProcessingDLQ
+          - Arn
+        maxReceiveCount: 3
+  ProcessingDLQ:
+    Type: AWS::SQS::Queue
     Properties:
-      LogGroupName:
-        Fn::Sub: /aws/lambda/TaxDoc-Analytics-${Environment}
-      RetentionInDays: 7
-  ChatbotLogGroup:
-    Type: AWS::Logs::LogGroup
+      QueueName:
+        Fn::Sub: TaxDoc-Processing-DLQ-${Environment}
+  AlertsTopic:
+    Type: AWS::SNS::Topic
     Properties:
-      LogGroupName:
-        Fn::Sub: /aws/lambda/TaxDoc-Chatbot-${Environment}
-      RetentionInDays: 7
+      TopicName:
+        Fn::Sub: TaxDoc-Alerts-${Environment}
+  AlertsEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      TopicArn:
+        Ref: AlertsTopic
+      Endpoint: admin@taxdoc.com
 Outputs:
-  ApiEndpoint:
+  ApiGatewayUrl:
     Description: API Gateway endpoint URL
     Value:
       Fn::Sub: https://${TaxDocApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
     Export:
       Name:
-        Fn::Sub: ${AWS::StackName}-ApiEndpoint
-  BucketName:
+        Fn::Sub: ${AWS::StackName}-ApiUrl
+  UploadBucketName:
     Description: S3 bucket for uploads
     Value:
-      Ref: TaxDocBucket
+      Ref: UploadBucket
     Export:
       Name:
-        Fn::Sub: ${AWS::StackName}-BucketName
-  FunctionName:
-    Description: Lambda function name
+        Fn::Sub: ${AWS::StackName}-UploadBucket
+  DocumentsTableName:
+    Description: DynamoDB table for documents
     Value:
-      Ref: TaxProcessorFunction
+      Ref: DocumentsTable
     Export:
       Name:
-        Fn::Sub: ${AWS::StackName}-FunctionName
+        Fn::Sub: ${AWS::StackName}-DocumentsTable
