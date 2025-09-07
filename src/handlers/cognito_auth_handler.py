@@ -11,6 +11,18 @@ CLIENT_ID = os.environ.get('COGNITO_CLIENT_ID')
 CLIENT_SECRET = os.environ.get('COGNITO_CLIENT_SECRET')
 
 def lambda_handler(event, context):
+    # Handle CORS preflight
+    if event.get('httpMethod') == 'OPTIONS':
+        return {
+            'statusCode': 200,
+            'headers': {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'POST, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type'
+            },
+            'body': ''
+        }
+    
     try:
         body = json.loads(event['body']) if event.get('body') else {}
         action = body.get('action', 'login')
@@ -34,12 +46,15 @@ def lambda_handler(event, context):
         }
 
 def get_secret_hash(username):
+    if not CLIENT_SECRET:
+        return None
     message = username + CLIENT_ID
     dig = hmac.new(CLIENT_SECRET.encode('UTF-8'), message.encode('UTF-8'), hashlib.sha256).digest()
     return base64.b64encode(dig).decode()
 
 def register_user(body):
     try:
+        # Simple user creation with secret hash
         response = cognito.admin_create_user(
             UserPoolId=USER_POOL_ID,
             Username=body['email'],
@@ -51,7 +66,7 @@ def register_user(body):
             MessageAction='SUPPRESS'
         )
         
-        # Set permanent password
+        # Set permanent password with secret hash
         cognito.admin_set_user_password(
             UserPoolId=USER_POOL_ID,
             Username=body['email'],
@@ -73,6 +88,7 @@ def register_user(body):
 
 def login_user(body):
     try:
+        # Try without secret hash first
         response = cognito.admin_initiate_auth(
             UserPoolId=USER_POOL_ID,
             ClientId=CLIENT_ID,
