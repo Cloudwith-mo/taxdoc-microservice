@@ -1,0 +1,153 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Authentication and Payment Infrastructure'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: prod
+  StripeSecretKey:
+    Type: String
+    NoEcho: true
+  StripeWebhookSecret:
+    Type: String
+    NoEcho: true
+
+Resources:
+  # Cognito User Pool
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub 'TaxDoc-UserPool-${Environment}'
+      AutoVerifiedAttributes:
+        - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref UserPool
+      ClientName: !Sub 'TaxDoc-Client-${Environment}'
+      GenerateSecret: true
+      ExplicitAuthFlows:
+        - ADMIN_NO_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+
+  # Lambda Functions
+  StripePaymentFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'stripe-payment-${Environment}'
+      Runtime: python3.9
+      Handler: stripe_payment_handler.lambda_handler
+      Code:
+        ZipFile: |
+          # Placeholder - deploy actual code
+          def lambda_handler(event, context):
+              return {'statusCode': 200}
+      Environment:
+        Variables:
+          STRIPE_SECRET_KEY: !Ref StripeSecretKey
+          STRIPE_WEBHOOK_SECRET: !Ref StripeWebhookSecret
+      Role: !GetAtt LambdaExecutionRole.Arn
+
+  CognitoAuthFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'cognito-auth-${Environment}'
+      Runtime: python3.9
+      Handler: cognito_auth_handler.lambda_handler
+      Code:
+        ZipFile: |
+          # Placeholder - deploy actual code
+          def lambda_handler(event, context):
+              return {'statusCode': 200}
+      Environment:
+        Variables:
+          COGNITO_USER_POOL_ID: !Ref UserPool
+          COGNITO_CLIENT_ID: !Ref UserPoolClient
+          COGNITO_CLIENT_SECRET: !GetAtt UserPoolClientSecret.Value
+      Role: !GetAtt LambdaExecutionRole.Arn
+
+  # API Gateway Routes
+  StripeApiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !ImportValue DrDoc-API-Gateway-prod
+      ParentId: !ImportValue DrDoc-API-Root-prod
+      PathPart: stripe
+
+  AuthApiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !ImportValue DrDoc-API-Gateway-prod
+      ParentId: !ImportValue DrDoc-API-Root-prod
+      PathPart: auth
+
+  # IAM Role
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: CognitoAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cognito-idp:*
+                Resource: !GetAtt UserPool.Arn
+
+  # Custom Resource for Client Secret
+  UserPoolClientSecret:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken: !GetAtt GetClientSecretFunction.Arn
+      UserPoolId: !Ref UserPool
+      ClientId: !Ref UserPoolClient
+
+  GetClientSecretFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.9
+      Handler: index.handler
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          def handler(event, context):
+              try:
+                  client = boto3.client('cognito-idp')
+                  response = client.describe_user_pool_client(
+                      UserPoolId=event['ResourceProperties']['UserPoolId'],
+                      ClientId=event['ResourceProperties']['ClientId']
+                  )
+                  secret = response['UserPoolClient']['ClientSecret']
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {'Value': secret})
+              except Exception as e:
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {})
+      Role: !GetAtt LambdaExecutionRole.Arn
+
+Outputs:
+  UserPoolId:
+    Value: !Ref UserPool
+    Export:
+      Name: !Sub 'TaxDoc-UserPool-${Environment}'
+  
+  UserPoolClientId:
+    Value: !Ref UserPoolClient
+    Export:
+      Name: !Sub 'TaxDoc-UserPoolClient-${Environment}'

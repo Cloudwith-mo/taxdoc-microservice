@@ -1,0 +1,117 @@
+/* Tax Edition Theme */
+.tax-badge {
+  background: linear-gradient(135deg, #00246B, #1e3a8a);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 0.9em;
+  margin-top: 8px;
+  display: inline-block;
+  font-weight: 500;
+}
+
+.app-header h1 {
+  color: #00246B;
+  font-size: 2.5em;
+  margin-bottom: 8px;
+}
+
+.app-header p {
+  color: #374151;
+  font-size: 1.2em;
+  margin-bottom: 16px;
+}
+
+/* Tax form specific styling */
+.tax-form-indicator {
+  background: #00246B;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.8em;
+  font-weight: 600;
+}
+
+.irs-blue {
+  color: #00246B;
+}
+
+.tax-warning {
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  color: #92400e;
+  padding: 12px;
+  border-radius: 8px;
+  margin: 16px 0;
+}
+
+.tax-error {
+  background: #fee2e2;
+  border: 1px solid #ef4444;
+  color: #dc2626;
+  padding: 12px;
+  border-radius: 8px;
+  margin: 16px 0;
+}
+
+.math-check-passed {
+  background: #d1fae5;
+  border: 1px solid #10b981;
+  color: #065f46;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.9em;
+}
+
+.math-check-failed {
+  background: #fee2e2;
+  border: 1px solid #ef4444;
+  color: #dc2626;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.9em;
+}
+
+.field-box-label {
+  position: absolute;
+  top: -8px;
+  left: 8px;
+  background: #00246B;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.7em;
+  font-weight: bold;
+}
+
+.unsupported-doc-message {
+  background: #fef3c7;
+  border: 2px solid #f59e0b;
+  color: #92400e;
+  padding: 20px;
+  border-radius: 12px;
+  text-align: center;
+  margin: 20px 0;
+}
+
+.unsupported-doc-message h3 {
+  color: #92400e;
+  margin-bottom: 12px;
+}
+
+.supported-forms-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+.supported-form-tag {
+  background: #00246B;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 0.8em;
+  font-weight: 500;
+}

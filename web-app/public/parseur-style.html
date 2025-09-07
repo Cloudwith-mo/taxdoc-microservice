@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaxDoc - Document Processing</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; height: 100vh; overflow: hidden; }
+        
+        .app-container { display: flex; height: 100vh; }
+        
+        /* Left Navigation */
+        .sidebar { width: 250px; background: #f8fafc; border-right: 1px solid #e2e8f0; display: flex; flex-direction: column; }
+        .sidebar-header { padding: 1rem; border-bottom: 1px solid #e2e8f0; }
+        .sidebar-header h2 { font-size: 1.25rem; color: #1a202c; }
+        .nav-menu { flex: 1; padding: 1rem 0; }
+        .nav-item { padding: 0.75rem 1rem; cursor: pointer; border-left: 3px solid transparent; transition: all 0.2s; }
+        .nav-item:hover { background: #edf2f7; }
+        .nav-item.active { background: #e6fffa; border-left-color: #38b2ac; color: #38b2ac; }
+        .nav-item .icon { margin-right: 0.5rem; }
+        
+        /* Main Content Area */
+        .main-content { flex: 1; display: flex; }
+        
+        /* Document Viewer */
+        .document-viewer { flex: 1; background: #fff; display: flex; flex-direction: column; }
+        .document-header { padding: 1rem; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: between; align-items: center; }
+        .document-area { flex: 1; padding: 1rem; overflow: auto; display: flex; justify-content: center; align-items: flex-start; }
+        .document-preview { max-width: 90%; max-height: 80vh; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); object-fit: contain; }
+        .upload-zone { width: 400px; height: 500px; border: 2px dashed #cbd5e0; border-radius: 12px; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; transition: all 0.3s; }
+        .upload-zone:hover { border-color: #38b2ac; background: #f0fdfa; }
+        
+        /* Right Panel */
+        .right-panel { width: 350px; background: #f8fafc; border-left: 1px solid #e2e8f0; display: flex; flex-direction: column; }
+        .panel-tabs { display: flex; border-bottom: 1px solid #e2e8f0; }
+        .panel-tab { flex: 1; padding: 0.75rem; text-align: center; cursor: pointer; border-bottom: 2px solid transparent; }
+        .panel-tab.active { border-bottom-color: #38b2ac; color: #38b2ac; background: white; }
+        .panel-content { flex: 1; overflow: auto; }
+        
+        /* Extracted Data */
+        .extracted-data { padding: 1rem; }
+        .field-group { margin-bottom: 1.5rem; }
+        .field-group h4 { font-size: 0.875rem; font-weight: 600; color: #4a5568; margin-bottom: 0.5rem; text-transform: uppercase; }
+        .field-item { background: white; border: 1px solid #e2e8f0; border-radius: 6px; padding: 0.75rem; margin-bottom: 0.5rem; }
+        .field-label { font-size: 0.75rem; color: #718096; margin-bottom: 0.25rem; }
+        .field-value { font-weight: 500; color: #2d3748; }
+        .confidence-badge { float: right; padding: 0.125rem 0.5rem; border-radius: 12px; font-size: 0.75rem; font-weight: 500; }
+        .confidence-high { background: #c6f6d5; color: #22543d; }
+        .confidence-medium { background: #fef5e7; color: #c05621; }
+        .confidence-low { background: #fed7d7; color: #c53030; }
+        
+        /* AI Chatbot */
+        .chatbot-container { padding: 1rem; display: flex; flex-direction: column; height: 100%; }
+        .chat-messages { flex: 1; overflow-y: auto; margin-bottom: 1rem; }
+        .message { margin-bottom: 1rem; }
+        .message.user { text-align: right; }
+        .message.bot { text-align: left; }
+        .message-bubble { display: inline-block; padding: 0.75rem; border-radius: 12px; max-width: 80%; }
+        .message.user .message-bubble { background: #38b2ac; color: white; }
+        .message.bot .message-bubble { background: #edf2f7; color: #2d3748; }
+        .chat-input { display: flex; gap: 0.5rem; }
+        .chat-input input { flex: 1; padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: 6px; }
+        .chat-input button { padding: 0.75rem 1rem; background: #38b2ac; color: white; border: none; border-radius: 6px; cursor: pointer; }
+        
+        /* Buttons */
+        .btn { padding: 0.5rem 1rem; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; transition: all 0.2s; }
+        .btn-primary { background: #38b2ac; color: white; }
+        .btn-primary:hover { background: #319795; }
+        .btn-secondary { background: #e2e8f0; color: #4a5568; }
+        .btn-secondary:hover { background: #cbd5e0; }
+        
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Left Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h2>🏛️ TaxDoc</h2>
+            </div>
+            <div class="nav-menu">
+                <div class="nav-item active" onclick="showSection('documents')">
+                    <span class="icon">📄</span>Documents
+                </div>
+                <div class="nav-item" onclick="showSection('templates')">
+                    <span class="icon">🎨</span>Templates
+                </div>
+                <div class="nav-item" onclick="showSection('history')">
+                    <span class="icon">📋</span>History
+                </div>
+                <div class="nav-item" onclick="showSection('settings')">
+                    <span class="icon">⚙️</span>Settings
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Document Viewer -->
+            <div class="document-viewer">
+                <div class="document-header">
+                    <h3 id="documentTitle">Upload Document</h3>
+                    <div>
+                        <button class="btn btn-secondary" onclick="clearDocument()">Clear</button>
+                        <button class="btn btn-primary" onclick="processDocument()">Process</button>
+                    </div>
+                </div>
+                <div class="document-area">
+                    <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+                        <div style="text-align: center;">
+                            <div style="font-size: 3rem; margin-bottom: 1rem;">📤</div>
+                            <h3>Drop your document here</h3>
+                            <p style="color: #718096; margin-top: 0.5rem;">or click to browse</p>
+                            <p style="font-size: 0.875rem; color: #a0aec0; margin-top: 1rem;">Supports PDF, PNG, JPG</p>
+                        </div>
+                        <input type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg" style="display: none;">
+                    </div>
+                    <img id="documentImage" class="document-preview hidden" alt="Document" style="display: none;">
+                </div>
+            </div>
+
+            <!-- Right Panel -->
+            <div class="right-panel">
+                <div class="panel-tabs">
+                    <div class="panel-tab active" onclick="showTab('extracted')">Extracted</div>
+                    <div class="panel-tab" onclick="showTab('chat')">AI Chat</div>
+                </div>
+                
+                <!-- Extracted Data Tab -->
+                <div id="extractedTab" class="panel-content">
+                    <div class="extracted-data">
+                        <div id="extractedFields">
+                            <p style="color: #718096; text-align: center; margin-top: 2rem;">
+                                Upload and process a document to see extracted data
+                            </p>
+                        </div>
+                        
+                        <div style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #e2e8f0;">
+                            <button class="btn btn-primary" style="width: 100%; margin-bottom: 0.5rem;" onclick="downloadJSON()">
+                                📥 Download JSON
+                            </button>
+                            <button class="btn btn-secondary" style="width: 100%;" onclick="downloadCSV()">
+                                📊 Download CSV
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- AI Chat Tab -->
+                <div id="chatTab" class="panel-content hidden">
+                    <div class="chatbot-container">
+                        <div class="chat-messages" id="chatMessages">
+                            <div class="message bot">
+                                <div class="message-bubble">
+                                    👋 Hi! I'm your AI assistant. Upload a document and I can help explain the extracted data or answer questions about it.
+                                </div>
+                            </div>
+                        </div>
+                        <div class="chat-input">
+                            <input type="text" id="chatInput" placeholder="Ask about your document..." onkeypress="handleChatKeypress(event)">
+                            <button onclick="sendMessage()">Send</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentDocument = null;
+        let extractedData = null;
+
+        // File handling
+        document.getElementById('fileInput').addEventListener('change', handleFileSelect);
+        
+        // Drag and drop
+        const uploadZone = document.getElementById('uploadZone');
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            uploadZone.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        uploadZone.addEventListener('drop', handleDrop);
+
+        function handleDrop(e) {
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                displayDocument(files[0]);
+            }
+        }
+
+        function handleFileSelect(e) {
+            if (e.target.files.length > 0) {
+                displayDocument(e.target.files[0]);
+            }
+        }
+
+        function displayDocument(file) {
+            currentDocument = file;
+            document.getElementById('documentTitle').textContent = file.name;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = document.getElementById('documentImage');
+                const uploadZone = document.getElementById('uploadZone');
+                img.src = e.target.result;
+                img.style.display = 'block';
+                img.classList.remove('hidden');
+                uploadZone.style.display = 'none';
+            };
+            reader.readAsDataURL(file);
+        }
+
+        async function processDocument() {
+            if (!currentDocument) {
+                // Load sample 1099-NEC for demo
+                loadSample1099NEC();
+                return;
+            }
+
+            // Simulate processing
+            document.getElementById('documentTitle').textContent = `Processing ${currentDocument.name}...`;
+            
+            // Mock API call
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            // Detect document type and show appropriate data
+            const fileName = currentDocument.name.toLowerCase();
+            if (fileName.includes('1099') || fileName.includes('nec')) {
+                extractedData = {
+                    document_type: '1099-NEC',
+                    confidence_score: 96,
+                    fields: {
+                        'Payer Information': {
+                            'payer_name': { value: 'Business Company', confidence: 98 },
+                            'payer_tin': { value: '12-3456789', confidence: 99 },
+                            'payer_address': { value: '1234 Long Street, Bigtown, US State, 12345', confidence: 95 }
+                        },
+                        'Recipient Information': {
+                            'recipient_name': { value: 'Peter Payer', confidence: 97 },
+                            'recipient_tin': { value: '123-45-6789', confidence: 99 },
+                            'recipient_address': { value: '5678 Short Ave., Littleville, US State, 67890', confidence: 94 }
+                        },
+                        'Compensation Details': {
+                            'nonemployee_compensation': { value: '$12,345.00', confidence: 99 },
+                            'federal_tax_withheld': { value: '$0.00', confidence: 98 },
+                            'state_tax_withheld': { value: '$0.00', confidence: 98 },
+                            'state_income': { value: '$12,345.00', confidence: 97 }
+                        }
+                    }
+                };
+            } else {
+                // Default W-2 data
+                extractedData = {
+                    document_type: 'W-2',
+                    confidence_score: 95,
+                    fields: {
+                        'Employee Information': {
+                            'employee_name': { value: 'John Doe', confidence: 98 },
+                            'ssn': { value: '***-**-1234', confidence: 99 },
+                            'address': { value: '123 Main St, City, ST 12345', confidence: 92 }
+                        },
+                        'Employer Information': {
+                            'employer_name': { value: 'Tech Corp Inc', confidence: 96 },
+                            'ein': { value: '12-3456789', confidence: 97 },
+                            'employer_address': { value: '456 Business Ave, City, ST 12345', confidence: 94 }
+                        },
+                        'Wage Information': {
+                            'wages': { value: '$75,000.00', confidence: 99 },
+                            'federal_tax': { value: '$12,500.00', confidence: 97 },
+                            'social_security_wages': { value: '$75,000.00', confidence: 98 },
+                            'medicare_wages': { value: '$75,000.00', confidence: 98 }
+                        }
+                    }
+                };
+            }
+
+            displayExtractedData();
+            document.getElementById('documentTitle').textContent = currentDocument ? currentDocument.name : 'Sample 1099-NEC';
+            
+            // Keep document visible after processing
+            const img = document.getElementById('documentImage');
+            const uploadZone = document.getElementById('uploadZone');
+            img.style.display = 'block';
+            img.classList.remove('hidden');
+            uploadZone.style.display = 'none';
+        }
+
+        function loadSample1099NEC() {
+            // Create iframe to show the 1099-NEC form
+            const documentArea = document.querySelector('.document-area');
+            const uploadZone = document.getElementById('uploadZone');
+            const img = document.getElementById('documentImage');
+            
+            // Hide upload zone and image
+            uploadZone.style.display = 'none';
+            img.style.display = 'none';
+            
+            // Create iframe for the form
+            let iframe = document.getElementById('formIframe');
+            if (!iframe) {
+                iframe = document.createElement('iframe');
+                iframe.id = 'formIframe';
+                iframe.style.width = '100%';
+                iframe.style.height = '600px';
+                iframe.style.border = '1px solid #e2e8f0';
+                iframe.style.borderRadius = '8px';
+                documentArea.appendChild(iframe);
+            }
+            
+            // Load the 1099-NEC form
+            iframe.src = 'sample-1099-nec.html';
+            
+            // Set title and process
+            document.getElementById('documentTitle').textContent = 'Sample 1099-NEC Form';
+            setTimeout(() => processDocument(), 1000);
+        }
+
+        function displayExtractedData() {
+            const container = document.getElementById('extractedFields');
+            let html = '';
+
+            Object.entries(extractedData.fields).forEach(([groupName, fields]) => {
+                html += `<div class="field-group">
+                    <h4>${groupName}</h4>`;
+                
+                Object.entries(fields).forEach(([fieldName, data]) => {
+                    const confidenceClass = data.confidence > 95 ? 'confidence-high' : 
+                                          data.confidence > 85 ? 'confidence-medium' : 'confidence-low';
+                    
+                    html += `<div class="field-item">
+                        <div class="field-label">${fieldName.replace('_', ' ').toUpperCase()}</div>
+                        <div class="field-value">
+                            ${data.value}
+                            <span class="confidence-badge ${confidenceClass}">${data.confidence}%</span>
+                        </div>
+                    </div>`;
+                });
+                
+                html += '</div>';
+            });
+
+            container.innerHTML = html;
+        }
+
+        function clearDocument() {
+            currentDocument = null;
+            extractedData = null;
+            document.getElementById('documentTitle').textContent = 'Upload Document';
+            const img = document.getElementById('documentImage');
+            const uploadZone = document.getElementById('uploadZone');
+            img.style.display = 'none';
+            img.classList.add('hidden');
+            img.src = '';
+            uploadZone.style.display = 'flex';
+            document.getElementById('extractedFields').innerHTML = `
+                <p style="color: #718096; text-align: center; margin-top: 2rem;">
+                    Upload and process a document to see extracted data
+                </p>
+            `;
+        }
+
+        // Tab switching
+        function showTab(tabName) {
+            document.querySelectorAll('.panel-tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.panel-content').forEach(content => content.classList.add('hidden'));
+            
+            event.target.classList.add('active');
+            document.getElementById(tabName + 'Tab').classList.remove('hidden');
+        }
+
+        function showSection(section) {
+            document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+            event.target.classList.add('active');
+            // Add section switching logic here
+        }
+
+        // Chat functionality
+        function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            if (!message) return;
+
+            addMessage(message, 'user');
+            input.value = '';
+
+            // Simulate AI response
+            setTimeout(() => {
+                let response = "I'd be happy to help! ";
+                if (!extractedData) {
+                    response = "Please upload and process a document first, then I can help explain the extracted data.";
+                } else if (extractedData.document_type === '1099-NEC') {
+                    if (message.toLowerCase().includes('compensation') || message.toLowerCase().includes('income')) {
+                        response = `I can see the nonemployee compensation from your 1099-NEC is $12,345.00 with 99% confidence. This is income you received as an independent contractor.`;
+                    } else if (message.toLowerCase().includes('tax')) {
+                        response = `No federal or state taxes were withheld from your 1099-NEC payments. You'll need to pay estimated taxes or include this income on your tax return.`;
+                    } else if (message.toLowerCase().includes('payer')) {
+                        response = `The payer is Business Company (TIN: 12-3456789) located at 1234 Long Street, Bigtown, US State, 12345.`;
+                    } else {
+                        response = `This is a 1099-NEC form showing $12,345.00 in nonemployee compensation. I can explain any field - just ask about compensation, taxes, payer info, or anything else!`;
+                    }
+                } else if (message.toLowerCase().includes('wage')) {
+                    response = `I can see the wages extracted from your W-2 are $75,000.00 with 99% confidence. This represents your total taxable wages for the year.`;
+                } else if (message.toLowerCase().includes('tax')) {
+                    response = `The federal tax withheld from your wages is $12,500.00. This is the amount your employer withheld for federal income tax.`;
+                } else {
+                    response = `Based on your ${extractedData.document_type}, I can help explain any of the extracted fields. What would you like to know more about?`;
+                }
+                addMessage(response, 'bot');
+            }, 1000);
+        }
+
+        function addMessage(text, sender) {
+            const messagesContainer = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
+            messageDiv.innerHTML = `<div class="message-bubble">${text}</div>`;
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function handleChatKeypress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        // Export functions
+        function downloadJSON() {
+            if (!extractedData) {
+                alert('No data to export. Please process a document first.');
+                return;
+            }
+            
+            const blob = new Blob([JSON.stringify(extractedData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${currentDocument.name.split('.')[0]}_extracted.json`;
+            a.click();
+        }
+
+        function downloadCSV() {
+            if (!extractedData) {
+                alert('No data to export. Please process a document first.');
+                return;
+            }
+            
+            let csv = 'Field,Value,Confidence\n';
+            Object.values(extractedData.fields).forEach(group => {
+                Object.entries(group).forEach(([field, data]) => {
+                    csv += `"${field}","${data.value}","${data.confidence}%"\n`;
+                });
+            });
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${currentDocument.name.split('.')[0]}_extracted.csv`;
+            a.click();
+        }
+    </script>
+</body>
+</html>

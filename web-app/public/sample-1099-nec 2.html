@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        .form-1099 {
+            width: 600px;
+            height: 800px;
+            border: 2px solid #000;
+            font-family: Arial, sans-serif;
+            font-size: 10px;
+            background: white;
+            padding: 10px;
+            margin: 20px auto;
+        }
+        .form-header { display: flex; justify-content: space-between; margin-bottom: 10px; }
+        .form-title { font-weight: bold; font-size: 14px; }
+        .corrected { font-size: 8px; }
+        .payer-section, .recipient-section { border: 1px solid #000; padding: 5px; margin: 5px 0; }
+        .tin-row { display: flex; justify-content: space-between; margin: 10px 0; }
+        .tin-box { border: 1px solid #000; padding: 3px; width: 120px; text-align: center; }
+        .amount-box { border: 1px solid #000; padding: 3px; width: 100px; text-align: right; }
+        .checkbox { width: 12px; height: 12px; border: 1px solid #000; display: inline-block; margin-right: 5px; }
+        .form-boxes { margin: 20px 0; }
+        .box-row { display: flex; align-items: center; margin: 8px 0; }
+        .box-number { font-weight: bold; margin-right: 10px; width: 15px; }
+        .state-row { display: flex; justify-content: space-between; margin: 10px 0; }
+        .footer { font-size: 8px; margin-top: 20px; border-top: 1px solid #000; padding-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="form-1099">
+        <div class="form-header">
+            <div class="corrected">☐ CORRECTED (if checked)</div>
+            <div>
+                <div class="form-title">Form 1099-NEC</div>
+                <div>2021</div>
+                <div style="font-size: 8px;">Nonemployee Compensation</div>
+            </div>
+            <div style="font-size: 8px;">
+                OMB No. 1545-0116<br>
+                Copy B<br>
+                For Recipient
+            </div>
+        </div>
+
+        <div class="payer-section">
+            <div style="font-size: 8px; margin-bottom: 5px;">PAYER'S name, street address, city or town, state or province, country, ZIP or foreign postal code, and telephone no.</div>
+            <div style="font-weight: bold;">Business Company</div>
+            <div>1234 Long Street</div>
+            <div>Bigtown, US State, 12345</div>
+        </div>
+
+        <div class="tin-row">
+            <div>
+                <div style="font-size: 8px;">PAYER'S TIN</div>
+                <div class="tin-box">12-3456789</div>
+            </div>
+            <div>
+                <div style="font-size: 8px;">RECIPIENT'S TIN</div>
+                <div class="tin-box">123-45-6789</div>
+            </div>
+        </div>
+
+        <div class="recipient-section">
+            <div style="font-size: 8px; margin-bottom: 5px;">RECIPIENT'S name</div>
+            <div style="font-weight: bold;">Peter Payer</div>
+            <div style="font-size: 8px; margin: 5px 0;">Street address (including apt. no.)</div>
+            <div>5678 Short Ave.</div>
+            <div style="font-size: 8px; margin: 5px 0;">City or town, state or province, country, and ZIP or foreign postal code</div>
+            <div>Littleville, US State, 67890</div>
+            <div style="font-size: 8px; margin: 5px 0;">Account number (see instructions)</div>
+            <div>X</div>
+        </div>
+
+        <div class="form-boxes">
+            <div class="box-row">
+                <span class="box-number">1</span>
+                <span style="flex: 1;">Nonemployee compensation</span>
+                <div class="amount-box">$12,345.00</div>
+            </div>
+
+            <div class="box-row">
+                <span class="box-number">2</span>
+                <span class="checkbox"></span>
+                <span style="flex: 1;">Payer made direct sales totaling $5,000 or more of consumer products to recipient for resale</span>
+            </div>
+
+            <div class="box-row">
+                <span class="box-number">3</span>
+                <span style="flex: 1;"></span>
+            </div>
+
+            <div class="box-row">
+                <span class="box-number">4</span>
+                <span style="flex: 1;">Federal income tax withheld</span>
+                <div class="amount-box">$</div>
+            </div>
+
+            <div class="box-row">
+                <span class="box-number">5</span>
+                <span style="flex: 1;">State tax withheld</span>
+                <div class="amount-box">$</div>
+            </div>
+
+            <div class="state-row">
+                <div>
+                    <span class="box-number">6</span>
+                    <span>State/Payer's state no.</span>
+                    <div style="border: 1px solid #000; padding: 3px; margin-top: 5px;">ST 123456</div>
+                </div>
+                <div>
+                    <span class="box-number">7</span>
+                    <span>State income</span>
+                    <div class="amount-box" style="margin-top: 5px;">$12,345.00</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <div style="margin-bottom: 10px;">
+                This is important tax information and is being furnished to the IRS. If you are required to file a return, a negligence penalty or other sanction may be imposed on you if this income is taxable and the IRS determines that it has not been reported.
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+                <span>Form 1099-NEC (keep for your records)</span>
+                <span>www.irs.gov/Form1099NEC</span>
+            </div>
+            <div style="text-align: center; margin-top: 5px;">Department of the Treasury - Internal Revenue Service</div>
+            <div style="font-size: 6px; margin-top: 10px;">The Balance</div>
+        </div>
+    </div>
+</body>
+</html>
