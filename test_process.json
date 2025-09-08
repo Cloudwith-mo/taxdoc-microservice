@@ -1,0 +1,5 @@
+{
+  "httpMethod": "POST",
+  "path": "/process-document",
+  "body": "{\"filename\":\"test.pdf\",\"file_content\":\"dGVzdA==\"}"
+}

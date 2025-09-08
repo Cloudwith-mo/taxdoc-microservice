@@ -1,0 +1,140 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Main API Gateway with CORS-enabled endpoints'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: prod
+
+Resources:
+  # Main API Gateway
+  MainApiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub 'taxdoc-main-api-${Environment}'
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  # Process Document Resource
+  ProcessResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref MainApiGateway
+      ParentId: !GetAtt MainApiGateway.RootResourceId
+      PathPart: process
+
+  # Process Document POST Method
+  ProcessPostMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref MainApiGateway
+      ResourceId: !Ref ProcessResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ProcessFunction.Arn}/invocations'
+
+  # Process Document OPTIONS Method (CORS)
+  ProcessOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref MainApiGateway
+      ResourceId: !Ref ProcessResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key'"
+              method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+        PassthroughBehavior: WHEN_NO_MATCH
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: false
+            method.response.header.Access-Control-Allow-Methods: false
+            method.response.header.Access-Control-Allow-Origin: false
+
+  # Lambda Function
+  ProcessFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'taxdoc-process-${Environment}'
+      Runtime: python3.9
+      Handler: api_handler.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          # Placeholder - deploy actual code
+          def lambda_handler(event, context):
+              return {'statusCode': 200}
+
+  # IAM Role
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: TextractAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - textract:*
+                  - s3:*
+                  - dynamodb:*
+                Resource: '*'
+
+  # Lambda Permission
+  ProcessPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ProcessFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${MainApiGateway}/*/*'
+
+  # API Deployment
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - ProcessPostMethod
+      - ProcessOptionsMethod
+    Properties:
+      RestApiId: !Ref MainApiGateway
+      StageName: !Ref Environment
+
+Outputs:
+  ApiGatewayId:
+    Value: !Ref MainApiGateway
+    Export:
+      Name: !Sub 'DrDoc-API-Gateway-${Environment}'
+  
+  ApiRootId:
+    Value: !GetAtt MainApiGateway.RootResourceId
+    Export:
+      Name: !Sub 'DrDoc-API-Root-${Environment}'
+  
+  ApiEndpoint:
+    Value: !Sub 'https://${MainApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    Export:
+      Name: !Sub 'DrDoc-API-Endpoint-${Environment}'

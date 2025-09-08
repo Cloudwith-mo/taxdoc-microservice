@@ -2,7 +2,11 @@ import json
 import boto3
 import base64
 import uuid
+import logging
 from datetime import datetime
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 # AWS clients
 textract = boto3.client('textract')
@@ -16,15 +20,46 @@ BUCKET_NAME = 'taxdoc-documents-bucket'
 TABLE_NAME = 'taxdoc-documents'
 SNS_TOPIC_ARN = 'arn:aws:sns:us-east-1:995805900737:taxdoc-alerts'
 
+def _cors_headers():
+    return {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "Content-Type,Authorization",
+        "Access-Control-Allow-Methods": "OPTIONS,POST"
+    }
+
+def _response(status_code, body):
+    return {
+        "statusCode": status_code,
+        "headers": _cors_headers(),
+        "body": json.dumps(body) if not isinstance(body, str) else body
+    }
+
 def lambda_handler(event, context):
     """AI-powered document processing with Textract + Claude"""
     
+    if event.get("httpMethod", "").upper() == "OPTIONS":
+        return _response(200, "")
+    
     try:
-        # Handle multipart form data
+        logger.info(f"Processing event: {json.dumps(event)}")
+        # Handle request body safely
+        body_str = event.get('body', '{}')
+        if not body_str:
+            body_str = '{}'
+        
         if event.get('isBase64Encoded'):
-            body = base64.b64decode(event['body'])
+            body = base64.b64decode(body_str)
         else:
-            body = event['body'].encode() if isinstance(event['body'], str) else event['body']
+            # Try to parse as JSON first
+            try:
+                body_json = json.loads(body_str)
+                s3_key = body_json.get('s3Key')
+                if s3_key:
+                    # Direct S3 processing
+                    return process_s3_document(s3_key)
+            except:
+                pass
+            body = body_str.encode() if isinstance(body_str, str) else body_str
         
         # Extract file from multipart data (simplified)
         file_content = extract_file_from_multipart(body)
@@ -78,18 +113,11 @@ def lambda_handler(event, context):
             Message=f'Successfully processed document {doc_id} with {len(final_data.get("fields", {}))} fields extracted.'
         )
         
-        return {
-            'statusCode': 200,
-            'headers': {'Access-Control-Allow-Origin': '*'},
-            'body': json.dumps(result, default=str)
-        }
+        return _response(200, result)
         
     except Exception as e:
-        return {
-            'statusCode': 500,
-            'headers': {'Access-Control-Allow-Origin': '*'},
-            'body': json.dumps({'error': str(e)})
-        }
+        logger.exception("Process handler error")
+        return _response(500, {'error': 'internal server error', 'detail': str(e)})
 
 def extract_file_from_multipart(body):
     """Extract file content from multipart form data"""
@@ -186,3 +214,39 @@ def apply_regex_fallback(text, extracted_data):
     
     extracted_data['fields'] = fields
     return extracted_data
+
+def process_s3_document(s3_key):
+    """Process document already in S3"""
+    doc_id = str(uuid.uuid4())
+    
+    try:
+        # Step 1: Textract OCR
+        textract_response = textract.analyze_document(
+            Document={'S3Object': {'Bucket': BUCKET_NAME, 'Name': s3_key}},
+            FeatureTypes=['TABLES', 'FORMS']
+        )
+        
+        # Extract raw text
+        raw_text = extract_text_from_textract(textract_response)
+        
+        # Step 2: Claude AI extraction
+        extracted_data = extract_with_claude(raw_text)
+        
+        # Step 3: Regex fallback
+        final_data = apply_regex_fallback(raw_text, extracted_data)
+        
+        result = {
+            'DocumentID': doc_id,
+            'DocumentType': final_data.get('document_type', 'Unknown'),
+            'ClassificationConfidence': final_data.get('confidence', 0.95),
+            'UploadDate': datetime.utcnow().isoformat(),
+            'S3Location': f"s3://{BUCKET_NAME}/{s3_key}",
+            'Data': final_data.get('fields', {}),
+            'ProcessingStatus': 'Completed'
+        }
+        
+        return _response(200, result)
+        
+    except Exception as e:
+        logger.exception(f"S3 processing error for {s3_key}")
+        return _response(500, {'error': 'processing failed', 'detail': str(e)})
