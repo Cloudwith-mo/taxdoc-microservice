@@ -20,8 +20,21 @@ def clean_b64(s):
     s += '='*(4-rem) if rem else ''
     return s
 
-def lines_text(detect):
-    return "\n".join(b["Text"] for b in detect.get("Blocks",[]) if b["BlockType"]=="LINE")
+def detect_text_bytes(bucket, key):
+    """Read from S3 and call Textract with Bytes to avoid KMS/S3 access issues"""
+    obj = s3.get_object(Bucket=bucket, Key=key)
+    body = obj["Body"].read()
+    response = textract.detect_document_text(Document={"Bytes": body})
+    lines = [b["Text"] for b in response.get("Blocks", []) if b["BlockType"] == "LINE"]
+    text = "\n".join(lines)
+    print(f"OCR bytes={len(body)}, lines={len(lines)} for s3://{bucket}/{key}")
+    return text, body
+
+def analyze_doc_bytes(body, features, queries=None):
+    """Analyze document using Bytes instead of S3Object"""
+    kwargs = {"Document": {"Bytes": body}, "FeatureTypes": features}
+    if queries: kwargs["QueriesConfig"] = {"Queries": queries}
+    return textract.analyze_document(**kwargs)
 
 def call_claude_json(prompt, max_tokens=2000):
     import time
@@ -243,16 +256,25 @@ def lambda_handler(event, ctx):
         rec = event["Records"][0]["s3"]
         bucket = rec["bucket"]["name"]
         key = rec["object"]["key"]
-        doc_arg = {"S3Object":{"Bucket":bucket,"Name":key}}
         
-        detected = textract.detect_document_text(Document=doc_arg)
-        text = lines_text(detected)
+        try:
+            text, body = detect_text_bytes(bucket, key)
+        except Exception as e:
+            print(f"OCR failed for s3://{bucket}/{key}: {e}")
+            return ret(500, {"error": f"OCR failed: {str(e)}"})
+        
+        if not text.strip():
+            print(f"No text extracted from s3://{bucket}/{key}")
+            return ret(400, {"error": "No readable text found in document"})
+        
         docType, cls_conf = classify_doc(text)
         
         doc_id = str(uuid.uuid4())
         
         if docType == "W-2":
-            analyzed = analyze_doc(doc_arg, ["FORMS","TABLES","QUERIES"], QUERIES_W2)
+            if not QUERIES_W2:
+                raise RuntimeError("W-2 QuerySet missing; cannot extract.")
+            analyzed = analyze_doc_bytes(body, ["FORMS","TABLES","QUERIES"], QUERIES_W2)
             tex_q = extract_query_answers(analyzed)
             claude = call_claude_json(prompt_for_w2() + "\n\nTEXT:\n" + text[:20000])
             fields, source, conf = merge_w2_fields(tex_q, claude)
@@ -276,7 +298,7 @@ def lambda_handler(event, ctx):
             })
         
         elif docType in {"INVOICE","RECEIPT"}:
-            exp = textract.analyze_expense(Document=doc_arg)
+            exp = textract.analyze_expense(Document={"Bytes": body})
             fields = normalize_expense(exp)
             
             item = {
@@ -297,13 +319,13 @@ def lambda_handler(event, ctx):
         
         else:
             # Generic document processing
-            return process_generic_document(doc_arg, text, docType, cls_conf, bucket, key, doc_id)
+            return process_generic_document(body, text, docType, cls_conf, bucket, key, doc_id)
 
-def process_generic_document(doc_arg, text, docType, cls_conf, bucket, key, doc_id):
+def process_generic_document(body, text, docType, cls_conf, bucket, key, doc_id):
     """Process unknown/generic documents with comprehensive extraction"""
     
     # Multi-layer extraction for unknowns
-    analyzed = analyze_doc(doc_arg, ["FORMS","TABLES"])
+    analyzed = analyze_doc_bytes(body, ["FORMS","TABLES"])
     
     # Layer 1: Textract forms and tables
     kv_pairs = forms_kv(analyzed)

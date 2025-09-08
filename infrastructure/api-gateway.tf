@@ -2,152 +2,68 @@
 data "aws_region" "current" {}
 data "aws_caller_identity" "current" {}
 
-# API Gateway for IDP Pipeline
-resource "aws_api_gateway_rest_api" "idp_api" {
-  name        = "idp-pipeline-api"
-  description = "IDP Pipeline API"
-  
-  endpoint_configuration {
-    types = ["REGIONAL"]
+# HTTP API Gateway with CORS
+resource "aws_apigatewayv2_api" "idp_api" {
+  name          = "idp-pipeline-api"
+  protocol_type = "HTTP"
+  description   = "IDP Pipeline API with CORS"
+
+  cors_configuration {
+    allow_origins     = ["http://taxdoc-mvp-web-1754513919.s3-website-us-east-1.amazonaws.com"]
+    allow_methods     = ["GET", "POST", "PUT", "OPTIONS"]
+    allow_headers     = ["Content-Type", "Authorization", "Idempotency-Key", "x-amz-meta-userid", "x-amz-meta-docid"]
+    expose_headers    = ["ETag"]
+    max_age          = 3600
+    allow_credentials = false
   }
 }
 
-# Upload URL resource
-resource "aws_api_gateway_resource" "upload_url" {
-  rest_api_id = aws_api_gateway_rest_api.idp_api.id
-  parent_id   = aws_api_gateway_rest_api.idp_api.root_resource_id
-  path_part   = "upload-url"
+# Upload URL route
+resource "aws_apigatewayv2_route" "upload_url" {
+  api_id    = aws_apigatewayv2_api.idp_api.id
+  route_key = "GET /upload-url"
+  target    = "integrations/${aws_apigatewayv2_integration.upload_url_integration.id}"
 }
 
-resource "aws_api_gateway_method" "upload_url_get" {
-  rest_api_id   = aws_api_gateway_rest_api.idp_api.id
-  resource_id   = aws_api_gateway_resource.upload_url.id
-  http_method   = "GET"
-  authorization = "NONE"
+resource "aws_apigatewayv2_integration" "upload_url_integration" {
+  api_id           = aws_apigatewayv2_api.idp_api.id
+  integration_type = "AWS_PROXY"
+  integration_uri  = "arn:aws:lambda:us-east-1:995805900737:function:s3-upload-handler"
+  integration_method = "POST"
 }
 
-resource "aws_api_gateway_integration" "upload_url_integration" {
-  rest_api_id = aws_api_gateway_rest_api.idp_api.id
-  resource_id = aws_api_gateway_resource.upload_url.id
-  http_method = aws_api_gateway_method.upload_url_get.http_method
-  
-  integration_http_method = "POST"
-  type                   = "AWS_PROXY"
-  uri                    = "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:995805900737:function:s3-upload-handler/invocations"
+# Process route
+resource "aws_apigatewayv2_route" "process" {
+  api_id    = aws_apigatewayv2_api.idp_api.id
+  route_key = "POST /process"
+  target    = "integrations/${aws_apigatewayv2_integration.process_integration.id}"
 }
 
-# Process resource
-resource "aws_api_gateway_resource" "process" {
-  rest_api_id = aws_api_gateway_rest_api.idp_api.id
-  parent_id   = aws_api_gateway_rest_api.idp_api.root_resource_id
-  path_part   = "process"
+resource "aws_apigatewayv2_integration" "process_integration" {
+  api_id           = aws_apigatewayv2_api.idp_api.id
+  integration_type = "AWS_PROXY"
+  integration_uri  = "arn:aws:lambda:us-east-1:995805900737:function:api-gateway-processor"
+  integration_method = "POST"
 }
 
-resource "aws_api_gateway_method" "process_post" {
-  rest_api_id   = aws_api_gateway_rest_api.idp_api.id
-  resource_id   = aws_api_gateway_resource.process.id
-  http_method   = "POST"
-  authorization = "NONE"
-}
+# S3 bucket CORS for presigned PUT
+resource "aws_s3_bucket_cors_configuration" "uploads_cors" {
+  bucket = "taxflowsai-uploads"
 
-resource "aws_api_gateway_integration" "process_integration" {
-  rest_api_id = aws_api_gateway_rest_api.idp_api.id
-  resource_id = aws_api_gateway_resource.process.id
-  http_method = aws_api_gateway_method.process_post.http_method
-  
-  integration_http_method = "POST"
-  type                   = "AWS_PROXY"
-  uri                    = "arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:995805900737:function:idp-simple-test/invocations"
-}
-
-# CORS for process
-resource "aws_api_gateway_method" "process_options" {
-  rest_api_id   = aws_api_gateway_rest_api.idp_api.id
-  resource_id   = aws_api_gateway_resource.process.id
-  http_method   = "OPTIONS"
-  authorization = "NONE"
-}
-
-resource "aws_api_gateway_integration" "process_options_integration" {
-  rest_api_id = aws_api_gateway_rest_api.idp_api.id
-  resource_id = aws_api_gateway_resource.process.id
-  http_method = aws_api_gateway_method.process_options.http_method
-  type        = "MOCK"
-  
-  request_templates = {
-    "application/json" = "{\"statusCode\": 200}"
+  cors_rule {
+    allowed_headers = ["*"]
+    allowed_methods = ["PUT", "GET", "HEAD"]
+    allowed_origins = ["http://taxdoc-mvp-web-1754513919.s3-website-us-east-1.amazonaws.com"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3000
   }
 }
 
-resource "aws_api_gateway_method_response" "process_options_response" {
-  rest_api_id = aws_api_gateway_rest_api.idp_api.id
-  resource_id = aws_api_gateway_resource.process.id
-  http_method = aws_api_gateway_method.process_options.http_method
-  status_code = "200"
-  
-  response_parameters = {
-    "method.response.header.Access-Control-Allow-Headers" = true
-    "method.response.header.Access-Control-Allow-Methods" = true
-    "method.response.header.Access-Control-Allow-Origin"  = true
-  }
-}
-
-resource "aws_api_gateway_integration_response" "process_options_integration_response" {
-  rest_api_id = aws_api_gateway_rest_api.idp_api.id
-  resource_id = aws_api_gateway_resource.process.id
-  http_method = aws_api_gateway_method.process_options.http_method
-  status_code = aws_api_gateway_method_response.process_options_response.status_code
-  
-  response_parameters = {
-    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-    "method.response.header.Access-Control-Allow-Methods" = "'POST,OPTIONS'"
-    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
-  }
-}
-
-# CORS for upload-url
-resource "aws_api_gateway_method" "upload_url_options" {
-  rest_api_id   = aws_api_gateway_rest_api.idp_api.id
-  resource_id   = aws_api_gateway_resource.upload_url.id
-  http_method   = "OPTIONS"
-  authorization = "NONE"
-}
-
-resource "aws_api_gateway_integration" "upload_url_options_integration" {
-  rest_api_id = aws_api_gateway_rest_api.idp_api.id
-  resource_id = aws_api_gateway_resource.upload_url.id
-  http_method = aws_api_gateway_method.upload_url_options.http_method
-  type        = "MOCK"
-  
-  request_templates = {
-    "application/json" = "{\"statusCode\": 200}"
-  }
-}
-
-resource "aws_api_gateway_method_response" "upload_url_options_response" {
-  rest_api_id = aws_api_gateway_rest_api.idp_api.id
-  resource_id = aws_api_gateway_resource.upload_url.id
-  http_method = aws_api_gateway_method.upload_url_options.http_method
-  status_code = "200"
-  
-  response_parameters = {
-    "method.response.header.Access-Control-Allow-Headers" = true
-    "method.response.header.Access-Control-Allow-Methods" = true
-    "method.response.header.Access-Control-Allow-Origin"  = true
-  }
-}
-
-resource "aws_api_gateway_integration_response" "upload_url_options_integration_response" {
-  rest_api_id = aws_api_gateway_rest_api.idp_api.id
-  resource_id = aws_api_gateway_resource.upload_url.id
-  http_method = aws_api_gateway_method.upload_url_options.http_method
-  status_code = aws_api_gateway_method_response.upload_url_options_response.status_code
-  
-  response_parameters = {
-    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-    "method.response.header.Access-Control-Allow-Methods" = "'GET,OPTIONS'"
-    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
-  }
+# Stage with auto-deploy
+resource "aws_apigatewayv2_stage" "prod" {
+  api_id      = aws_apigatewayv2_api.idp_api.id
+  name        = "prod"
+  auto_deploy = true
 }
 
 # Lambda permissions
@@ -156,40 +72,22 @@ resource "aws_lambda_permission" "upload_handler_permission" {
   action        = "lambda:InvokeFunction"
   function_name = "s3-upload-handler"
   principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_api_gateway_rest_api.idp_api.execution_arn}/*/*"
+  source_arn    = "${aws_apigatewayv2_api.idp_api.execution_arn}/*/*"
 }
 
 resource "aws_lambda_permission" "process_permission" {
   statement_id  = "AllowExecutionFromAPIGateway"
   action        = "lambda:InvokeFunction"
-  function_name = "idp-simple-test"
+  function_name = "api-gateway-processor"
   principal     = "apigateway.amazonaws.com"
-  source_arn    = "${aws_api_gateway_rest_api.idp_api.execution_arn}/*/*"
-}
-
-# Deployment
-resource "aws_api_gateway_deployment" "idp_deployment" {
-  depends_on = [
-    aws_api_gateway_method.upload_url_get,
-    aws_api_gateway_method.process_post,
-    aws_api_gateway_integration.upload_url_integration,
-    aws_api_gateway_integration.process_integration
-  ]
-  
-  rest_api_id = aws_api_gateway_rest_api.idp_api.id
-}
-
-resource "aws_api_gateway_stage" "prod" {
-  deployment_id = aws_api_gateway_deployment.idp_deployment.id
-  rest_api_id   = aws_api_gateway_rest_api.idp_api.id
-  stage_name    = "prod"
+  source_arn    = "${aws_apigatewayv2_api.idp_api.execution_arn}/*/*"
 }
 
 # Output API URL
 output "api_gateway_url" {
-  value = "${aws_api_gateway_rest_api.idp_api.execution_arn}/prod"
+  value = "${aws_apigatewayv2_api.idp_api.execution_arn}/prod"
 }
 
 output "api_gateway_invoke_url" {
-  value = "https://${aws_api_gateway_rest_api.idp_api.id}.execute-api.us-east-1.amazonaws.com/prod"
+  value = "https://${aws_apigatewayv2_api.idp_api.id}.execute-api.us-east-1.amazonaws.com/prod"
 }

@@ -13,6 +13,19 @@ def lambda_handler(event, context):
         except:
             body = {}
     
+    # Mock extracted data based on filename
+    filename = body.get('filename', 'unknown')
+    mock_data = {
+        'employee_name': 'John Doe',
+        'employer_name': 'Tech Corp Inc',
+        'wages_tips_compensation': '75000.00',
+        'federal_income_tax_withheld': '12500.00',
+        'social_security_wages': '75000.00',
+        'social_security_tax_withheld': '4650.00',
+        'medicare_wages': '75000.00',
+        'medicare_tax_withheld': '1087.50'
+    }
+    
     return {
         'statusCode': 200,
         'headers': {
@@ -22,9 +35,9 @@ def lambda_handler(event, context):
             'Content-Type': 'application/json'
         },
         'body': json.dumps({
-            'message': 'Test endpoint working',
-            'received_filename': body.get('filename', 'unknown'),
-            'content_size': len(body.get('contentBase64', '')),
+            'DocumentType': 'W-2',
+            'ClassificationConfidence': 0.95,
+            'Data': mock_data,
             'status': 'success'
         })
     }

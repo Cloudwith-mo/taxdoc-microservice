@@ -5,7 +5,7 @@ import requests
 import json
 import base64
 
-API_BASE = "https://6njsxe3q65.execute-api.us-east-1.amazonaws.com/prod"
+API_BASE = "https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod"
 
 def test_s3_upload_flow():
     """Test S3 presigned URL upload flow"""
@@ -25,24 +25,27 @@ def test_s3_upload_flow():
     return True
 
 def test_document_processing():
-    """Test document processing endpoint"""
-    print("🧪 Testing Document Processing...")
+    """Test document processing with S3 key"""
+    print("🧪 Testing Document Processing with S3 key...")
     
-    # Test with small base64 payload
-    tiny_png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=="
-    
+    # Test with S3 key (should exist from previous uploads)
     response = requests.post(f"{API_BASE}/process", 
                            headers={"Content-Type": "application/json"},
                            json={
-                               "filename": "test.png",
-                               "contentBase64": tiny_png
+                               "s3Key": "uploads/3ddfe8d6-5f48-4a05-b185-9ce0d06cb005_W2-sample.png",
+                               "filename": "W2-sample.png"
                            })
     
-    if response.status_code in [200, 202]:
-        print("✅ Document processing working")
+    print(f"Response status: {response.status_code}")
+    if response.status_code == 200:
+        result = response.json()
+        print(f"Document type: {result.get('docType', 'Unknown')}")
+        print(f"Confidence: {result.get('docTypeConfidence', 0)}")
+        print(f"Fields extracted: {len(result.get('fields', {}))}")
         return True
     else:
         print(f"❌ Processing failed: {response.status_code}")
+        print(f"Response: {response.text}")
         return False
 
 def run_smoke_tests():
