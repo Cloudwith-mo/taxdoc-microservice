@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaxDoc AI - Enhanced Document Processing</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f7fa; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { text-align: center; margin-bottom: 40px; }
+        .upload-area { 
+            border: 2px dashed #3498db; border-radius: 12px; padding: 40px; text-align: center; 
+            background: white; margin-bottom: 30px; cursor: pointer; transition: all 0.3s;
+        }
+        .upload-area:hover { border-color: #2980b9; background: #f8f9fa; }
+        .upload-area.dragover { border-color: #27ae60; background: #e8f5e8; }
+        .btn { 
+            background: #3498db; color: white; border: none; padding: 12px 24px; 
+            border-radius: 6px; cursor: pointer; font-size: 16px; transition: all 0.3s;
+        }
+        .btn:hover { background: #2980b9; }
+        .btn:disabled { background: #bdc3c7; cursor: not-allowed; }
+        .document-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+        .document-card { 
+            background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            transition: transform 0.2s; border-left: 4px solid #3498db;
+        }
+        .document-card:hover { transform: translateY(-2px); }
+        .doc-type { 
+            display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; 
+            font-weight: bold; margin-bottom: 10px; text-transform: uppercase;
+        }
+        .doc-type.w-2 { background: #e74c3c; color: white; }
+        .doc-type.invoice { background: #f39c12; color: white; }
+        .doc-type.receipt { background: #27ae60; color: white; }
+        .doc-type.unknown { background: #95a5a6; color: white; }
+        .doc-type.contract { background: #8e44ad; color: white; }
+        .doc-type.letter { background: #34495e; color: white; }
+        .confidence { font-size: 12px; color: #7f8c8d; margin-bottom: 10px; }
+        .confidence.high { color: #27ae60; }
+        .confidence.medium { color: #f39c12; }
+        .confidence.low { color: #e74c3c; }
+        .extracted-fields { margin-top: 15px; }
+        .field-item { 
+            display: flex; justify-content: space-between; padding: 8px 0; 
+            border-bottom: 1px solid #ecf0f1; font-size: 14px;
+        }
+        .field-label { font-weight: 600; color: #2c3e50; }
+        .field-value { color: #34495e; text-align: right; max-width: 60%; word-break: break-word; }
+        .summary { 
+            background: #f8f9fa; padding: 12px; border-radius: 6px; margin-top: 10px; 
+            font-style: italic; color: #5a6c7d; font-size: 14px;
+        }
+        .processing { opacity: 0.6; }
+        .error { border-left-color: #e74c3c; }
+        .search-bar { 
+            width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; 
+            margin-bottom: 20px; font-size: 16px;
+        }
+        .filter-tabs { 
+            display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;
+        }
+        .filter-tab { 
+            padding: 8px 16px; border: 1px solid #ddd; border-radius: 20px; 
+            background: white; cursor: pointer; transition: all 0.3s;
+        }
+        .filter-tab.active { background: #3498db; color: white; border-color: #3498db; }
+        .stats { 
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); 
+            gap: 15px; margin-bottom: 30px;
+        }
+        .stat-card { 
+            background: white; padding: 20px; border-radius: 8px; text-align: center; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .stat-number { font-size: 24px; font-weight: bold; color: #3498db; }
+        .stat-label { font-size: 12px; color: #7f8c8d; text-transform: uppercase; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>TaxDoc AI - Enhanced Document Processing</h1>
+            <p>Upload any document for intelligent extraction and classification</p>
+        </div>
+
+        <div class="upload-area" id="uploadArea">
+            <h3>Drop files here or click to upload</h3>
+            <p>Supports PDF, PNG, JPEG - Any document type</p>
+            <input type="file" id="fileInput" multiple accept=".pdf,.png,.jpg,.jpeg" style="display: none;">
+            <button class="btn" onclick="document.getElementById('fileInput').click()">Choose Files</button>
+        </div>
+
+        <div class="stats" id="stats">
+            <div class="stat-card">
+                <div class="stat-number" id="totalDocs">0</div>
+                <div class="stat-label">Total Documents</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="processedDocs">0</div>
+                <div class="stat-label">Processed</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="avgConfidence">0%</div>
+                <div class="stat-label">Avg Confidence</div>
+            </div>
+        </div>
+
+        <input type="text" class="search-bar" id="searchBar" placeholder="Search documents by content, type, or extracted fields...">
+
+        <div class="filter-tabs" id="filterTabs">
+            <div class="filter-tab active" data-filter="all">All Documents</div>
+            <div class="filter-tab" data-filter="W-2">W-2 Forms</div>
+            <div class="filter-tab" data-filter="INVOICE">Invoices</div>
+            <div class="filter-tab" data-filter="RECEIPT">Receipts</div>
+            <div class="filter-tab" data-filter="CONTRACT">Contracts</div>
+            <div class="filter-tab" data-filter="LETTER">Letters</div>
+            <div class="filter-tab" data-filter="UNKNOWN">Other</div>
+        </div>
+
+        <div class="document-grid" id="documentGrid">
+            <!-- Documents will be populated here -->
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod';
+        let documents = [];
+        let filteredDocs = [];
+
+        // File upload handling
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+
+        uploadArea.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+        });
+
+        async function handleFiles(files) {
+            for (let file of files) {
+                await processFile(file);
+            }
+        }
+
+        async function processFile(file) {
+            const docId = generateId();
+            
+            // Add processing document to UI
+            const processingDoc = {
+                docId,
+                filename: file.name,
+                status: 'processing',
+                docType: 'PROCESSING',
+                docTypeConfidence: 0,
+                fields: {},
+                summary: 'Processing document...'
+            };
+            
+            documents.unshift(processingDoc);
+            updateUI();
+
+            try {
+                // Convert to base64
+                const base64 = await fileToBase64(file);
+                
+                // Send to API
+                const response = await fetch(`${API_BASE}/process`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        filename: file.name,
+                        contentBase64: base64
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    // Update document with results
+                    const docIndex = documents.findIndex(d => d.docId === docId);
+                    if (docIndex !== -1) {
+                        documents[docIndex] = {
+                            ...result,
+                            filename: file.name,
+                            status: 'completed'
+                        };
+                    }
+                } else {
+                    // Handle error
+                    const docIndex = documents.findIndex(d => d.docId === docId);
+                    if (docIndex !== -1) {
+                        documents[docIndex] = {
+                            ...processingDoc,
+                            status: 'error',
+                            docType: 'ERROR',
+                            summary: result.error || 'Processing failed'
+                        };
+                    }
+                }
+            } catch (error) {
+                console.error('Processing error:', error);
+                const docIndex = documents.findIndex(d => d.docId === docId);
+                if (docIndex !== -1) {
+                    documents[docIndex] = {
+                        ...processingDoc,
+                        status: 'error',
+                        docType: 'ERROR',
+                        summary: 'Network error occurred'
+                    };
+                }
+            }
+
+            updateUI();
+        }
+
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const dataUrl = reader.result;
+                    const base64 = dataUrl.split(',')[1];
+                    resolve(base64);
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function generateId() {
+            return 'doc_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        function updateUI() {
+            updateStats();
+            updateDocumentGrid();
+        }
+
+        function updateStats() {
+            const total = documents.length;
+            const processed = documents.filter(d => d.status === 'completed').length;
+            const avgConf = processed > 0 ? 
+                Math.round(documents.filter(d => d.status === 'completed')
+                    .reduce((sum, d) => sum + (d.docTypeConfidence || 0), 0) / processed * 100) : 0;
+
+            document.getElementById('totalDocs').textContent = total;
+            document.getElementById('processedDocs').textContent = processed;
+            document.getElementById('avgConfidence').textContent = avgConf + '%';
+        }
+
+        function updateDocumentGrid() {
+            const grid = document.getElementById('documentGrid');
+            const searchTerm = document.getElementById('searchBar').value.toLowerCase();
+            const activeFilter = document.querySelector('.filter-tab.active').dataset.filter;
+
+            filteredDocs = documents.filter(doc => {
+                // Filter by type
+                if (activeFilter !== 'all' && doc.docType !== activeFilter) return false;
+                
+                // Filter by search term
+                if (searchTerm) {
+                    const searchableText = [
+                        doc.filename,
+                        doc.docType,
+                        doc.summary,
+                        ...Object.values(doc.fields || {}),
+                        ...Object.values(doc.keyValues || []).map(kv => kv.key + ' ' + kv.value)
+                    ].join(' ').toLowerCase();
+                    
+                    if (!searchableText.includes(searchTerm)) return false;
+                }
+                
+                return true;
+            });
+
+            grid.innerHTML = filteredDocs.map(doc => createDocumentCard(doc)).join('');
+        }
+
+        function createDocumentCard(doc) {
+            const confidenceClass = getConfidenceClass(doc.docTypeConfidence);
+            const docTypeClass = doc.docType.toLowerCase().replace(/[^a-z0-9]/g, '-');
+            
+            return `
+                <div class="document-card ${doc.status === 'processing' ? 'processing' : ''} ${doc.status === 'error' ? 'error' : ''}">
+                    <div class="doc-type ${docTypeClass}">${doc.docType}</div>
+                    <div class="confidence ${confidenceClass}">
+                        Confidence: ${Math.round((doc.docTypeConfidence || 0) * 100)}%
+                    </div>
+                    <h4>${doc.filename}</h4>
+                    
+                    ${doc.summary ? `<div class="summary">${doc.summary}</div>` : ''}
+                    
+                    ${Object.keys(doc.fields || {}).length > 0 ? `
+                        <div class="extracted-fields">
+                            <strong>Extracted Fields:</strong>
+                            ${Object.entries(doc.fields).slice(0, 5).map(([key, value]) => `
+                                <div class="field-item">
+                                    <span class="field-label">${formatFieldName(key)}</span>
+                                    <span class="field-value">${value}</span>
+                                </div>
+                            `).join('')}
+                            ${Object.keys(doc.fields).length > 5 ? `<div class="field-item"><em>+${Object.keys(doc.fields).length - 5} more fields</em></div>` : ''}
+                        </div>
+                    ` : ''}
+                    
+                    ${(doc.keyValues || []).length > 0 ? `
+                        <div class="extracted-fields">
+                            <strong>Key Information:</strong>
+                            ${doc.keyValues.slice(0, 3).map(kv => `
+                                <div class="field-item">
+                                    <span class="field-label">${kv.key}</span>
+                                    <span class="field-value">${kv.value}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        function getConfidenceClass(confidence) {
+            if (confidence >= 0.8) return 'high';
+            if (confidence >= 0.6) return 'medium';
+            return 'low';
+        }
+
+        function formatFieldName(key) {
+            return key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        }
+
+        // Filter tabs
+        document.getElementById('filterTabs').addEventListener('click', (e) => {
+            if (e.target.classList.contains('filter-tab')) {
+                document.querySelectorAll('.filter-tab').forEach(tab => tab.classList.remove('active'));
+                e.target.classList.add('active');
+                updateDocumentGrid();
+            }
+        });
+
+        // Search functionality
+        document.getElementById('searchBar').addEventListener('input', updateDocumentGrid);
+
+        // Initialize
+        updateUI();
+    </script>
+</body>
+</html>

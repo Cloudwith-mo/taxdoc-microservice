@@ -16,7 +16,7 @@ dynamodb = boto3.resource('dynamodb')
 sns = boto3.client('sns')
 
 # Configuration
-BUCKET_NAME = 'taxdoc-documents-bucket'
+BUCKET_NAME = 'taxflowsai-uploads'
 TABLE_NAME = 'taxdoc-documents'
 SNS_TOPIC_ARN = 'arn:aws:sns:us-east-1:995805900737:taxdoc-alerts'
 
@@ -55,21 +55,28 @@ def lambda_handler(event, context):
             if not content_base64:
                 return _response(400, {'error': 'No contentBase64 provided'})
             
-            # Decode base64 content
-            file_content = base64.b64decode(content_base64)
+            # Clean base64 string thoroughly
+            import re
+            # Remove data: prefix
+            content_base64 = re.sub(r'^data:.*;base64,', '', content_base64, flags=re.I)
+            # Remove whitespace/newlines
+            content_base64 = re.sub(r'\s+', '', content_base64)
+            # Normalize URL-safe to standard
+            content_base64 = content_base64.replace('-', '+').replace('_', '/')
+            # Add padding
+            rem = len(content_base64) % 4
+            if rem:
+                content_base64 += '=' * (4 - rem)
             
-            # Validate actual format by magic bytes
-            magic_bytes = file_content[:8]
-            if magic_bytes.startswith(b'\x89PNG'):
-                actual_format = 'PNG'
-            elif magic_bytes.startswith(b'\xff\xd8\xff'):
-                actual_format = 'JPEG'
-            elif magic_bytes.startswith(b'%PDF'):
-                actual_format = 'PDF'
-            else:
-                return _response(400, {'error': 'Unsupported format - only PNG, JPEG, PDF supported'})
+            try:
+                file_content = base64.b64decode(content_base64, validate=False)
+            except Exception as e:
+                return _response(400, {'error': 'Invalid base64', 'detail': str(e)})
             
-            logger.info(f"Processing {actual_format} file: {len(file_content)} bytes")
+            logger.info(f"Base64 cleaned, first 40 chars: {content_base64[:40]}")
+            
+            if not file_content:
+                return _response(400, {'error': 'Empty file content'})
             
             return process_uploaded_document(file_content, filename)
             
@@ -477,21 +484,51 @@ def apply_regex_fallback(text, extracted_data):
     extracted_data['fields'] = fields
     return extracted_data
 
+def detect_format(header):
+    """Detect file format from magic bytes"""
+    if header.startswith(b"\x89PNG\r\n\x1a\n"): return "png"
+    if header[:2] == b"\xff\xd8": return "jpeg"
+    if header[:4] == b"%PDF": return "pdf"
+    if header[:4] in (b"II*\x00", b"MM\x00*"): return "tiff"
+    return "unknown"
+
 def process_uploaded_document(file_content, filename):
-    """Process uploaded document content directly"""
+    """Process uploaded document with proper format handling"""
     doc_id = str(uuid.uuid4())
     
     try:
-        # Textract supports PNG directly, no conversion needed
-        logger.info(f"Processing {filename} with {len(file_content)} bytes")
+        # Validate file size
+        if len(file_content) > 10 * 1024 * 1024:
+            return _response(413, {'error': 'File too large - max 10MB'})
         
-        # Use DetectDocumentText for broader format support
-        if len(file_content) > 5 * 1024 * 1024:
-            return _response(400, {'error': 'File too large - max 5MB'})
+        # Detect actual format
+        magic = file_content[:8]
+        fmt = detect_format(magic)
+        logger.info(f"Processing {fmt} file: {len(file_content)} bytes, magic: {list(magic[:4])}")
         
-        textract_response = textract.detect_document_text(
-            Document={'Bytes': file_content}
-        )
+        if not file_content:
+            return _response(400, {'error': 'Empty file content after decoding'})
+        
+        if fmt == "unknown":
+            return _response(400, {'error': 'Unsupported format', 'magic': list(magic)})
+        
+        # Call Textract with correct method based on format
+        if fmt in ("png", "jpeg"):
+            # Use bytes for PNG/JPEG
+            textract_response = textract.analyze_document(
+                Document={'Bytes': file_content},
+                FeatureTypes=['FORMS', 'TABLES']
+            )
+        elif fmt in ("pdf", "tiff"):
+            # Use S3 for PDF/TIFF (safer cross-SDK)
+            s3_key = f"tmp/{doc_id}_{filename}"
+            s3.put_object(Bucket=BUCKET_NAME, Key=s3_key, Body=file_content)
+            textract_response = textract.analyze_document(
+                Document={'S3Object': {'Bucket': BUCKET_NAME, 'Name': s3_key}},
+                FeatureTypes=['FORMS', 'TABLES']
+            )
+        else:
+            return _response(400, {'error': f'Unsupported format: {fmt}'})
         
         # Extract raw text
         raw_text = extract_text_from_textract(textract_response)
