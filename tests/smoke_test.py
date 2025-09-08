@@ -5,7 +5,7 @@ import requests
 import json
 import base64
 
-API_BASE = "https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod"
+API_BASE = "https://6njsxe3q65.execute-api.us-east-1.amazonaws.com/prod"
 
 def test_s3_upload_flow():
     """Test S3 presigned URL upload flow"""
