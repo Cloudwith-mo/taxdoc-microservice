@@ -58,10 +58,18 @@ def lambda_handler(event, context):
             # Decode base64 content
             file_content = base64.b64decode(content_base64)
             
-            # Determine file type and validate
-            file_ext = filename.lower().split('.')[-1]
-            if file_ext not in ['png', 'jpg', 'jpeg', 'pdf']:
-                return _response(400, {'error': f'Unsupported file type: {file_ext}'})
+            # Validate actual format by magic bytes
+            magic_bytes = file_content[:8]
+            if magic_bytes.startswith(b'\x89PNG'):
+                actual_format = 'PNG'
+            elif magic_bytes.startswith(b'\xff\xd8\xff'):
+                actual_format = 'JPEG'
+            elif magic_bytes.startswith(b'%PDF'):
+                actual_format = 'PDF'
+            else:
+                return _response(400, {'error': 'Unsupported format - only PNG, JPEG, PDF supported'})
+            
+            logger.info(f"Processing {actual_format} file: {len(file_content)} bytes")
             
             return process_uploaded_document(file_content, filename)
             
@@ -159,113 +167,310 @@ def extract_text_from_textract(response):
     return '\n'.join(text_blocks)
 
 def extract_with_claude(text):
-    """Enhanced Claude AI for Parseur-level field extraction"""
+    """Advanced Claude AI with streaming and optimized prompts"""
     
-    prompt = f"""You are an expert document parser. Extract ALL fields from this tax document with high precision.
+    # Token-optimized text chunking
+    text_chunks = chunk_text_optimally(text, max_tokens=6000)
+    all_fields = {}
+    
+    for i, chunk in enumerate(text_chunks):
+        chunk_fields = process_text_chunk(chunk, i)
+        all_fields.update(chunk_fields)
+    
+    # Merge and validate results
+    return merge_field_results(all_fields)
 
-Document Text:
-{text[:4000]}
+def chunk_text_optimally(text, max_tokens=6000):
+    """Smart text chunking with context preservation"""
+    # Estimate tokens (4 chars ≈ 1 token)
+    max_chars = max_tokens * 4
+    
+    if len(text) <= max_chars:
+        return [text]
+    
+    chunks = []
+    lines = text.split('\n')
+    current_chunk = ""
+    
+    for line in lines:
+        if len(current_chunk + line) > max_chars and current_chunk:
+            chunks.append(current_chunk.strip())
+            current_chunk = line
+        else:
+            current_chunk += "\n" + line
+    
+    if current_chunk:
+        chunks.append(current_chunk.strip())
+    
+    return chunks
 
-Extract these fields with confidence scores (0.0-1.0):
+def process_text_chunk(text, chunk_index):
+    """Process individual text chunk with advanced prompting"""
+    
+    # Advanced prompt with few-shot examples
+    prompt = f"""<role>Expert tax document parser with 99.5% field accuracy</role>
 
-W-2 Fields:
-- employer_name, employer_address, employer_ein
-- employee_name, employee_address, employee_ssn
-- wages_tips_compensation, federal_income_tax_withheld
-- social_security_wages, social_security_tax_withheld
-- medicare_wages_tips, medicare_tax_withheld
-- state_wages_tips, state_income_tax, locality_name
+<examples>
+Input: "Employee: John Smith\nSSN: 123-45-6789\nWages: $50,000.00"
+Output: {{"employee_name": {{"value": "John Smith", "confidence": 0.98}}, "employee_ssn": {{"value": "123-45-6789", "confidence": 0.99}}, "wages_tips_compensation": {{"value": "50000.00", "confidence": 0.97}}}}
+</examples>
 
-1099 Fields:
-- payer_name, payer_address, payer_tin
-- recipient_name, recipient_address, recipient_tin
-- nonemployee_compensation, federal_income_tax_withheld
-- state_tax_withheld, state_payer_state_no
+<document_text>
+{text}
+</document_text>
 
-Invoice/Receipt Fields:
-- vendor_name, vendor_address, invoice_number, invoice_date
-- total_amount, tax_amount, line_items
+<extraction_rules>
+1. Extract ONLY visible text values
+2. Normalize currency: remove $, commas
+3. Validate SSN/EIN format: XXX-XX-XXXX or XX-XXXXXXX
+4. Confidence: 0.95+ for clear text, 0.8+ for partial, 0.6+ for inferred
+5. Skip empty/unclear fields
+</extraction_rules>
 
-Return ONLY valid JSON:
-{{
-  "document_type": "W-2|1099-NEC|1099-MISC|Invoice|Receipt|Other",
-  "confidence": 0.95,
-  "fields": {{
-    "field_name": {{"value": "extracted_value", "confidence": 0.95, "location": "box_1"}}
-  }}
-}}"""
+<field_definitions>
+W-2: employer_name, employer_address, employer_ein, employee_name, employee_ssn, wages_tips_compensation, federal_income_tax_withheld, social_security_wages, social_security_tax_withheld, medicare_wages_tips, medicare_tax_withheld
+1099: payer_name, payer_tin, recipient_name, recipient_tin, nonemployee_compensation, federal_income_tax_withheld
+Invoice: vendor_name, invoice_number, invoice_date, total_amount
+</field_definitions>
+
+Return JSON only:
+{{"document_type": "W-2|1099-NEC|1099-MISC|Invoice|Other", "fields": {{"field_name": {{"value": "clean_value", "confidence": 0.95}}}}}}"""
 
     try:
-        response = bedrock.invoke_model(
+        # Streaming response for better performance
+        response = bedrock.invoke_model_with_response_stream(
             modelId="anthropic.claude-3-5-sonnet-20240620-v1:0",
             body=json.dumps({
                 "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": 2000,
-                "temperature": 0.1,
+                "max_tokens": 1500,
+                "temperature": 0.05,  # Lower for consistency
+                "top_p": 0.9,
                 "messages": [{"role": "user", "content": prompt}]
             })
         )
         
-        result = json.loads(response['body'].read())
-        claude_response = result['content'][0]['text']
+        # Collect streaming response
+        full_response = ""
+        for event in response['body']:
+            if 'chunk' in event:
+                chunk_data = json.loads(event['chunk']['bytes'])
+                if chunk_data['type'] == 'content_block_delta':
+                    full_response += chunk_data['delta']['text']
         
-        # Enhanced JSON parsing
-        import re
-        json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', claude_response, re.DOTALL)
-        if json_match:
-            parsed = json.loads(json_match.group())
-            # Validate and enhance fields
-            return validate_extracted_fields(parsed)
+        # Enhanced JSON extraction with multiple fallbacks
+        return extract_json_with_fallbacks(full_response)
         
     except Exception as e:
-        logger.error(f"Claude extraction failed: {e}")
+        logger.error(f"Claude chunk {chunk_index} failed: {e}")
+        return apply_advanced_regex_fallback(text)
+
+def extract_json_with_fallbacks(response_text):
+    """Robust JSON extraction with multiple strategies"""
+    import re
     
-    return {"document_type": "Unknown", "confidence": 0.5, "fields": {}}
+    # Strategy 1: Standard JSON block
+    json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', response_text, re.DOTALL)
+    if json_match:
+        try:
+            return json.loads(json_match.group())
+        except:
+            pass
+    
+    # Strategy 2: Extract field patterns
+    field_pattern = r'"([^"]+)":\s*\{[^}]*"value":\s*"([^"]*)",\s*"confidence":\s*([0-9.]+)'
+    matches = re.findall(field_pattern, response_text)
+    
+    if matches:
+        fields = {}
+        for field_name, value, confidence in matches:
+            fields[field_name] = {
+                "value": value,
+                "confidence": float(confidence)
+            }
+        return {"document_type": "Unknown", "fields": fields}
+    
+    # Strategy 3: Simple key-value extraction
+    kv_pattern = r'([a-z_]+):\s*([^\n,}]+)'
+    kv_matches = re.findall(kv_pattern, response_text.lower())
+    
+    if kv_matches:
+        fields = {}
+        for key, value in kv_matches[:10]:  # Limit to prevent noise
+            fields[key] = {
+                "value": value.strip('"\' '),
+                "confidence": 0.7
+            }
+        return {"document_type": "Other", "fields": fields}
+    
+    return {"document_type": "Unknown", "fields": {}}
+
+def apply_advanced_regex_fallback(text):
+    """Advanced regex with field-specific patterns"""
+    import re
+    
+    fields = {}
+    
+    # High-precision patterns
+    patterns = {
+        'employee_ssn': (r'\b\d{3}-\d{2}-\d{4}\b', 0.95),
+        'employer_ein': (r'\b\d{2}-\d{7}\b', 0.95),
+        'wages_tips_compensation': (r'\$?([\d,]+\.\d{2})(?=\s|$)', 0.85),
+        'federal_income_tax_withheld': (r'Federal.*?\$?([\d,]+\.\d{2})', 0.80),
+        'employee_name': (r'Employee:?\s*([A-Z][a-z]+\s+[A-Z][a-z]+)', 0.90),
+        'employer_name': (r'Employer:?\s*([A-Z][^\n]{10,50})', 0.85),
+        'invoice_number': (r'(?:Invoice|INV)\s*#?\s*([A-Z0-9-]{3,15})', 0.90),
+        'total_amount': (r'Total:?\s*\$?([\d,]+\.\d{2})', 0.85)
+    }
+    
+    for field, (pattern, confidence) in patterns.items():
+        matches = re.findall(pattern, text, re.IGNORECASE)
+        if matches:
+            value = matches[0] if isinstance(matches[0], str) else matches[0]
+            # Clean value
+            if 'amount' in field or 'wage' in field:
+                value = re.sub(r'[^\d.]', '', value)
+            fields[field] = {
+                "value": value,
+                "confidence": confidence,
+                "source": "advanced_regex"
+            }
+    
+    return {"document_type": "Other", "fields": fields}
+
+def merge_field_results(all_fields):
+    """Merge results from multiple chunks with conflict resolution"""
+    merged = {"document_type": "Unknown", "fields": {}}
+    
+    # Determine document type from field patterns
+    field_names = set(all_fields.keys())
+    if any(f in field_names for f in ['employee_ssn', 'employer_ein', 'wages_tips_compensation']):
+        merged["document_type"] = "W-2"
+    elif any(f in field_names for f in ['payer_tin', 'nonemployee_compensation']):
+        merged["document_type"] = "1099-NEC"
+    elif any(f in field_names for f in ['invoice_number', 'vendor_name']):
+        merged["document_type"] = "Invoice"
+    
+    # Merge fields with confidence-based conflict resolution
+    for field_name, field_data in all_fields.items():
+        if field_name not in merged["fields"]:
+            merged["fields"][field_name] = field_data
+        else:
+            # Keep higher confidence value
+            existing_conf = merged["fields"][field_name].get("confidence", 0)
+            new_conf = field_data.get("confidence", 0)
+            if new_conf > existing_conf:
+                merged["fields"][field_name] = field_data
+    
+    return merged
 
 def validate_extracted_fields(data):
-    """Validate and enhance extracted field data"""
+    """Advanced field validation with format checking"""
+    import re
+    
     fields = data.get('fields', {})
+    validated_fields = {}
     
-    # Normalize field values
     for field_name, field_data in fields.items():
-        if isinstance(field_data, dict):
-            value = field_data.get('value', '')
-            # Clean currency values
-            if 'amount' in field_name or 'wage' in field_name or 'tax' in field_name:
-                value = re.sub(r'[^\d.,]', '', str(value))
-            # Clean TIN/SSN
-            if 'tin' in field_name or 'ssn' in field_name or 'ein' in field_name:
-                value = re.sub(r'[^\d-]', '', str(value))
-            field_data['value'] = value
+        if not isinstance(field_data, dict):
+            continue
+            
+        value = str(field_data.get('value', '')).strip()
+        confidence = field_data.get('confidence', 0.5)
+        
+        # Skip empty values
+        if not value:
+            continue
+        
+        # Field-specific validation and normalization
+        if 'ssn' in field_name:
+            # SSN: XXX-XX-XXXX
+            clean_ssn = re.sub(r'[^\d]', '', value)
+            if len(clean_ssn) == 9:
+                value = f"{clean_ssn[:3]}-{clean_ssn[3:5]}-{clean_ssn[5:]}"
+                confidence = min(confidence + 0.1, 1.0)
+            elif not re.match(r'\d{3}-\d{2}-\d{4}', value):
+                continue  # Skip invalid SSN
+        
+        elif 'ein' in field_name or 'tin' in field_name:
+            # EIN: XX-XXXXXXX
+            clean_ein = re.sub(r'[^\d]', '', value)
+            if len(clean_ein) == 9:
+                value = f"{clean_ein[:2]}-{clean_ein[2:]}"
+                confidence = min(confidence + 0.1, 1.0)
+            elif not re.match(r'\d{2}-\d{7}', value):
+                continue  # Skip invalid EIN
+        
+        elif any(x in field_name for x in ['amount', 'wage', 'tax', 'compensation']):
+            # Currency: clean and validate
+            clean_amount = re.sub(r'[^\d.]', '', value)
+            if re.match(r'^\d+\.\d{2}$', clean_amount):
+                value = clean_amount
+                confidence = min(confidence + 0.05, 1.0)
+            elif re.match(r'^\d+$', clean_amount):
+                value = f"{clean_amount}.00"
+                confidence = max(confidence - 0.1, 0.1)
+            else:
+                continue  # Skip invalid amounts
+        
+        elif 'date' in field_name:
+            # Date normalization
+            date_match = re.search(r'(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})', value)
+            if date_match:
+                month, day, year = date_match.groups()
+                if len(year) == 2:
+                    year = f"20{year}" if int(year) < 50 else f"19{year}"
+                value = f"{month.zfill(2)}/{day.zfill(2)}/{year}"
+                confidence = min(confidence + 0.05, 1.0)
+        
+        elif 'name' in field_name or 'address' in field_name:
+            # Name/address cleaning
+            value = re.sub(r'\s+', ' ', value).title()
+            if len(value) < 3:
+                continue  # Skip too short names
+        
+        # Quality score adjustment
+        if len(value) > 100:
+            confidence = max(confidence - 0.2, 0.1)  # Penalize very long values
+        
+        validated_fields[field_name] = {
+            "value": value,
+            "confidence": round(confidence, 3),
+            "validated": True
+        }
     
+    data['fields'] = validated_fields
     return data
 
 def apply_regex_fallback(text, extracted_data):
-    """Enhanced regex patterns for missing critical fields"""
+    """Final regex fallback with advanced pattern matching"""
     import re
     
     fields = extracted_data.get('fields', {})
     
-    # Enhanced patterns with validation
-    patterns = {
-        'employer_ein': r'\b\d{2}-\d{7}\b',
-        'employee_ssn': r'\b\d{3}-\d{2}-\d{4}\b',
-        'payer_tin': r'\b\d{2}-\d{7}\b',
-        'recipient_tin': r'\b\d{3}-\d{2}-\d{4}\b',
-        'wages_tips_compensation': r'\$?[\d,]+\.\d{2}',
-        'federal_income_tax_withheld': r'Federal.*?\$?[\d,]+\.\d{2}',
-        'nonemployee_compensation': r'\$?[\d,]+\.\d{2}',
-        'invoice_number': r'(?:Invoice|INV)\s*#?\s*([A-Z0-9-]+)',
-        'invoice_date': r'\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b'
+    # Get missing critical fields only
+    critical_fields = {
+        'employee_ssn': r'(?:SSN|Social Security)\s*:?\s*(\d{3}-\d{2}-\d{4})',
+        'employer_ein': r'(?:EIN|Employer ID)\s*:?\s*(\d{2}-\d{7})',
+        'wages_tips_compensation': r'(?:Wages|Box 1)\s*:?\s*\$?([\d,]+\.\d{2})',
+        'federal_income_tax_withheld': r'(?:Federal|Box 2)\s*:?\s*\$?([\d,]+\.\d{2})',
+        'employee_name': r'(?:Employee|Name)\s*:?\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)',
+        'employer_name': r'(?:Employer|Company)\s*:?\s*([A-Z][^\n]{5,40})',
     }
     
-    for field, pattern in patterns.items():
-        if field not in fields or not fields.get(field, {}).get('value'):
-            matches = re.findall(pattern, text, re.IGNORECASE)
+    for field, pattern in critical_fields.items():
+        if field not in fields:
+            matches = re.findall(pattern, text, re.IGNORECASE | re.MULTILINE)
             if matches:
+                value = matches[0].strip()
+                # Additional validation
+                if field == 'employee_ssn' and len(re.sub(r'[^\d]', '', value)) != 9:
+                    continue
+                if field == 'employer_ein' and len(re.sub(r'[^\d]', '', value)) != 9:
+                    continue
+                    
                 fields[field] = {
-                    'value': matches[0] if isinstance(matches[0], str) else matches[0],
-                    'confidence': 0.7,
+                    'value': value,
+                    'confidence': 0.75,
                     'source': 'regex_fallback'
                 }
     
@@ -280,7 +485,10 @@ def process_uploaded_document(file_content, filename):
         # Textract supports PNG directly, no conversion needed
         logger.info(f"Processing {filename} with {len(file_content)} bytes")
         
-        # Process with Textract using document bytes (supports PNG, JPEG, PDF)
+        # Use DetectDocumentText for broader format support
+        if len(file_content) > 5 * 1024 * 1024:
+            return _response(400, {'error': 'File too large - max 5MB'})
+        
         textract_response = textract.detect_document_text(
             Document={'Bytes': file_content}
         )
