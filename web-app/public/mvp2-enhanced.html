@@ -477,9 +477,15 @@
                 throw new Error('Free trial limit exceeded. Please upgrade to continue.');
             }
             
-            // Convert file to base64
+            // Convert file to base64 (handle large files efficiently)
             const buf = await file.arrayBuffer();
-            const base64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+            const bytes = new Uint8Array(buf);
+            let base64 = '';
+            const chunkSize = 8192;
+            for (let i = 0; i < bytes.length; i += chunkSize) {
+                const chunk = bytes.slice(i, i + chunkSize);
+                base64 += btoa(String.fromCharCode(...chunk));
+            }
             const payload = JSON.stringify({ 
                 filename: file.name, 
                 contentBase64: base64,
