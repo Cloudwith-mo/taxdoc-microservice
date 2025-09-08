@@ -297,22 +297,54 @@
         <div id="analytics" class="tab-content">
             <h3>📊 Processing Analytics</h3>
             
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                <h3>📊 Processing Analytics</h3>
+                <button class="btn btn-secondary" onclick="loadAnalytics()">🔄 Refresh</button>
+            </div>
+            
             <div class="analytics-grid">
                 <div class="metric-card">
                     <div class="metric-value" id="totalDocs">0</div>
                     <div class="metric-label">Total Documents</div>
                 </div>
                 <div class="metric-card">
-                    <div class="metric-value" id="avgConfidence">0%</div>
-                    <div class="metric-label">Average Confidence</div>
-                </div>
-                <div class="metric-card">
-                    <div class="metric-value" id="processingTime">0s</div>
-                    <div class="metric-label">Avg Processing Time</div>
+                    <div class="metric-value" id="processedDocs">0</div>
+                    <div class="metric-label">Processed</div>
                 </div>
                 <div class="metric-card">
                     <div class="metric-value" id="successRate">0%</div>
                     <div class="metric-label">Success Rate</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" id="avgConfidence">0%</div>
+                    <div class="metric-label">Avg Confidence</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" id="processingTimeP50">0s</div>
+                    <div class="metric-label">Processing Time (P50)</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" id="processingTimeP95">0s</div>
+                    <div class="metric-label">Processing Time (P95)</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" id="storageUsed">0 MB</div>
+                    <div class="metric-label">Storage Used</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" id="creditsRemaining">0</div>
+                    <div class="metric-label">Credits Remaining</div>
+                </div>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem;">
+                <div style="background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+                    <h4>Document Types</h4>
+                    <div id="documentTypes"></div>
+                </div>
+                <div style="background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+                    <h4>Recent Activity</h4>
+                    <div id="recentActivity"></div>
                 </div>
             </div>
 
@@ -916,7 +948,7 @@
                 document.getElementById(typingId).remove();
                 
                 // Add AI response
-                const aiResponse = result.response?.answer || result.answer || 'I can help you with questions about your processed documents.';
+                const aiResponse = result.response || 'I can help you with questions about your processed documents.';
                 chatArea.innerHTML += `
                     <div style="margin-bottom: 1rem; padding: 1rem; background: #667eea; color: white; border-radius: 6px;">
                         <strong>AI:</strong> ${aiResponse}
@@ -993,34 +1025,87 @@
                 const data = await response.json();
                 
                 document.getElementById('totalDocs').textContent = data.total_documents || '0';
-                document.getElementById('avgConfidence').textContent = (data.avg_confidence || 0) + '%';
-                document.getElementById('processingTime').textContent = (data.avg_processing_time || 0) + 's';
+                document.getElementById('processedDocs').textContent = data.processed_documents || '0';
                 document.getElementById('successRate').textContent = (data.success_rate || 0) + '%';
+                document.getElementById('avgConfidence').textContent = (data.avg_confidence || 0) + '%';
+                document.getElementById('processingTimeP50').textContent = (data.avg_processing_time_p50 || 0) + 's';
+                document.getElementById('processingTimeP95').textContent = (data.avg_processing_time_p95 || 0) + 's';
+                document.getElementById('storageUsed').textContent = Math.round((data.storage_used_bytes || 0) / 1024 / 1024) + ' MB';
+                document.getElementById('creditsRemaining').textContent = data.credits_remaining || '0';
+                
+                // Update document types
+                const typesDiv = document.getElementById('documentTypes');
+                if (data.document_types) {
+                    const total = Object.values(data.document_types).reduce((a, b) => a + b, 0);
+                    typesDiv.innerHTML = Object.entries(data.document_types).map(([type, count]) => 
+                        `<div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e2e8f0;">
+                            <span>${type}</span>
+                            <span style="font-weight: 600;">${count} (${Math.round(count/total*100)}%)</span>
+                        </div>`
+                    ).join('');
+                }
+                
+                // Update recent activity
+                const activityDiv = document.getElementById('recentActivity');
+                if (data.recent_activity) {
+                    activityDiv.innerHTML = data.recent_activity.map(activity => 
+                        `<div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e2e8f0; font-size: 0.875rem;">
+                            <div>
+                                <div style="font-weight: 600;">${activity.filename}</div>
+                                <div style="color: #64748b;">${activity.type}</div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="color: ${activity.status === 'success' ? '#10b981' : '#ef4444'};">${activity.status}</div>
+                                <div style="color: #64748b; font-size: 0.75rem;">${Math.round(activity.confidence * 100)}%</div>
+                            </div>
+                        </div>`
+                    ).join('');
+                }
             } catch (error) {
                 console.error('Analytics loading failed:', error);
             }
         }
         
-        async function startFreeTrial() {
+        async function loadDocuments() {
             try {
-                const response = await fetch('https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod/trial/start', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        email: localStorage.getItem('userEmail') || 'user@example.com'
-                    })
-                });
+                const response = await fetch('https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod/documents');
+                const data = await response.json();
                 
-                if (!response.ok) throw new Error('Trial activation failed');
-                
-                const result = await response.json();
-                document.getElementById('trialStatus').innerHTML = '✅ Free trial activated! 50 documents remaining.';
-                localStorage.setItem('trialActive', 'true');
-                localStorage.setItem('trialUsage', '0');
-                localStorage.setItem('trialStartDate', new Date().toISOString());
+                const documentsTab = document.getElementById('documentsResults');
+                if (data.documents && data.documents.length > 0) {
+                    documentsTab.style.display = 'block';
+                    documentsTab.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                            <h3>Processed Documents (${data.documents.length})</h3>
+                            <button class="btn btn-secondary" onclick="loadDocuments()">🔄 Refresh</button>
+                        </div>
+                        ${data.documents.map(doc => `
+                            <div class="result-card" style="margin-bottom: 1rem; cursor: pointer;" onclick="viewDocument('${doc.id}')">
+                                <h4>📄 ${doc.filename}</h4>
+                                <p><strong>Type:</strong> ${doc.docType} | <strong>Confidence:</strong> ${Math.round(doc.confidence * 100)}%</p>
+                                <p><strong>Fields:</strong> ${Object.keys(doc.fields).length} extracted</p>
+                                <p style="font-size: 0.875rem; color: #64748b;">${doc.timestamp}</p>
+                            </div>
+                        `).join('')}
+                    `;
+                } else {
+                    documentsTab.innerHTML = '<p>No documents processed yet. Upload and process documents in the Upload & Batch tab.</p>';
+                }
             } catch (error) {
-                document.getElementById('trialStatus').innerHTML = '❌ Trial activation failed. Please try again.';
+                console.error('Documents loading failed:', error);
             }
+        }
+        
+        function viewDocument(docId) {
+            alert('Document viewer coming soon! Doc ID: ' + docId);
+        }
+        
+        async function startFreeTrial() {
+            // Activate trial locally
+            localStorage.setItem('trialActive', 'true');
+            localStorage.setItem('trialUsage', '0');
+            localStorage.setItem('trialStartDate', new Date().toISOString());
+            document.getElementById('trialStatus').innerHTML = '✅ Free trial activated! 50 documents remaining.';
         }
         
         async function checkTrialUsage() {
@@ -1055,6 +1140,7 @@
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             loadAnalytics();
+            loadDocuments();
             
             // Check trial status on load
             const isTrialActive = localStorage.getItem('trialActive') === 'true';
