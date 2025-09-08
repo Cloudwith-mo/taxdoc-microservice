@@ -31,4 +31,4 @@ samconfig.toml
 # Temporary
 *.tmp
 *.zip
-*.bak
+*.bak.terraform/
