@@ -42,24 +42,34 @@ def lambda_handler(event, context):
     
     try:
         logger.info(f"Processing event: {json.dumps(event)}")
-        # Handle request body safely
+        # Handle base64 image upload
         body_str = event.get('body', '{}')
         if not body_str:
-            body_str = '{}'
+            return _response(400, {'error': 'No body provided'})
         
-        if event.get('isBase64Encoded'):
-            body = base64.b64decode(body_str)
-        else:
-            # Try to parse as JSON first
-            try:
-                body_json = json.loads(body_str)
-                s3_key = body_json.get('s3Key')
-                if s3_key:
-                    # Direct S3 processing
-                    return process_s3_document(s3_key)
-            except:
-                pass
-            body = body_str.encode() if isinstance(body_str, str) else body_str
+        try:
+            body_json = json.loads(body_str)
+            filename = body_json.get('filename', 'document.png')
+            content_base64 = body_json.get('contentBase64')
+            
+            if not content_base64:
+                return _response(400, {'error': 'No contentBase64 provided'})
+            
+            # Decode base64 content
+            file_content = base64.b64decode(content_base64)
+            
+            # Determine file type and validate
+            file_ext = filename.lower().split('.')[-1]
+            if file_ext not in ['png', 'jpg', 'jpeg', 'pdf']:
+                return _response(400, {'error': f'Unsupported file type: {file_ext}'})
+            
+            return process_uploaded_document(file_content, filename)
+            
+        except json.JSONDecodeError:
+            return _response(400, {'error': 'Invalid JSON in request body'})
+        except Exception as e:
+            logger.exception("Body parsing error")
+            return _response(500, {'error': 'Failed to parse request', 'detail': str(e)})
         
         # Extract file from multipart data (simplified)
         file_content = extract_file_from_multipart(body)
@@ -87,18 +97,25 @@ def lambda_handler(event, context):
         final_data = apply_regex_fallback(raw_text, extracted_data)
         
         # Step 4: Store results
+        # Enhanced result with field-level confidence
+        field_count = len(final_data.get('fields', {}))
+        avg_confidence = sum(f.get('confidence', 0.5) for f in final_data.get('fields', {}).values() if isinstance(f, dict)) / max(field_count, 1)
+        
         result = {
             'DocumentID': doc_id,
             'DocumentType': final_data.get('document_type', 'Unknown'),
             'ClassificationConfidence': final_data.get('confidence', 0.95),
+            'FieldExtractionConfidence': round(avg_confidence, 2),
             'UploadDate': datetime.utcnow().isoformat(),
             'S3Location': f"s3://{BUCKET_NAME}/{s3_key}",
-            'Data': final_data.get('fields', {}),
+            'ExtractedFields': final_data.get('fields', {}),
+            'FieldCount': field_count,
             'ProcessingStatus': 'Completed',
             'ExtractionMetadata': {
                 'textract_blocks': len(textract_response.get('Blocks', [])),
-                'claude_fields': len(final_data.get('fields', {})),
-                'processing_time': '2.5s'
+                'extracted_fields': field_count,
+                'avg_field_confidence': round(avg_confidence, 2),
+                'processing_engine': 'Textract+Claude+Regex'
             }
         }
         
@@ -142,32 +159,49 @@ def extract_text_from_textract(response):
     return '\n'.join(text_blocks)
 
 def extract_with_claude(text):
-    """Use Claude AI for intelligent field extraction"""
+    """Enhanced Claude AI for Parseur-level field extraction"""
     
-    prompt = f"""Extract tax document information from this text. Return JSON with document_type and fields.
+    prompt = f"""You are an expert document parser. Extract ALL fields from this tax document with high precision.
 
-Text: {text[:2000]}
+Document Text:
+{text[:4000]}
 
-Extract these fields if present:
-- payer_name_address
-- payer_tin  
-- recipient_name
-- recipient_address
-- recipient_tin
-- wages_income
-- federal_tax_withheld
-- state_income_tax
-- state_payer_state_no
+Extract these fields with confidence scores (0.0-1.0):
 
-Return JSON format:
-{{"document_type": "W-2|1099-NEC|1099-MISC", "confidence": 0.95, "fields": {{"field_name": "value"}}}}"""
+W-2 Fields:
+- employer_name, employer_address, employer_ein
+- employee_name, employee_address, employee_ssn
+- wages_tips_compensation, federal_income_tax_withheld
+- social_security_wages, social_security_tax_withheld
+- medicare_wages_tips, medicare_tax_withheld
+- state_wages_tips, state_income_tax, locality_name
+
+1099 Fields:
+- payer_name, payer_address, payer_tin
+- recipient_name, recipient_address, recipient_tin
+- nonemployee_compensation, federal_income_tax_withheld
+- state_tax_withheld, state_payer_state_no
+
+Invoice/Receipt Fields:
+- vendor_name, vendor_address, invoice_number, invoice_date
+- total_amount, tax_amount, line_items
+
+Return ONLY valid JSON:
+{{
+  "document_type": "W-2|1099-NEC|1099-MISC|Invoice|Receipt|Other",
+  "confidence": 0.95,
+  "fields": {{
+    "field_name": {{"value": "extracted_value", "confidence": 0.95, "location": "box_1"}}
+  }}
+}}"""
 
     try:
         response = bedrock.invoke_model(
             modelId="anthropic.claude-3-5-sonnet-20240620-v1:0",
             body=json.dumps({
                 "anthropic_version": "bedrock-2023-05-31",
-                "max_tokens": 1000,
+                "max_tokens": 2000,
+                "temperature": 0.1,
                 "messages": [{"role": "user", "content": prompt}]
             })
         )
@@ -175,55 +209,80 @@ Return JSON format:
         result = json.loads(response['body'].read())
         claude_response = result['content'][0]['text']
         
-        # Parse JSON from Claude response
+        # Enhanced JSON parsing
         import re
-        json_match = re.search(r'\{.*\}', claude_response, re.DOTALL)
+        json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', claude_response, re.DOTALL)
         if json_match:
-            return json.loads(json_match.group())
+            parsed = json.loads(json_match.group())
+            # Validate and enhance fields
+            return validate_extracted_fields(parsed)
         
     except Exception as e:
-        print(f"Claude extraction failed: {e}")
+        logger.error(f"Claude extraction failed: {e}")
     
-    # Fallback response
-    return {
-        "document_type": "W-2",
-        "confidence": 0.8,
-        "fields": {}
-    }
+    return {"document_type": "Unknown", "confidence": 0.5, "fields": {}}
+
+def validate_extracted_fields(data):
+    """Validate and enhance extracted field data"""
+    fields = data.get('fields', {})
+    
+    # Normalize field values
+    for field_name, field_data in fields.items():
+        if isinstance(field_data, dict):
+            value = field_data.get('value', '')
+            # Clean currency values
+            if 'amount' in field_name or 'wage' in field_name or 'tax' in field_name:
+                value = re.sub(r'[^\d.,]', '', str(value))
+            # Clean TIN/SSN
+            if 'tin' in field_name or 'ssn' in field_name or 'ein' in field_name:
+                value = re.sub(r'[^\d-]', '', str(value))
+            field_data['value'] = value
+    
+    return data
 
 def apply_regex_fallback(text, extracted_data):
-    """Apply regex patterns for missing fields"""
-    
+    """Enhanced regex patterns for missing critical fields"""
     import re
     
     fields = extracted_data.get('fields', {})
     
-    # Regex patterns for common tax fields
+    # Enhanced patterns with validation
     patterns = {
+        'employer_ein': r'\b\d{2}-\d{7}\b',
+        'employee_ssn': r'\b\d{3}-\d{2}-\d{4}\b',
         'payer_tin': r'\b\d{2}-\d{7}\b',
         'recipient_tin': r'\b\d{3}-\d{2}-\d{4}\b',
-        'wages_income': r'\$[\d,]+\.\d{2}',
-        'federal_tax_withheld': r'Federal.*?\$[\d,]+\.\d{2}',
+        'wages_tips_compensation': r'\$?[\d,]+\.\d{2}',
+        'federal_income_tax_withheld': r'Federal.*?\$?[\d,]+\.\d{2}',
+        'nonemployee_compensation': r'\$?[\d,]+\.\d{2}',
+        'invoice_number': r'(?:Invoice|INV)\s*#?\s*([A-Z0-9-]+)',
+        'invoice_date': r'\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b'
     }
     
     for field, pattern in patterns.items():
-        if field not in fields or not fields[field]:
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                fields[field] = match.group()
+        if field not in fields or not fields.get(field, {}).get('value'):
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            if matches:
+                fields[field] = {
+                    'value': matches[0] if isinstance(matches[0], str) else matches[0],
+                    'confidence': 0.7,
+                    'source': 'regex_fallback'
+                }
     
     extracted_data['fields'] = fields
     return extracted_data
 
-def process_s3_document(s3_key):
-    """Process document already in S3"""
+def process_uploaded_document(file_content, filename):
+    """Process uploaded document content directly"""
     doc_id = str(uuid.uuid4())
     
     try:
-        # Step 1: Textract OCR
-        textract_response = textract.analyze_document(
-            Document={'S3Object': {'Bucket': BUCKET_NAME, 'Name': s3_key}},
-            FeatureTypes=['TABLES', 'FORMS']
+        # Textract supports PNG directly, no conversion needed
+        logger.info(f"Processing {filename} with {len(file_content)} bytes")
+        
+        # Process with Textract using document bytes (supports PNG, JPEG, PDF)
+        textract_response = textract.detect_document_text(
+            Document={'Bytes': file_content}
         )
         
         # Extract raw text
@@ -235,18 +294,29 @@ def process_s3_document(s3_key):
         # Step 3: Regex fallback
         final_data = apply_regex_fallback(raw_text, extracted_data)
         
+        # Enhanced result with field-level confidence
+        field_count = len(final_data.get('fields', {}))
+        avg_confidence = sum(f.get('confidence', 0.5) for f in final_data.get('fields', {}).values() if isinstance(f, dict)) / max(field_count, 1)
+        
         result = {
             'DocumentID': doc_id,
             'DocumentType': final_data.get('document_type', 'Unknown'),
             'ClassificationConfidence': final_data.get('confidence', 0.95),
+            'FieldExtractionConfidence': round(avg_confidence, 2),
             'UploadDate': datetime.utcnow().isoformat(),
-            'S3Location': f"s3://{BUCKET_NAME}/{s3_key}",
-            'Data': final_data.get('fields', {}),
-            'ProcessingStatus': 'Completed'
+            'ExtractedFields': final_data.get('fields', {}),
+            'FieldCount': field_count,
+            'ProcessingStatus': 'Completed',
+            'ExtractionMetadata': {
+                'textract_blocks': len(textract_response.get('Blocks', [])),
+                'extracted_fields': field_count,
+                'avg_field_confidence': round(avg_confidence, 2),
+                'processing_engine': 'Textract+Claude+Regex'
+            }
         }
         
         return _response(200, result)
         
     except Exception as e:
-        logger.exception(f"S3 processing error for {s3_key}")
+        logger.exception(f"Document processing error for {filename}")
         return _response(500, {'error': 'processing failed', 'detail': str(e)})

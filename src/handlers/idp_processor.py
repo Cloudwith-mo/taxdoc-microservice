@@ -78,15 +78,17 @@ def process_document_idp(payload: Dict[str, Any]) -> Dict[str, Any]:
 def extract_text_with_textract(document_bytes: bytes) -> str:
     """Phase 1: Extract raw text using Textract OCR"""
     try:
-        # Use AnalyzeDocument for better form extraction
-        response = textract.analyze_document(
-            Document={'Bytes': document_bytes},
-            FeatureTypes=['FORMS', 'TABLES']
+        print(f"Starting Textract on {len(document_bytes)} bytes")
+        
+        # First try basic text detection for better compatibility
+        response = textract.detect_document_text(
+            Document={'Bytes': document_bytes}
         )
         
-        # Combine all text blocks in reading order
+        # Extract all text blocks
         raw_text = ""
         lines = []
+        words = []
         
         for block in response['Blocks']:
             if block['BlockType'] == 'LINE':
@@ -94,25 +96,36 @@ def extract_text_with_textract(document_bytes: bytes) -> str:
                     'text': block['Text'],
                     'top': block['Geometry']['BoundingBox']['Top']
                 })
+            elif block['BlockType'] == 'WORD':
+                words.append(block['Text'])
         
-        # Sort by vertical position for proper reading order
+        # Sort lines by vertical position
         lines.sort(key=lambda x: x['top'])
         raw_text = "\n".join([line['text'] for line in lines])
         
-        print(f"Textract extracted {len(raw_text)} characters: {raw_text[:200]}...")
+        # If no lines found, use words
+        if not raw_text and words:
+            raw_text = " ".join(words)
+        
+        print(f"Textract extracted {len(raw_text)} characters from {len(lines)} lines, {len(words)} words")
+        print(f"Sample text: {raw_text[:300]}")
+        
+        # If we got text, try enhanced analysis for forms
+        if raw_text and len(raw_text) > 10:
+            try:
+                enhanced_response = textract.analyze_document(
+                    Document={'Bytes': document_bytes},
+                    FeatureTypes=['FORMS']
+                )
+                print(f"Enhanced analysis found {len(enhanced_response.get('Blocks', []))} blocks")
+            except Exception as e:
+                print(f"Enhanced analysis failed: {e}")
+        
         return raw_text
         
     except Exception as e:
         print(f"Textract error: {e}")
-        # Fallback to basic text detection
-        try:
-            response = textract.detect_document_text(
-                Document={'Bytes': document_bytes}
-            )
-            raw_text = "\n".join([block['Text'] for block in response['Blocks'] if block['BlockType'] == 'LINE'])
-            return raw_text
-        except:
-            return ""
+        return ""
 
 def classify_document_with_claude(text: str) -> str:
     """Phase 2: Classify document type using Claude AI"""
