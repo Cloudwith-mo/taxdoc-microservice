@@ -3,7 +3,7 @@ from datetime import datetime
 
 textract = boto3.client("textract")
 s3 = boto3.client("s3")
-ddb = boto3.resource("dynamodb").Table(os.environ.get("RESULTS_TABLE", "TaxDocuments-dev"))
+ddb = boto3.resource("dynamodb").Table(os.environ.get("RESULTS_TABLE", "DrDocDocuments-prod"))
 bedrock = boto3.client("bedrock-runtime")
 
 CORS = {
@@ -74,7 +74,7 @@ def lambda_handler(event, ctx):
                 return ret(400, {"error": "No s3Key provided"})
             
             # Convert to S3 event format
-            bucket = 'taxflowsai-uploads'
+            bucket = "taxflowsai-uploads"  # Match upload handler bucket
             if not s3_key.startswith('uploads/'):
                 s3_key = f'uploads/{s3_key}'
             
@@ -94,6 +94,133 @@ def lambda_handler(event, ctx):
     
     return ret(400, {"error": "Invalid event format"})
 
+def extract_fields_with_ai(text, doc_type):
+    """Extract fields using Claude AI for any document type"""
+    try:
+        if doc_type == "W-2":
+            schema = '{"employee_name": "", "employer_name": "", "wages": "", "federal_tax_withheld": "", "social_security_wages": "", "social_security_tax": "", "medicare_wages": "", "medicare_tax": "", "ssn": "", "ein": "", "state": "", "state_wages": "", "state_tax": ""}'
+        elif doc_type == "1099-NEC":
+            schema = '{"payer_name": "", "payer_address": "", "payer_tin": "", "recipient_name": "", "recipient_address": "", "recipient_tin": "", "nonemployee_compensation": "", "federal_tax_withheld": "", "state_tax_withheld": "", "state": "", "account_number": ""}'
+        elif doc_type == "1099-MISC":
+            schema = '{"payer_name": "", "payer_address": "", "payer_tin": "", "recipient_name": "", "recipient_address": "", "recipient_tin": "", "rents": "", "royalties": "", "other_income": "", "federal_tax_withheld": "", "state_tax_withheld": "", "state": ""}'
+        elif doc_type == "INVOICE":
+            schema = '{"invoice_number": "", "invoice_date": "", "due_date": "", "vendor_name": "", "vendor_address": "", "customer_name": "", "customer_address": "", "subtotal": "", "tax_amount": "", "total_amount": "", "payment_terms": ""}'
+        elif doc_type == "RECEIPT":
+            schema = '{"merchant_name": "", "merchant_address": "", "transaction_date": "", "transaction_time": "", "items": "", "subtotal": "", "tax_amount": "", "total_amount": "", "payment_method": "", "receipt_number": ""}'
+        else:
+            schema = '{"document_type": "", "date": "", "amount": "", "description": "", "parties_involved": ""}'
+
+        prompt = f"""Extract data from this {doc_type} document and return ONLY a JSON object matching this schema:
+
+{schema}
+
+OCR Text:
+{text}
+
+Return only the JSON object, no other text:"""
+
+        response = bedrock.invoke_model(
+            modelId="us.anthropic.claude-sonnet-4-20250514-v1:0",
+            body=json.dumps({
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 1000,
+                "messages": [{"role": "user", "content": prompt}]
+            })
+        )
+        
+        result = json.loads(response['body'].read())
+        ai_response = result['content'][0]['text'].strip()
+        
+        # Extract JSON from response
+        json_start = ai_response.find('{')
+        json_end = ai_response.rfind('}') + 1
+        if json_start >= 0 and json_end > json_start:
+            return json.loads(ai_response[json_start:json_end])
+            
+    except Exception as e:
+        print(f"AI extraction failed: {e}")
+    
+    return {"error": "AI extraction failed", "raw_text_length": len(text)}
+
+def extract_1099_fields_with_ai(text):
+    """Extract 1099-NEC fields using Claude AI"""
+    try:
+        prompt = f"""Extract 1099-NEC tax form data from this OCR text and return ONLY a JSON object with these exact field names:
+
+{{
+  "payer_name": "company/payer name",
+  "payer_address": "payer address",
+  "payer_tin": "payer tax ID number",
+  "recipient_name": "recipient/contractor name",
+  "recipient_address": "recipient address", 
+  "recipient_tin": "recipient tax ID/SSN",
+  "nonemployee_compensation": "box 1 amount",
+  "federal_tax_withheld": "box 4 amount if any",
+  "state_tax_withheld": "box 5 amount if any",
+  "state": "state abbreviation",
+  "account_number": "account number if any"
+}}
+
+OCR Text:
+{text}
+
+Return only the JSON object, no other text:"""
+
+        response = bedrock.invoke_model(
+            modelId="us.anthropic.claude-sonnet-4-20250514-v1:0",
+            body=json.dumps({
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 1000,
+                "messages": [{"role": "user", "content": prompt}]
+            })
+        )
+        
+        result = json.loads(response['body'].read())
+        ai_response = result['content'][0]['text'].strip()
+        
+        # Extract JSON from response
+        json_start = ai_response.find('{')
+        json_end = ai_response.rfind('}') + 1
+        if json_start >= 0 and json_end > json_start:
+            return json.loads(ai_response[json_start:json_end])
+            
+    except Exception as e:
+        print(f"AI extraction failed: {e}")
+    
+    # Fallback to basic extraction
+    return {"extracted_text_length": len(text)}
+
+def extract_w2_fields_basic(text):
+    """Basic W-2 field extraction as fallback"""
+    fields = {}
+    
+    # Extract key fields from the actual OCR output
+    patterns = {
+        'employee_name': r'(?:Last name|e Employee).*?([A-Z][a-z]+).*?(?:first name).*?([A-Z][a-z]+)',
+        'employer_name': r'c Employer.*?\n([^\n]+)',
+        'wages': r'1 Wages.*?([\d,]+\.\d{2})',
+        'federal_tax_withheld': r'2 Federal income tax.*?([\d,]+\.\d{2})',
+        'social_security_wages': r'3 Social security wages.*?([\d,]+\.\d{2})',
+        'social_security_tax': r'4 Social security tax.*?([\d,]+\.\d{2})',
+        'medicare_wages': r'5 Medicare wages.*?([\d,]+\.\d{2})',
+        'medicare_tax': r'6 Medicare tax.*?([\d,]+\.\d{2})',
+        'ssn': r'a Employee.*?(\d{3}-\d{2}-\d{4})',
+        'ein': r'b Employer.*?(\d{2}-\d{7})',
+        'state': r'15 State\s+([A-Z]{2})',
+        'state_wages': r'16 State wages.*?([\d,]+)',
+        'state_tax': r'17 State income tax.*?([\d,]+)'
+    }
+    
+    for field, pattern in patterns.items():
+        match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
+        if match:
+            if field == 'employee_name' and match.lastindex >= 2:
+                fields[field] = f"{match.group(2)} {match.group(1)}"
+            else:
+                fields[field] = match.group(1).strip()
+    
+    return fields
+
 def process_document(bucket, key):
     """Process document from S3 bucket and key"""
     try:
@@ -109,13 +236,15 @@ def process_document(bucket, key):
     docType, cls_conf = classify_doc(text)
     doc_id = str(uuid.uuid4())
     
-    # Simple response for all document types
+    # Extract fields using AI for all document types
+    fields = extract_fields_with_ai(text, docType)
+    
     result = {
         "docId": doc_id,
         "docType": docType,
         "docTypeConfidence": cls_conf,
         "summary": f"Processed {docType} document",
-        "fields": {"extracted_text_length": len(text)},
+        "fields": fields,
         "keyValues": [],
         "tables": [],
         "issues": [],

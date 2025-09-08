@@ -470,7 +470,7 @@
             }, 1000);
         }
 
-        const API_BASE = "https://m99cbrkoql.execute-api.us-east-1.amazonaws.com/prod";
+        const API_BASE = "https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod";
 
         async function processDocument(file) {
             // Check trial usage first
@@ -487,7 +487,7 @@
             await fetch(url, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
             
             // 3) Kick processing with a tiny payload
-            const result = await fetch(`${API_BASE}/process`, {
+            const result = await fetch(`${API_BASE}/process-document`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ s3Key: key, filename: file.name })
@@ -495,14 +495,14 @@
                 
             // Transform API response to frontend format
             const transformedResult = {
-                document_type: result.DocumentType || 'Unknown',
-                confidence_score: Math.round((result.ClassificationConfidence || 0) * 100),
+                document_type: result.docType || 'Unknown',
+                confidence_score: Math.round((result.docTypeConfidence || 0) * 100),
                 extracted_data: {}
             };
             
             // Convert API data format to frontend format with confidence scores
-            if (result.Data) {
-                Object.entries(result.Data).forEach(([key, value]) => {
+            if (result.fields) {
+                Object.entries(result.fields).forEach(([key, value]) => {
                     const fieldName = key.toLowerCase().replace(/[^a-z0-9]/g, '_');
                     transformedResult.extracted_data[fieldName] = {
                         value: value || '',

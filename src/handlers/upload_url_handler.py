@@ -30,8 +30,8 @@ def lambda_handler(event, context):
                 'Access-Control-Allow-Headers': 'Content-Type'
             },
             'body': json.dumps({
-                'uploadUrl': url,
-                's3Key': key,
+                'url': url,
+                'key': key,
                 'bucket': BUCKET
             })
         }
