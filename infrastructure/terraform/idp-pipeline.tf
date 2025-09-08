@@ -84,9 +84,10 @@ resource "aws_dynamodb_table" "docs" {
   }
 
   global_secondary_index {
-    name     = "docType-index"
-    hash_key = "docType"
-    range_key = "processedAt"
+    name               = "docType-index"
+    hash_key           = "docType"
+    range_key          = "processedAt"
+    projection_type    = "ALL"
   }
 
   server_side_encryption {

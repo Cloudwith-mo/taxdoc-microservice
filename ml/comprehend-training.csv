@@ -1,0 +1,13 @@
+text,label
+"Form W-2 Wage and Tax Statement Employee social security number 123-45-6789 Employer identification number 12-3456789 Wages tips other compensation 50000.00 Federal income tax withheld 7500.00","w2"
+"Form 1099-NEC Nonemployee compensation Payer TIN 12-3456789 Recipient TIN 987-65-4321 Nonemployee compensation 15000.00","1099-nec"
+"Invoice #INV-2024-001 Bill To: ABC Company Date: 01/15/2024 Subtotal: $1,250.00 Tax: $125.00 Total: $1,375.00 Payment Terms: Net 30","invoice"
+"RECEIPT Store #1234 Date: 01/15/2024 Total: $45.67 VISA ****1234 Approval: 123456 Thank you for your purchase","receipt"
+"Bank Statement Account: 1234567890 Statement Period: 01/01/2024 - 01/31/2024 Beginning Balance: $5,000.00 Ending Balance: $4,750.00","bank_statement"
+"Pay Stub Employee: John Doe Pay Period: 01/01/2024 - 01/15/2024 Gross Pay: $2,500.00 Net Pay: $1,875.00 YTD Gross: $2,500.00","paystub"
+"Form 1099-INT Interest Income Payer TIN 12-3456789 Recipient TIN 987-65-4321 Interest income 125.50 Federal income tax withheld 0.00","1099-int"
+"Form 1099-DIV Dividends and Distributions Payer TIN 12-3456789 Total ordinary dividends 250.00 Qualified dividends 250.00","1099-div"
+"Form 1098 Mortgage Interest Statement Borrower TIN 987-65-4321 Mortgage interest received 8500.00 Outstanding mortgage principal 250000.00","1098"
+"Utility Bill Electric Company Account: 9876543210 Service Address: 123 Main St Statement Date: 01/31/2024 Amount Due: $125.45 Due Date: 02/15/2024","utility_bill"
+"Insurance Statement Policy Number: POL123456 Coverage Period: 01/01/2024 - 12/31/2024 Premium Amount: $1,200.00 Insured: John Doe Carrier: ABC Insurance","insurance_statement"
+"Driver License State of California DL 12345678 DOB: 01/01/1980 Expires: 01/01/2028 Class: C","id_doc"
