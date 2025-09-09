@@ -92,7 +92,7 @@
                 </div>
                 <div class="dropdown-item" onclick="showSettings()" style="padding: 12px 16px; border-bottom: 1px solid #f0f0f0; cursor: pointer; color: #333; transition: background 0.2s;">Account Settings</div>
                 <div class="dropdown-item" onclick="showBilling()" style="padding: 12px 16px; border-bottom: 1px solid #f0f0f0; cursor: pointer; color: #333; transition: background 0.2s;">Billing & Plans</div>
-                <div class="dropdown-item" onclick="logout()" style="padding: 12px 16px; cursor: pointer; color: #333; transition: background 0.2s;">Sign Out</div>
+                <div class="dropdown-item" id="authAction" onclick="toggleAuth()" style="padding: 12px 16px; cursor: pointer; color: #333; transition: background 0.2s;">Sign In</div>
             </div>
         </div>
     </div>
@@ -378,17 +378,114 @@
         let currentEditingDoc = null;
         const API_BASE = "https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod";
 
-        // User management
+        // ===== ParsePilot Cognito Auth (Code + PKCE) =====
+        const auth = (() => {
+            const cfg = {
+                domain: "https://parsepilot.auth.us-east-1.amazoncognito.com",
+                clientId: "7234567890abcdef",
+                redirectUri: window.location.origin + window.location.pathname,
+                logoutUri: window.location.origin + window.location.pathname,
+                scope: "openid profile email"
+            };
+
+            const LS = {
+                idToken: "taxdoc_token",
+                access: "taxdoc_access", 
+                refresh: "taxdoc_refresh",
+                user: "taxdoc_user",
+                username: "taxdoc_username",
+                exp: "taxdoc_exp"
+            };
+
+            const b64url = s => btoa(String.fromCharCode(...new TextEncoder().encode(s)))
+                .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+            
+            function parseJwt(t) {
+                try { return JSON.parse(atob(t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))); }
+                catch { return {}; }
+            }
+            
+            function set(k,v){ localStorage.setItem(k, typeof v==='string'?v:JSON.stringify(v)); }
+            function get(k){ return localStorage.getItem(k); }
+            function del(k){ localStorage.removeItem(k); }
+
+            function persistTokens(tok) {
+                const id = tok.id_token;
+                const at = tok.access_token;
+                const rt = tok.refresh_token;
+                if (id) set(LS.idToken, id);
+                if (at) set(LS.access, at);
+                if (rt) set(LS.refresh, rt);
+                const payload = parseJwt(id || at || "");
+                if (payload && payload.sub) {
+                    set(LS.user, payload.sub);
+                    const name = payload.email || payload["cognito:username"] || "User";
+                    set(LS.username, name);
+                    if (payload.exp) set(LS.exp, payload.exp.toString());
+                }
+            }
+
+            function signIn() {
+                const params = new URLSearchParams({
+                    response_type: "token",
+                    client_id: cfg.clientId,
+                    redirect_uri: cfg.redirectUri,
+                    scope: cfg.scope
+                });
+                window.location = `${cfg.domain}/login?${params.toString()}`;
+            }
+
+            function signOut() {
+                [LS.idToken,LS.access,LS.refresh,LS.user,LS.username,LS.exp].forEach(del);
+                const params = new URLSearchParams({
+                    client_id: cfg.clientId,
+                    logout_uri: cfg.logoutUri
+                });
+                window.location = `${cfg.domain}/logout?${params.toString()}`;
+            }
+
+            function onRedirect() {
+                if (location.hash.startsWith("#id_token") || location.hash.startsWith("#access_token")) {
+                    const h = new URLSearchParams(location.hash.slice(1));
+                    persistTokens({ 
+                        id_token: h.get("id_token"), 
+                        access_token: h.get("access_token") 
+                    });
+                    history.replaceState({}, document.title, location.pathname);
+                    return true;
+                }
+                return false;
+            }
+
+            function getIdToken() { return get(LS.idToken); }
+            
+            function authHeaders() {
+                const t = getIdToken();
+                return t ? { "Authorization": `Bearer ${t}` } : {};
+            }
+            
+            function getProfile() {
+                return {
+                    loggedIn: !!get(LS.idToken),
+                    userId: get(LS.user) || "ANON",
+                    username: get(LS.username) || "Guest User"
+                };
+            }
+
+            return { signIn, signOut, onRedirect, getIdToken, authHeaders, getProfile };
+        })();
+
+        // User management - now uses auth system
         function getUserId() {
-            return localStorage.getItem('userId') || 'ANON';
+            return auth.getProfile().userId;
         }
         
         function getUserEmail() {
-            return localStorage.getItem('userEmail') || 'guest@example.com';
+            return auth.getProfile().username;
         }
         
         function getUserName() {
-            return localStorage.getItem('userName') || 'Guest User';
+            return auth.getProfile().username;
         }
         
         // Tab Management
@@ -409,19 +506,49 @@
             dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
         }
         
+        function toggleAuth() {
+            if (auth.getProfile().loggedIn) {
+                auth.signOut();
+            } else {
+                auth.signIn();
+            }
+        }
+        
+        function updateAuthUI() {
+            const profile = auth.getProfile();
+            const authAction = document.getElementById('authAction');
+            const userDisplayName = document.getElementById('userDisplayName');
+            const userEmail = document.getElementById('userEmail');
+            
+            if (profile.loggedIn) {
+                authAction.textContent = 'Sign Out';
+                userDisplayName.textContent = profile.username;
+                userEmail.innerHTML = `<strong>${profile.username}</strong><br><small>Authenticated</small>`;
+            } else {
+                authAction.textContent = 'Sign In';
+                userDisplayName.textContent = 'Guest User';
+                userEmail.innerHTML = '<strong>guest@example.com</strong><br><small>Free Plan</small>';
+            }
+        }
+        
         function showSettings() {
+            if (!auth.getProfile().loggedIn) {
+                auth.signIn();
+                return;
+            }
             alert('Account settings coming soon...');
         }
         
         function showBilling() {
+            if (!auth.getProfile().loggedIn) {
+                auth.signIn();
+                return;
+            }
             alert('Billing & plans coming soon...');
         }
         
         function logout() {
-            localStorage.removeItem('userId');
-            localStorage.removeItem('userEmail');
-            localStorage.removeItem('userName');
-            window.location.reload();
+            auth.signOut();
         }
 
         // File Upload
@@ -776,6 +903,57 @@
             }
         }
         
+        // Build chat memory from processed docs
+        async function loadChatMemory() {
+            const userId = getUserId();
+            try {
+                const r = await fetch(`${API_BASE}/documents?userId=${encodeURIComponent(userId)}`, { 
+                    headers: { ...auth.authHeaders() }
+                });
+                if (!r.ok) return { facts: [], index: {} };
+                const result = await r.json();
+                const items = result.items || result || [];
+
+                const latest = items
+                    .filter(it => (it.status || 'PROCESSED') === 'PROCESSED')
+                    .sort((a, b) => (b.processedAt || 0) - (a.processedAt || 0))
+                    .slice(0, 12);
+
+                const index = {};
+                const facts = [];
+                for (const it of latest) {
+                    const rr = await fetch(`${API_BASE}/document?userId=${encodeURIComponent(userId)}&docId=${encodeURIComponent(it.docId)}`, { 
+                        headers: { ...auth.authHeaders() }
+                    });
+                    if (!rr.ok) continue;
+                    const doc = await rr.json();
+                    const fields = doc.finalFields || doc.fields || {};
+
+                    // Extract facts for Q&A
+                    if ((doc.docType || '').toLowerCase().includes('w-2')) {
+                        if (fields['Employer EIN']) facts.push(`W-2 Employer EIN: ${unwrapVal(fields['Employer EIN'])}`);
+                        if (fields['Employer Name']) facts.push(`W-2 Employer: ${unwrapVal(fields['Employer Name'])}`);
+                        if (fields['Box 1 - Wages']) facts.push(`W-2 Box 1 Wages: ${unwrapVal(fields['Box 1 - Wages'])}`);
+                    }
+                    if ((doc.docType || '').toLowerCase().includes('bank')) {
+                        if (fields['Total Deposits']) facts.push(`Bank total deposits: ${unwrapVal(fields['Total Deposits'])}`);
+                    }
+                    if ((doc.docType || '').toLowerCase().includes('invoice') || (doc.docType || '').toLowerCase().includes('receipt')) {
+                        if (fields['Vendor']) facts.push(`Vendor: ${unwrapVal(fields['Vendor'])}`);
+                        if (fields['Total']) facts.push(`Total: ${unwrapVal(fields['Total'])}`);
+                    }
+                    index[it.docId] = { meta: it, fields };
+                }
+                return { facts, index };
+            } catch (error) {
+                return { facts: [], index: {} };
+            }
+        }
+
+        function unwrapVal(v) { 
+            return (typeof v === 'object' && v && 'value' in v) ? v.value : v; 
+        }
+
         async function sendChatMessage() {
             const input = document.getElementById('chatInput');
             const message = input.value.trim();
@@ -800,51 +978,43 @@
             `;
             
             try {
-                const response = await fetch(`${API_BASE}/chatbot`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        question: message,
-                        context: {
-                            document_type: 'W-2',
-                            extracted_data: getLastProcessedData()
-                        }
-                    })
-                });
+                // Load memory and try to answer from processed docs
+                const memory = await loadChatMemory();
+                let smartResponse = '';
                 
-                const result = await response.json();
+                // Simple pattern matching for common questions
+                const msgLower = message.toLowerCase();
+                if (msgLower.includes('employer ein') || msgLower.includes('ein')) {
+                    const einFact = memory.facts.find(f => f.toLowerCase().includes('employer ein'));
+                    smartResponse = einFact || "I couldn't find an Employer EIN in your processed docs yet.";
+                } else if (msgLower.includes('wages') || msgLower.includes('box 1')) {
+                    const wagesFact = memory.facts.find(f => f.toLowerCase().includes('wages'));
+                    smartResponse = wagesFact || "I couldn't find wage information in your processed docs yet.";
+                } else if (msgLower.includes('total') || msgLower.includes('amount')) {
+                    const totalFact = memory.facts.find(f => f.toLowerCase().includes('total'));
+                    smartResponse = totalFact || "I couldn't find total amounts in your processed docs yet.";
+                } else {
+                    smartResponse = `I found ${memory.facts.length} facts from your ${Object.keys(memory.index).length} processed documents. Try asking about specific fields like "Employer EIN", "wages", or "totals".`;
+                }
                 
                 // Remove typing indicator
                 document.getElementById(typingId).remove();
                 
                 // Add AI response
-                const aiResponse = result.response || 'I can help you with questions about your processed documents.';
                 chatArea.innerHTML += `
                     <div style="margin-bottom: 1rem; padding: 1rem; background: #667eea; color: white; border-radius: 6px;">
-                        <strong>AI:</strong> ${aiResponse}
+                        <strong>AI:</strong> ${smartResponse}
                     </div>
                 `;
-                
-                // Add suggested actions if available
-                if (result.response?.suggested_actions?.length > 0) {
-                    chatArea.innerHTML += `
-                        <div style="margin-bottom: 1rem; padding: 0.75rem; background: #f0f9ff; border-radius: 6px; border-left: 3px solid #0ea5e9;">
-                            <strong>Suggestions:</strong><br>
-                            ${result.response.suggested_actions.map(action => `• ${action}`).join('<br>')}
-                        </div>
-                    `;
-                }
                 
             } catch (error) {
                 // Remove typing indicator
                 document.getElementById(typingId)?.remove();
                 
-                // Smart fallback based on message content
-                let smartResponse = getSmartResponse(message);
-                
+                // Fallback response
                 chatArea.innerHTML += `
                     <div style="margin-bottom: 1rem; padding: 1rem; background: #667eea; color: white; border-radius: 6px;">
-                        <strong>AI:</strong> ${smartResponse}
+                        <strong>AI:</strong> I'm here to help with your processed documents. Please process some documents first, then I can answer questions about the extracted data.
                     </div>
                 `;
             }
@@ -861,9 +1031,14 @@
         
         async function loadAnalytics() {
             try {
-                const response = await fetch(`${API_BASE}/analytics?userId=${getUserId()}`);
+                // Load documents with auth headers
+                const response = await fetch(`${API_BASE}/documents?userId=${encodeURIComponent(getUserId())}`, {
+                    headers: { ...auth.authHeaders() }
+                });
                 if (response.ok) {
-                    const analytics = await response.json();
+                    const result = await response.json();
+                    const docs = result.items || result || [];
+                    const analytics = calculateLocalAnalytics(docs);
                     updateAnalyticsDisplay(analytics);
                 } else {
                     throw new Error('Backend unavailable');
@@ -959,10 +1134,13 @@
         
         async function loadDocuments() {
             try {
-                // Try to load from backend first
-                const response = await fetch(`${API_BASE}/documents?userId=${getUserId()}`);
+                // Load with auth headers
+                const response = await fetch(`${API_BASE}/documents?userId=${encodeURIComponent(getUserId())}`, {
+                    headers: { ...auth.authHeaders() }
+                });
                 if (response.ok) {
-                    documents = await response.json();
+                    const result = await response.json();
+                    documents = result.items || result || [];
                 } else {
                     throw new Error('Backend unavailable');
                 }
@@ -1213,10 +1391,13 @@
             currentEditingDoc.fields = updatedFields;
 
             try {
-                // Save to backend
+                // Save to backend with auth headers
                 await fetch(`${API_BASE}/document/${currentEditingDoc.docId}`, {
                     method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        ...auth.authHeaders()
+                    },
                     body: JSON.stringify({
                         fields: updatedFields,
                         userId: getUserId()
@@ -1289,10 +1470,13 @@
         
         async function saveDocumentToPersistentStorage(doc) {
             try {
-                // Save to backend
+                // Save to backend with auth headers
                 await fetch(`${API_BASE}/documents`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        ...auth.authHeaders()
+                    },
                     body: JSON.stringify(doc)
                 });
                 
@@ -1384,10 +1568,12 @@
         }
         
         // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Handle auth redirect and update UI
+            await auth.onRedirect();
+            
             // Initialize auth UI
-            document.getElementById('userDisplayName').textContent = getUserName();
-            document.getElementById('userEmail').textContent = getUserEmail();
+            updateAuthUI();
             
             // Setup event listeners
             document.getElementById('userDropdown').addEventListener('click', (e) => {
