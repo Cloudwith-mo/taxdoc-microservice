@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaxDoc AI - Enhanced Document Processing</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f7fa; }
+        
+        /* Header with Auth */
+        .header { 
+            background: white; border-bottom: 1px solid #e1e8ed; padding: 15px 0; 
+            position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header-content { 
+            max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; 
+            align-items: center; padding: 0 20px;
+        }
+        .logo { font-size: 24px; font-weight: bold; color: #3498db; }
+        .auth-section { position: relative; }
+        .user-dropdown { 
+            background: #3498db; color: white; border: none; padding: 10px 15px; 
+            border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 8px;
+        }
+        .dropdown-menu { 
+            position: absolute; top: 100%; right: 0; background: white; border: 1px solid #ddd; 
+            border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); min-width: 200px; 
+            display: none; z-index: 1000;
+        }
+        .dropdown-menu.show { display: block; }
+        .dropdown-item { 
+            padding: 12px 16px; border-bottom: 1px solid #f0f0f0; cursor: pointer; 
+            transition: background 0.2s;
+        }
+        .dropdown-item:hover { background: #f8f9fa; }
+        .dropdown-item:last-child { border-bottom: none; }
+        
+        /* Navigation Tabs */
+        .nav-tabs { 
+            background: white; border-bottom: 1px solid #e1e8ed; 
+            max-width: 1200px; margin: 0 auto;
+        }
+        .nav-tabs-list { 
+            display: flex; padding: 0 20px; 
+        }
+        .nav-tab { 
+            padding: 15px 20px; border-bottom: 3px solid transparent; cursor: pointer; 
+            transition: all 0.3s; color: #666; font-weight: 500;
+        }
+        .nav-tab.active { border-bottom-color: #3498db; color: #3498db; }
+        .nav-tab:hover { background: #f8f9fa; }
+        
+        /* Main Content */
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        /* Upload Area */
+        .upload-area { 
+            border: 2px dashed #3498db; border-radius: 12px; padding: 40px; text-align: center; 
+            background: white; margin-bottom: 30px; cursor: pointer; transition: all 0.3s;
+        }
+        .upload-area:hover { border-color: #2980b9; background: #f8f9fa; }
+        .upload-area.dragover { border-color: #27ae60; background: #e8f5e8; }
+        
+        /* Buttons */
+        .btn { 
+            background: #3498db; color: white; border: none; padding: 12px 24px; 
+            border-radius: 6px; cursor: pointer; font-size: 16px; transition: all 0.3s;
+        }
+        .btn:hover { background: #2980b9; }
+        .btn:disabled { background: #bdc3c7; cursor: not-allowed; }
+        .btn-secondary { background: #95a5a6; }
+        .btn-secondary:hover { background: #7f8c8d; }
+        .btn-success { background: #27ae60; }
+        .btn-success:hover { background: #229954; }
+        .btn-danger { background: #e74c3c; }
+        .btn-danger:hover { background: #c0392b; }
+        
+        /* Document Grid */
+        .document-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px; }
+        .document-card { 
+            background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            transition: transform 0.2s; border-left: 4px solid #3498db; position: relative;
+        }
+        .document-card:hover { transform: translateY(-2px); }
+        .card-actions { 
+            position: absolute; top: 15px; right: 15px; display: flex; gap: 8px; 
+        }
+        .card-btn { 
+            background: #f8f9fa; border: 1px solid #ddd; border-radius: 4px; 
+            padding: 6px 10px; font-size: 12px; cursor: pointer; transition: all 0.2s;
+        }
+        .card-btn:hover { background: #e9ecef; }
+        
+        /* Document Type Badges */
+        .doc-type { 
+            display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; 
+            font-weight: bold; margin-bottom: 10px; text-transform: uppercase;
+        }
+        .doc-type.w-2 { background: #e74c3c; color: white; }
+        .doc-type.1099-nec { background: #d35400; color: white; }
+        .doc-type.invoice { background: #f39c12; color: white; }
+        .doc-type.receipt { background: #27ae60; color: white; }
+        .doc-type.paystub { background: #3498db; color: white; }
+        .doc-type.bank-statement { background: #2c3e50; color: white; }
+        .doc-type.utility-bill { background: #16a085; color: white; }
+        .doc-type.id-card { background: #9b59b6; color: white; }
+        .doc-type.contract { background: #8e44ad; color: white; }
+        .doc-type.unknown { background: #95a5a6; color: white; }
+        
+        /* Field Display */
+        .extracted-fields { margin-top: 15px; }
+        .field-item { 
+            display: flex; justify-content: space-between; padding: 8px 0; 
+            border-bottom: 1px solid #ecf0f1; font-size: 14px;
+        }
+        .field-label { font-weight: 600; color: #2c3e50; }
+        .field-value { color: #34495e; text-align: right; max-width: 60%; word-break: break-word; }
+        
+        /* Edit Modal */
+        .modal { 
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center;
+        }
+        .modal.show { display: flex; }
+        .modal-content { 
+            background: white; border-radius: 12px; padding: 30px; max-width: 600px; 
+            width: 90%; max-height: 80vh; overflow-y: auto;
+        }
+        .modal-header { 
+            display: flex; justify-content: space-between; align-items: center; 
+            margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #eee;
+        }
+        .modal-title { font-size: 20px; font-weight: 600; }
+        .close-btn { 
+            background: none; border: none; font-size: 24px; cursor: pointer; 
+            color: #999; padding: 0; width: 30px; height: 30px;
+        }
+        .close-btn:hover { color: #333; }
+        
+        /* Form Fields */
+        .form-group { margin-bottom: 20px; }
+        .form-label { display: block; margin-bottom: 5px; font-weight: 600; color: #333; }
+        .form-input { 
+            width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; 
+            font-size: 14px; transition: border-color 0.3s;
+        }
+        .form-input:focus { outline: none; border-color: #3498db; }
+        .add-field-btn { 
+            background: #27ae60; color: white; border: none; padding: 8px 16px; 
+            border-radius: 4px; cursor: pointer; font-size: 14px; margin-top: 10px;
+        }
+        .remove-field-btn { 
+            background: #e74c3c; color: white; border: none; padding: 4px 8px; 
+            border-radius: 3px; cursor: pointer; font-size: 12px; margin-left: 10px;
+        }
+        
+        /* Stats */
+        .stats { 
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); 
+            gap: 15px; margin-bottom: 30px;
+        }
+        .stat-card { 
+            background: white; padding: 20px; border-radius: 8px; text-align: center; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .stat-number { font-size: 24px; font-weight: bold; color: #3498db; }
+        .stat-label { font-size: 12px; color: #7f8c8d; text-transform: uppercase; }
+        
+        /* Filters */
+        .search-bar { 
+            width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; 
+            margin-bottom: 20px; font-size: 16px;
+        }
+        .filter-tabs { 
+            display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;
+        }
+        .filter-tab { 
+            padding: 8px 16px; border: 1px solid #ddd; border-radius: 20px; 
+            background: white; cursor: pointer; transition: all 0.3s;
+        }
+        .filter-tab.active { background: #3498db; color: white; border-color: #3498db; }
+        
+        /* Confidence indicators */
+        .confidence { font-size: 12px; color: #7f8c8d; margin-bottom: 10px; }
+        .confidence.high { color: #27ae60; }
+        .confidence.medium { color: #f39c12; }
+        .confidence.low { color: #e74c3c; }
+        
+        /* Processing states */
+        .processing { opacity: 0.6; }
+        .error { border-left-color: #e74c3c; }
+        .summary { 
+            background: #f8f9fa; padding: 12px; border-radius: 6px; margin-top: 10px; 
+            font-style: italic; color: #5a6c7d; font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header with Authentication -->
+    <div class="header">
+        <div class="header-content">
+            <div class="logo">TaxDoc AI</div>
+            <div class="auth-section">
+                <button class="user-dropdown" id="userDropdown">
+                    <span id="userDisplayName">Guest User</span>
+                    <span>▼</span>
+                </button>
+                <div class="dropdown-menu" id="dropdownMenu">
+                    <div class="dropdown-item" id="profileItem">
+                        <strong id="userEmail">guest@example.com</strong><br>
+                        <small>Free Plan</small>
+                    </div>
+                    <div class="dropdown-item" onclick="showSettings()">Account Settings</div>
+                    <div class="dropdown-item" onclick="showBilling()">Billing & Plans</div>
+                    <div class="dropdown-item" onclick="logout()">Sign Out</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="nav-tabs">
+        <div class="nav-tabs-list">
+            <div class="nav-tab active" data-tab="upload">Upload Documents</div>
+            <div class="nav-tab" data-tab="documents">My Documents</div>
+            <div class="nav-tab" data-tab="analytics">Analytics</div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="container">
+        <!-- Upload Tab -->
+        <div class="tab-content active" id="upload-tab">
+            <div class="upload-area" id="uploadArea">
+                <h3>Drop files here or click to upload</h3>
+                <p>Supports PDF, PNG, JPEG - Any document type</p>
+                <input type="file" id="fileInput" multiple accept=".pdf,.png,.jpg,.jpeg" style="display: none;">
+                <button class="btn" onclick="document.getElementById('fileInput').click()">Choose Files</button>
+            </div>
+
+            <div class="stats" id="uploadStats">
+                <div class="stat-card">
+                    <div class="stat-number" id="uploadCount">0</div>
+                    <div class="stat-label">Files Uploaded</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="processingCount">0</div>
+                    <div class="stat-label">Processing</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="successCount">0</div>
+                    <div class="stat-label">Completed</div>
+                </div>
+            </div>
+
+            <div class="document-grid" id="recentUploads">
+                <!-- Recent uploads will appear here -->
+            </div>
+        </div>
+
+        <!-- Documents Tab -->
+        <div class="tab-content" id="documents-tab">
+            <div class="stats" id="documentStats">
+                <div class="stat-card">
+                    <div class="stat-number" id="totalDocs">0</div>
+                    <div class="stat-label">Total Documents</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="processedDocs">0</div>
+                    <div class="stat-label">Processed</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="avgConfidence">0%</div>
+                    <div class="stat-label">Avg Confidence</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="thisMonth">0</div>
+                    <div class="stat-label">This Month</div>
+                </div>
+            </div>
+
+            <input type="text" class="search-bar" id="searchBar" placeholder="Search documents by content, type, or extracted fields...">
+
+            <div class="filter-tabs" id="filterTabs">
+                <div class="filter-tab active" data-filter="all">All Documents</div>
+                <div class="filter-tab" data-filter="W-2">W-2 Forms</div>
+                <div class="filter-tab" data-filter="1099-NEC">1099-NEC</div>
+                <div class="filter-tab" data-filter="INVOICE">Invoices</div>
+                <div class="filter-tab" data-filter="RECEIPT">Receipts</div>
+                <div class="filter-tab" data-filter="PAYSTUB">Paystubs</div>
+                <div class="filter-tab" data-filter="BANK_STATEMENT">Bank Statements</div>
+                <div class="filter-tab" data-filter="ID_CARD">ID Cards</div>
+                <div class="filter-tab" data-filter="CONTRACT">Contracts</div>
+                <div class="filter-tab" data-filter="UNKNOWN">Other</div>
+            </div>
+
+            <div class="document-grid" id="documentGrid">
+                <!-- Documents will be populated here -->
+            </div>
+        </div>
+
+        <!-- Analytics Tab -->
+        <div class="tab-content" id="analytics-tab">
+            <h2>Document Processing Analytics</h2>
+            <p>Analytics dashboard coming soon...</p>
+        </div>
+    </div>
+
+    <!-- Edit Document Modal -->
+    <div class="modal" id="editModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Edit Document Fields</h3>
+                <button class="close-btn" onclick="closeEditModal()">&times;</button>
+            </div>
+            <div id="editForm">
+                <!-- Form fields will be populated here -->
+            </div>
+            <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
+                <button class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+                <button class="btn btn-success" onclick="saveDocument()">Save Changes</button>
+                <button class="btn" onclick="downloadDocument()">Download</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod';
+        let documents = [];
+        let recentUploads = [];
+        let currentEditingDoc = null;
+
+        // User management
+        function getUserId() {
+            return localStorage.getItem('userId') || 'ANON';
+        }
+
+        function getUserEmail() {
+            return localStorage.getItem('userEmail') || 'guest@example.com';
+        }
+
+        function getUserName() {
+            return localStorage.getItem('userName') || 'Guest User';
+        }
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeAuth();
+            loadDocuments();
+            setupEventListeners();
+            updateAllStats();
+        });
+
+        function initializeAuth() {
+            document.getElementById('userDisplayName').textContent = getUserName();
+            document.getElementById('userEmail').textContent = getUserEmail();
+        }
+
+        function setupEventListeners() {
+            // Tab navigation
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+            });
+
+            // User dropdown
+            document.getElementById('userDropdown').addEventListener('click', toggleDropdown);
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.auth-section')) {
+                    document.getElementById('dropdownMenu').classList.remove('show');
+                }
+            });
+
+            // File upload
+            setupFileUpload();
+
+            // Search and filters
+            document.getElementById('searchBar').addEventListener('input', updateDocumentGrid);
+            document.getElementById('filterTabs').addEventListener('click', (e) => {
+                if (e.target.classList.contains('filter-tab')) {
+                    document.querySelectorAll('.filter-tab').forEach(tab => tab.classList.remove('active'));
+                    e.target.classList.add('active');
+                    updateDocumentGrid();
+                }
+            });
+        }
+
+        function switchTab(tabName) {
+            // Update tab buttons
+            document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+
+            // Update tab content
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            document.getElementById(`${tabName}-tab`).classList.add('active');
+
+            // Load data if needed
+            if (tabName === 'documents') {
+                loadDocuments();
+            }
+        }
+
+        function toggleDropdown() {
+            document.getElementById('dropdownMenu').classList.toggle('show');
+        }
+
+        function setupFileUpload() {
+            const uploadArea = document.getElementById('uploadArea');
+            const fileInput = document.getElementById('fileInput');
+
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.classList.add('dragover');
+            });
+
+            uploadArea.addEventListener('dragleave', () => {
+                uploadArea.classList.remove('dragover');
+            });
+
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove('dragover');
+                handleFiles(e.dataTransfer.files);
+            });
+
+            uploadArea.addEventListener('click', () => {
+                fileInput.click();
+            });
+
+            fileInput.addEventListener('change', (e) => {
+                handleFiles(e.target.files);
+            });
+        }
+
+        async function handleFiles(files) {
+            for (let file of files) {
+                await processFile(file);
+            }
+        }
+
+        async function processFile(file) {
+            const docId = generateId();
+            
+            // Add processing document to recent uploads
+            const processingDoc = {
+                docId,
+                filename: file.name,
+                status: 'processing',
+                docType: 'PROCESSING',
+                docTypeConfidence: 0,
+                fields: {},
+                summary: 'Processing document...',
+                uploadDate: new Date().toISOString(),
+                userId: getUserId()
+            };
+            
+            recentUploads.unshift(processingDoc);
+            updateUploadGrid();
+            updateAllStats();
+
+            try {
+                // Convert file to base64
+                const base64Content = await fileToBase64(file);
+                
+                // Process document
+                const processResponse = await fetch(`${API_BASE}/process-document`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ 
+                        filename: file.name,
+                        contentBase64: base64Content,
+                        userId: getUserId()
+                    })
+                });
+                
+                if (!processResponse.ok) {
+                    throw new Error(`Process failed: ${processResponse.status}`);
+                }
+                
+                const result = await processResponse.json();
+                
+                // Update document with results
+                const docIndex = recentUploads.findIndex(d => d.docId === docId);
+                if (docIndex !== -1) {
+                    recentUploads[docIndex] = {
+                        ...processingDoc,
+                        docId: result.docId || docId,
+                        status: 'completed',
+                        docType: result.docType || 'Unknown',
+                        docTypeConfidence: result.docTypeConfidence || 0,
+                        fields: result.fields || {},
+                        keyValues: result.keyValues || [],
+                        summary: result.summary || 'Document processed successfully'
+                    };
+                }
+
+                // Save to persistent storage
+                await saveDocumentToPersistentStorage(recentUploads[docIndex]);
+                
+            } catch (error) {
+                console.error('Processing error:', error);
+                const docIndex = recentUploads.findIndex(d => d.docId === docId);
+                if (docIndex !== -1) {
+                    recentUploads[docIndex] = {
+                        ...processingDoc,
+                        status: 'error',
+                        docType: 'ERROR',
+                        summary: error.message || 'Processing failed'
+                    };
+                }
+            }
+
+            updateUploadGrid();
+            updateAllStats();
+        }
+
+        async function saveDocumentToPersistentStorage(doc) {
+            try {
+                // Save to backend
+                await fetch(`${API_BASE}/documents`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(doc)
+                });
+                
+                // Also save locally
+                const savedDocs = JSON.parse(localStorage.getItem(`docs_${getUserId()}`) || '[]');
+                savedDocs.unshift(doc);
+                localStorage.setItem(`docs_${getUserId()}`, JSON.stringify(savedDocs));
+                
+            } catch (error) {
+                console.error('Failed to save document:', error);
+                // Fallback to local storage only
+                const savedDocs = JSON.parse(localStorage.getItem(`docs_${getUserId()}`) || '[]');
+                savedDocs.unshift(doc);
+                localStorage.setItem(`docs_${getUserId()}`, JSON.stringify(savedDocs));
+            }
+        }
+
+        async function loadDocuments() {
+            try {
+                // Try to load from backend first
+                const response = await fetch(`${API_BASE}/documents?userId=${getUserId()}`);
+                if (response.ok) {
+                    documents = await response.json();
+                } else {
+                    throw new Error('Backend unavailable');
+                }
+            } catch (error) {
+                console.log('Loading from local storage');
+                // Fallback to local storage
+                documents = JSON.parse(localStorage.getItem(`docs_${getUserId()}`) || '[]');
+            }
+            
+            updateDocumentGrid();
+            updateAllStats();
+        }
+
+        function updateUploadGrid() {
+            const grid = document.getElementById('recentUploads');
+            grid.innerHTML = recentUploads.slice(0, 6).map(doc => createDocumentCard(doc, true)).join('');
+        }
+
+        function updateDocumentGrid() {
+            const grid = document.getElementById('documentGrid');
+            const searchTerm = document.getElementById('searchBar').value.toLowerCase();
+            const activeFilter = document.querySelector('.filter-tab.active').dataset.filter;
+
+            const filteredDocs = documents.filter(doc => {
+                // Filter by type
+                if (activeFilter !== 'all' && doc.docType !== activeFilter) return false;
+                
+                // Filter by search term
+                if (searchTerm) {
+                    const searchableText = [
+                        doc.filename,
+                        doc.docType,
+                        doc.summary,
+                        ...Object.values(doc.fields || {}),
+                        ...Object.values(doc.keyValues || []).map(kv => kv.key + ' ' + kv.value)
+                    ].join(' ').toLowerCase();
+                    
+                    if (!searchableText.includes(searchTerm)) return false;
+                }
+                
+                return true;
+            });
+
+            grid.innerHTML = filteredDocs.map(doc => createDocumentCard(doc, false)).join('');
+        }
+
+        function createDocumentCard(doc, isRecent = false) {
+            const confidenceClass = getConfidenceClass(doc.docTypeConfidence);
+            const docTypeClass = doc.docType.toLowerCase().replace(/[^a-z0-9]/g, '-');
+            
+            return `
+                <div class="document-card ${doc.status === 'processing' ? 'processing' : ''} ${doc.status === 'error' ? 'error' : ''}">
+                    ${!isRecent && doc.status === 'completed' ? `
+                        <div class="card-actions">
+                            <button class="card-btn" onclick="editDocument('${doc.docId}')">Edit</button>
+                            <button class="card-btn" onclick="downloadDocument('${doc.docId}')">Download</button>
+                        </div>
+                    ` : ''}
+                    
+                    <div class="doc-type ${docTypeClass}">${doc.docType}</div>
+                    <div class="confidence ${confidenceClass}">
+                        Confidence: ${Math.round((doc.docTypeConfidence || 0) * 100)}%
+                    </div>
+                    <h4>${doc.filename}</h4>
+                    
+                    ${doc.summary ? `<div class="summary">${doc.summary}</div>` : ''}
+                    
+                    ${renderExtractedFields(doc.fields)}
+                    
+                    ${(!doc.fields || Object.keys(doc.fields).length === 0) && (doc.keyValues || []).length > 0 ? `
+                        <div class="extracted-fields">
+                            <strong>Key Information:</strong>
+                            ${doc.keyValues.slice(0, 3).map(kv => `
+                                <div class="field-item">
+                                    <span class="field-label">${kv.key}</span>
+                                    <span class="field-value">${kv.value}</span>
+                                </div>
+                            `).join('')}
+                            ${doc.keyValues.length > 3 ? `<div class="field-item"><em>+${doc.keyValues.length - 3} more fields</em></div>` : ''}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        function editDocument(docId) {
+            const doc = documents.find(d => d.docId === docId);
+            if (!doc) return;
+
+            currentEditingDoc = doc;
+            populateEditForm(doc);
+            document.getElementById('editModal').classList.add('show');
+        }
+
+        function populateEditForm(doc) {
+            const form = document.getElementById('editForm');
+            const fields = doc.fields || {};
+            
+            let formHTML = `
+                <div class="form-group">
+                    <label class="form-label">Document Type</label>
+                    <input type="text" class="form-input" value="${doc.docType}" readonly>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Filename</label>
+                    <input type="text" class="form-input" value="${doc.filename}" readonly>
+                </div>
+            `;
+
+            // Add existing fields
+            Object.entries(fields).forEach(([key, value]) => {
+                const displayValue = typeof value === 'object' ? value.value : value;
+                formHTML += `
+                    <div class="form-group">
+                        <label class="form-label">${formatFieldName(key)}</label>
+                        <div style="display: flex; align-items: center;">
+                            <input type="text" class="form-input" data-field="${key}" value="${displayValue || ''}">
+                            <button type="button" class="remove-field-btn" onclick="removeField('${key}')">Remove</button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            // Add new field section
+            formHTML += `
+                <div class="form-group">
+                    <label class="form-label">Add New Field</label>
+                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                        <input type="text" id="newFieldName" class="form-input" placeholder="Field name" style="flex: 1;">
+                        <input type="text" id="newFieldValue" class="form-input" placeholder="Field value" style="flex: 1;">
+                        <button type="button" class="add-field-btn" onclick="addNewField()">Add</button>
+                    </div>
+                </div>
+            `;
+
+            form.innerHTML = formHTML;
+        }
+
+        function addNewField() {
+            const nameInput = document.getElementById('newFieldName');
+            const valueInput = document.getElementById('newFieldValue');
+            
+            if (!nameInput.value.trim() || !valueInput.value.trim()) return;
+
+            const key = nameInput.value.trim();
+            const value = valueInput.value.trim();
+
+            // Add to current editing doc
+            if (!currentEditingDoc.fields) currentEditingDoc.fields = {};
+            currentEditingDoc.fields[key] = value;
+
+            // Refresh form
+            populateEditForm(currentEditingDoc);
+        }
+
+        function removeField(fieldKey) {
+            if (currentEditingDoc.fields) {
+                delete currentEditingDoc.fields[fieldKey];
+                populateEditForm(currentEditingDoc);
+            }
+        }
+
+        async function saveDocument() {
+            if (!currentEditingDoc) return;
+
+            // Collect form data
+            const formInputs = document.querySelectorAll('#editForm input[data-field]');
+            const updatedFields = {};
+            
+            formInputs.forEach(input => {
+                const fieldKey = input.dataset.field;
+                const fieldValue = input.value.trim();
+                if (fieldValue) {
+                    updatedFields[fieldKey] = fieldValue;
+                }
+            });
+
+            currentEditingDoc.fields = updatedFields;
+
+            try {
+                // Save to backend
+                await fetch(`${API_BASE}/document/${currentEditingDoc.docId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        fields: updatedFields,
+                        userId: getUserId()
+                    })
+                });
+
+                // Update local documents array
+                const docIndex = documents.findIndex(d => d.docId === currentEditingDoc.docId);
+                if (docIndex !== -1) {
+                    documents[docIndex] = { ...currentEditingDoc };
+                }
+
+                // Update local storage
+                localStorage.setItem(`docs_${getUserId()}`, JSON.stringify(documents));
+
+                closeEditModal();
+                updateDocumentGrid();
+                
+            } catch (error) {
+                console.error('Failed to save document:', error);
+                alert('Failed to save changes. Please try again.');
+            }
+        }
+
+        function downloadDocument(docId) {
+            const doc = currentEditingDoc || documents.find(d => d.docId === docId);
+            if (!doc) return;
+
+            const data = {
+                filename: doc.filename,
+                docType: doc.docType,
+                fields: doc.fields || {},
+                extractedAt: new Date().toISOString()
+            };
+
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${doc.filename.replace(/\.[^/.]+$/, '')}_extracted.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function closeEditModal() {
+            document.getElementById('editModal').classList.remove('show');
+            currentEditingDoc = null;
+        }
+
+        function updateAllStats() {
+            // Upload stats
+            document.getElementById('uploadCount').textContent = recentUploads.length;
+            document.getElementById('processingCount').textContent = recentUploads.filter(d => d.status === 'processing').length;
+            document.getElementById('successCount').textContent = recentUploads.filter(d => d.status === 'completed').length;
+
+            // Document stats
+            const total = documents.length;
+            const processed = documents.filter(d => d.status === 'completed').length;
+            const avgConf = processed > 0 ? 
+                Math.round(documents.filter(d => d.status === 'completed')
+                    .reduce((sum, d) => sum + (d.docTypeConfidence || 0), 0) / processed * 100) : 0;
+            
+            const thisMonth = documents.filter(d => {
+                const docDate = new Date(d.uploadDate || d.createdAt || Date.now());
+                const now = new Date();
+                return docDate.getMonth() === now.getMonth() && docDate.getFullYear() === now.getFullYear();
+            }).length;
+
+            document.getElementById('totalDocs').textContent = total;
+            document.getElementById('processedDocs').textContent = processed;
+            document.getElementById('avgConfidence').textContent = avgConf + '%';
+            document.getElementById('thisMonth').textContent = thisMonth;
+        }
+
+        // Utility functions
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const dataUrl = reader.result;
+                    const base64 = dataUrl.split(',')[1];
+                    resolve(base64);
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function generateId() {
+            return 'doc_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        function getConfidenceClass(confidence) {
+            if (confidence >= 0.8) return 'high';
+            if (confidence >= 0.6) return 'medium';
+            return 'low';
+        }
+
+        const FIELD_LABELS = {
+            employee_ssn: "Employee SSN",
+            employer_ein: "Employer EIN",
+            employee_name: "Employee Name",
+            employer_address: "Employer Address",
+            "Employee SSN": "Employee SSN",
+            "Employee Name": "Employee Name",
+            "Employer EIN": "Employer EIN",
+            "Box 1 - Wages": "Wages, tips, other compensation (Box 1)",
+            "Box 2 - Federal Tax": "Federal income tax withheld (Box 2)",
+            "Box 3 - SS Wages": "Social security wages (Box 3)",
+            "Box 4 - SS Tax": "Social security tax withheld (Box 4)",
+            "Box 5 - Medicare Wages": "Medicare wages and tips (Box 5)",
+            "Box 6 - Medicare Tax": "Medicare tax withheld (Box 6)",
+            box1_wages: "Wages, tips, other compensation (Box 1)",
+            box2_fed_tax: "Federal income tax withheld (Box 2)",
+            box3_ss_wages: "Social security wages (Box 3)",
+            box4_ss_tax: "Social security tax withheld (Box 4)",
+            box5_medicare_wages: "Medicare wages and tips (Box 5)",
+            box6_medicare_tax: "Medicare tax withheld (Box 6)",
+            box12a: "Box 12a", box12b: "Box 12b", box12c: "Box 12c", box12d: "Box 12d",
+            state: "State (Box 15)", state_wages: "State wages (Box 16)",
+            state_tax: "State income tax (Box 17)", local_wages: "Local wages (Box 18)",
+            local_tax: "Local income tax (Box 19)", locality: "Locality name (Box 20)",
+            taxyear: "Tax Year", "Tax Year": "Tax Year"
+        };
+
+        function formatFieldName(key) {
+            return FIELD_LABELS[key] || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        }
+
+        function renderExtractedFields(fields) {
+            if (!fields || Object.keys(fields).length === 0) return '';
+            
+            const items = Object.entries(fields)
+                .filter(([_, v]) => v && String(v).trim() !== "" && String(v) !== "null")
+                .map(([k, v]) => ({
+                    label: formatFieldName(k),
+                    value: typeof v === "object" ? v.value : v,
+                    confidence: typeof v === "object" ? Math.round(100 * (v.confidence || 0.9)) : 90
+                }))
+                .sort((a, b) => a.label.localeCompare(b.label));
+
+            if (items.length === 0) return '';
+
+            return `
+                <div class="extracted-fields">
+                    <strong>Extracted Fields (${items.length}):</strong>
+                    ${items.slice(0, 8).map(item => `
+                        <div class="field-item">
+                            <span class="field-label">${item.label}</span>
+                            <span class="field-value">${item.value}</span>
+                        </div>
+                    `).join('')}
+                    ${items.length > 8 ? `<div class="field-item"><em>+${items.length - 8} more fields</em></div>` : ''}
+                </div>
+            `;
+        }
+
+        // Auth functions (placeholders)
+        function showSettings() {
+            alert('Account settings coming soon...');
+        }
+
+        function showBilling() {
+            alert('Billing & plans coming soon...');
+        }
+
+        function logout() {
+            localStorage.removeItem('userId');
+            localStorage.removeItem('userEmail');
+            localStorage.removeItem('userName');
+            window.location.reload();
+        }
+    </script>
+</body>
+</html>

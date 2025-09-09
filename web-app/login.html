@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaxDoc AI - Login</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh; display: flex; align-items: center; justify-content: center;
+        }
+        
+        .login-container { 
+            background: white; border-radius: 12px; padding: 40px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2); width: 100%; max-width: 400px;
+        }
+        
+        .logo { 
+            text-align: center; margin-bottom: 30px; 
+            font-size: 28px; font-weight: bold; color: #3498db;
+        }
+        
+        .form-group { margin-bottom: 20px; }
+        .form-label { 
+            display: block; margin-bottom: 5px; font-weight: 600; 
+            color: #333; font-size: 14px;
+        }
+        .form-input { 
+            width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; 
+            font-size: 16px; transition: border-color 0.3s;
+        }
+        .form-input:focus { outline: none; border-color: #3498db; }
+        
+        .btn { 
+            width: 100%; background: #3498db; color: white; border: none; 
+            padding: 12px; border-radius: 6px; cursor: pointer; font-size: 16px; 
+            font-weight: 600; transition: all 0.3s; margin-bottom: 15px;
+        }
+        .btn:hover { background: #2980b9; }
+        .btn:disabled { background: #bdc3c7; cursor: not-allowed; }
+        
+        .btn-secondary { 
+            background: transparent; color: #3498db; border: 1px solid #3498db; 
+        }
+        .btn-secondary:hover { background: #3498db; color: white; }
+        
+        .divider { 
+            text-align: center; margin: 20px 0; color: #999; 
+            position: relative;
+        }
+        .divider::before { 
+            content: ''; position: absolute; top: 50%; left: 0; right: 0; 
+            height: 1px; background: #ddd; z-index: 1;
+        }
+        .divider span { 
+            background: white; padding: 0 15px; position: relative; z-index: 2; 
+        }
+        
+        .guest-login { 
+            text-align: center; margin-top: 20px; 
+        }
+        .guest-link { 
+            color: #3498db; text-decoration: none; font-size: 14px; 
+        }
+        .guest-link:hover { text-decoration: underline; }
+        
+        .error { 
+            background: #fee; border: 1px solid #fcc; color: #c33; 
+            padding: 10px; border-radius: 4px; margin-bottom: 15px; font-size: 14px;
+        }
+        
+        .success { 
+            background: #efe; border: 1px solid #cfc; color: #3c3; 
+            padding: 10px; border-radius: 4px; margin-bottom: 15px; font-size: 14px;
+        }
+        
+        .toggle-form { 
+            text-align: center; margin-top: 20px; font-size: 14px; 
+        }
+        .toggle-link { 
+            color: #3498db; cursor: pointer; text-decoration: none; 
+        }
+        .toggle-link:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="logo">TaxDoc AI</div>
+        
+        <div id="message"></div>
+        
+        <!-- Login Form -->
+        <form id="loginForm">
+            <div class="form-group">
+                <label class="form-label">Email</label>
+                <input type="email" class="form-input" id="loginEmail" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Password</label>
+                <input type="password" class="form-input" id="loginPassword" required>
+            </div>
+            <button type="submit" class="btn" id="loginBtn">Sign In</button>
+        </form>
+        
+        <!-- Register Form (hidden initially) -->
+        <form id="registerForm" style="display: none;">
+            <div class="form-group">
+                <label class="form-label">Full Name</label>
+                <input type="text" class="form-input" id="registerName" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Email</label>
+                <input type="email" class="form-input" id="registerEmail" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Password</label>
+                <input type="password" class="form-input" id="registerPassword" required minlength="6">
+            </div>
+            <button type="submit" class="btn" id="registerBtn">Create Account</button>
+        </form>
+        
+        <div class="divider">
+            <span>or</span>
+        </div>
+        
+        <button class="btn btn-secondary" onclick="continueAsGuest()">Continue as Guest</button>
+        
+        <div class="toggle-form">
+            <span id="toggleText">Don't have an account?</span>
+            <a href="#" class="toggle-link" id="toggleLink" onclick="toggleForm()">Sign up</a>
+        </div>
+        
+        <div class="guest-login">
+            <a href="enhanced-ui-v2.html" class="guest-link">Skip to App →</a>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod';
+        let isLoginMode = true;
+
+        document.getElementById('loginForm').addEventListener('submit', handleLogin);
+        document.getElementById('registerForm').addEventListener('submit', handleRegister);
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            const btn = document.getElementById('loginBtn');
+            
+            btn.disabled = true;
+            btn.textContent = 'Signing in...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // Store user data
+                    localStorage.setItem('userId', data.userId);
+                    localStorage.setItem('userEmail', data.email);
+                    localStorage.setItem('userName', data.name);
+                    localStorage.setItem('userPlan', data.plan);
+                    localStorage.setItem('sessionToken', data.sessionToken);
+                    
+                    showMessage('Login successful! Redirecting...', 'success');
+                    
+                    setTimeout(() => {
+                        window.location.href = 'enhanced-ui-v2.html';
+                    }, 1000);
+                } else {
+                    showMessage(data.error || 'Login failed', 'error');
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                showMessage('Login failed. Please try again.', 'error');
+            }
+            
+            btn.disabled = false;
+            btn.textContent = 'Sign In';
+        }
+
+        async function handleRegister(e) {
+            e.preventDefault();
+            
+            const name = document.getElementById('registerName').value;
+            const email = document.getElementById('registerEmail').value;
+            const password = document.getElementById('registerPassword').value;
+            const btn = document.getElementById('registerBtn');
+            
+            btn.disabled = true;
+            btn.textContent = 'Creating account...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, email, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // Store user data
+                    localStorage.setItem('userId', data.userId);
+                    localStorage.setItem('userEmail', data.email);
+                    localStorage.setItem('userName', data.name);
+                    localStorage.setItem('userPlan', data.plan);
+                    localStorage.setItem('sessionToken', data.sessionToken);
+                    
+                    showMessage('Account created successfully! Redirecting...', 'success');
+                    
+                    setTimeout(() => {
+                        window.location.href = 'enhanced-ui-v2.html';
+                    }, 1000);
+                } else {
+                    showMessage(data.error || 'Registration failed', 'error');
+                }
+            } catch (error) {
+                console.error('Register error:', error);
+                showMessage('Registration failed. Please try again.', 'error');
+            }
+            
+            btn.disabled = false;
+            btn.textContent = 'Create Account';
+        }
+
+        function toggleForm() {
+            const loginForm = document.getElementById('loginForm');
+            const registerForm = document.getElementById('registerForm');
+            const toggleText = document.getElementById('toggleText');
+            const toggleLink = document.getElementById('toggleLink');
+            
+            isLoginMode = !isLoginMode;
+            
+            if (isLoginMode) {
+                loginForm.style.display = 'block';
+                registerForm.style.display = 'none';
+                toggleText.textContent = "Don't have an account?";
+                toggleLink.textContent = 'Sign up';
+            } else {
+                loginForm.style.display = 'none';
+                registerForm.style.display = 'block';
+                toggleText.textContent = 'Already have an account?';
+                toggleLink.textContent = 'Sign in';
+            }
+            
+            clearMessage();
+        }
+
+        function continueAsGuest() {
+            // Set guest user data
+            localStorage.setItem('userId', 'GUEST_' + Date.now());
+            localStorage.setItem('userEmail', 'guest@example.com');
+            localStorage.setItem('userName', 'Guest User');
+            localStorage.setItem('userPlan', 'free');
+            
+            window.location.href = 'enhanced-ui-v2.html';
+        }
+
+        function showMessage(text, type) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.innerHTML = `<div class="${type}">${text}</div>`;
+        }
+
+        function clearMessage() {
+            document.getElementById('message').innerHTML = '';
+        }
+
+        // Check if user is already logged in
+        if (localStorage.getItem('userId') && localStorage.getItem('sessionToken')) {
+            window.location.href = 'enhanced-ui-v2.html';
+        }
+    </script>
+</body>
+</html>
