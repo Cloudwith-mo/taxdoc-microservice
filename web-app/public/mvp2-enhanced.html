@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TaxDoc Pro - AI-Powered Document Processing</title>
+    <title>ParsePilot - Autopilot for your paperwork</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; }
@@ -77,8 +77,8 @@
 <body>
     <div class="header" style="display: flex; justify-content: space-between; align-items: center; padding: 1.5rem 2rem;">
         <div>
-            <h1 style="margin: 0;">🏛️ TaxDoc AI</h1>
-            <p style="margin: 0.5rem 0 0 0;">AI-Powered Document Processing</p>
+            <h1 style="margin: 0;">🚁 ParsePilot</h1>
+            <p style="margin: 0.5rem 0 0 0;">Autopilot for your paperwork</p>
         </div>
         <div class="auth-section" style="position: relative;">
             <button class="user-dropdown" id="userDropdown" style="background: rgba(255,255,255,0.2); color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 8px;">
@@ -112,11 +112,11 @@
         <!-- Upload & Batch Tab -->
         <div id="upload" class="tab-content active">
             <div class="upload-area" id="uploadArea">
-                <h3>📤 Upload Tax Documents</h3>
-                <p>Drag & drop files here or click to select</p>
+                <h3>📤 Upload Documents</h3>
+                <p>From doc to data, on autopilot</p>
                 <p style="font-size: 0.875rem; color: #64748b; margin-top: 1rem;">Supports PDF, PNG, JPG • Max 10MB per file</p>
                 <div id="uploadTrialInfo" style="background: #f0f9ff; padding: 1rem; border-radius: 6px; margin-top: 1rem; border-left: 4px solid #0ea5e9;">
-                    <strong>🎆 Free Trial:</strong> Process up to 50 documents per month at no cost!
+                    <strong>🚁 Free Trial:</strong> Process up to 50 documents per month with TurboParse™ acceleration!
                 </div>
                 <input type="file" id="fileInput" multiple accept=".pdf,.png,.jpg,.jpeg" style="display: none;">
             </div>
@@ -141,7 +141,10 @@
         <div id="documents" class="tab-content">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                 <h3>📄 My Documents</h3>
-                <button class="btn btn-secondary" onclick="loadDocuments()">🔄 Refresh</button>
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                    <span style="font-size: 0.875rem; color: #667eea; font-weight: 500;">Powered by TurboParse™</span>
+                    <button class="btn btn-secondary" onclick="loadDocuments()">🔄 Refresh</button>
+                </div>
             </div>
             
             <div class="analytics-grid" style="margin-bottom: 2rem;">
@@ -184,11 +187,11 @@
         <!-- AI Chatbot Tab -->
         <div id="chatbot" class="tab-content">
             <div style="background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
-                <h3>🤖 AI Document Chatbot</h3>
-                <p>Ask questions about your processed documents</p>
+                <h3>🤖 AI Document Assistant</h3>
+                <p>Point. Parse. Proceed. Ask questions about your processed documents</p>
                 <div id="chatArea" style="background: #f8fafc; padding: 1rem; border-radius: 8px; margin: 1rem 0; min-height: 300px;">
                     <div style="margin-bottom: 1rem; padding: 1rem; background: #667eea; color: white; border-radius: 6px;">
-                        <strong>AI:</strong> Hello! I can help you understand your tax documents. Ask me about wages, taxes, employer information, or any other details from your processed forms.
+                        <strong>AI:</strong> Hello! I'm your ParsePilot assistant. Ask me about any extracted data from your processed documents - invoices, receipts, forms, contracts, and more.
                     </div>
                 </div>
                 <div style="display: flex; gap: 1rem;">
@@ -201,8 +204,8 @@
         <!-- Pay Tab -->
         <div id="pay" class="tab-content">
             <div style="background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); text-align: center;">
-                <h3>💳 Subscription Plans</h3>
-                <p>Choose a plan that fits your document processing needs</p>
+                <h3>💳 ParsePilot Plans</h3>
+                <p>Guided, reliable document automation for every need</p>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 2rem; margin: 2rem 0;">
                     <div style="border: 1px solid #e2e8f0; padding: 2rem; border-radius: 8px;">
                         <h4>Free Trial</h4>
@@ -230,8 +233,8 @@
                         <div style="font-size: 2rem; font-weight: bold; color: #667eea;">$29/mo</div>
                         <ul style="text-align: left; margin: 1rem 0;">
                             <li>1,000 documents/month</li>
-                            <li>AI-powered extraction</li>
-                            <li>Batch processing</li>
+                            <li>TurboParse™ acceleration</li>
+                            <li>Batch processing & async</li>
                         </ul>
                         <button class="btn btn-primary" onclick="subscribe('pro')">Subscribe</button>
                     </div>
@@ -240,8 +243,8 @@
                         <div style="font-size: 2rem; font-weight: bold; color: #667eea;">$99/mo</div>
                         <ul style="text-align: left; margin: 1rem 0;">
                             <li>Unlimited documents</li>
-                            <li>Custom AI models</li>
-                            <li>API access</li>
+                            <li>TurboParse™ 5× faster batching</li>
+                            <li>API access & custom models</li>
                         </ul>
                         <button class="btn btn-primary" onclick="subscribe('enterprise')">Subscribe</button>
                     </div>

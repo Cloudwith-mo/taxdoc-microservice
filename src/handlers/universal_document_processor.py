@@ -81,7 +81,8 @@ def lambda_handler(event, context):
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key',
-        'Access-Control-Allow-Methods': 'GET,POST,OPTIONS'
+        'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+        'X-Powered-By': 'TurboParse™ Engine'
     }
     
     if event.get('httpMethod') == 'OPTIONS':
@@ -128,7 +129,7 @@ def route_and_process(document_bytes, filename):
     doc_type = classify_document(full_text)
     doc_id = str(uuid.uuid4())
     
-    print(f"[ROUTER] classified={doc_type} text_len={len(full_text)} filename={filename}")
+    print(f"[TurboParse™] classified={doc_type} text_len={len(full_text)} filename={filename}")
     
     # Route to optimal extractor based on document type
     if doc_type == 'W-2':
@@ -155,7 +156,9 @@ def route_and_process(document_bytes, filename):
         'docId': doc_id,
         'docType': doc_type,
         'filename': filename,
-        'processedAt': datetime.utcnow().isoformat()
+        'processedAt': datetime.utcnow().isoformat(),
+        'engine': 'TurboParse™',
+        'version': '2.0'
     })
     
     return result

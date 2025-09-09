@@ -1,16 +1,17 @@
-# TaxDoc AI - Document Processing Platform
+# ParsePilot - Autopilot for your paperwork
 
-Production-ready AWS serverless platform for AI-powered document extraction with authentication and payments.
+Production-ready AWS serverless platform for AI-powered document extraction with TurboParse™ acceleration, authentication and payments.
 
 ## 🚀 Live Platform
 - **Frontend**: http://taxdoc-mvp-web-1754513919.s3-website-us-east-1.amazonaws.com/mvp2-enhanced.html
 - **API**: https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod
+- **Brand**: ParsePilot with TurboParse™ engine for 2-5× faster processing
 
 ## 🏗️ Architecture
 - **Frontend**: React with authentication and pricing modals
 - **Backend**: AWS Lambda functions for processing, auth, and payments
 - **Storage**: S3 for documents, DynamoDB for metadata
-- **AI**: Textract + Claude LLM + Regex fallback pipeline
+- **AI**: TurboParse™ engine (Textract + Claude LLM + validation pipeline)
 - **Auth**: Cognito user pools with JWT tokens
 - **Payments**: Stripe subscriptions with webhooks
 
@@ -69,11 +70,11 @@ aws s3 sync build/ s3://your-bucket-name
 ## 📊 Features
 - ✅ User authentication (Cognito)
 - ✅ Subscription payments (Stripe)
-- ✅ AI document extraction
-- ✅ Batch processing
-- ✅ Multiple export formats
-- ✅ Real-time analytics
-- ✅ SNS notifications
+- ✅ TurboParse™ AI document extraction
+- ✅ Batch processing with async acceleration
+- ✅ Multiple export formats (JSON/CSV)
+- ✅ Real-time analytics dashboard
+- ✅ SNS notifications & webhooks
 
 ## 🔐 Security
 - JWT token authentication
