@@ -1,8 +1,8 @@
 {
   "CallerReference": "parsepilot-2025-01-09",
   "Aliases": {
-    "Quantity": 1,
-    "Items": ["app.parsepilot.com"]
+    "Quantity": 0,
+    "Items": []
   },
   "DefaultRootObject": "mvp2-enhanced.html",
   "Comment": "ParsePilot - Autopilot for your paperwork",
@@ -13,7 +13,7 @@
       {
         "Id": "s3-taxdoc-mvp-web-1754513919",
         "DomainName": "taxdoc-mvp-web-1754513919.s3.amazonaws.com",
-        "OriginAccessControlId": "ORIGIN_ACCESS_CONTROL_ID",
+        "OriginAccessControlId": "E2E6VH18IE6TXN",
         "S3OriginConfig": {
           "OriginAccessIdentity": ""
         }
@@ -28,17 +28,10 @@
     "TrustedSigners": {
       "Enabled": false,
       "Quantity": 0
-    },
-    "ForwardedValues": {
-      "QueryString": false,
-      "Cookies": {"Forward": "none"}
-    },
-    "MinTTL": 0
+    }
   },
   "ViewerCertificate": {
-    "ACMCertificateArn": "arn:aws:acm:us-east-1:995805900737:certificate/54b289e4-c6a5-475b-b507-a976932c78d1",
-    "SSLSupportMethod": "sni-only",
-    "MinimumProtocolVersion": "TLSv1.2_2021"
+    "CloudFrontDefaultCertificate": true
   },
   "Restrictions": {
     "GeoRestriction": {

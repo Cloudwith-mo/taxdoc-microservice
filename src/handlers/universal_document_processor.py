@@ -79,7 +79,7 @@ EMAIL_RE = re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b')
 def lambda_handler(event, context):
     headers = {
         'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': 'http://taxdoc-mvp-web-1754513919.s3-website-us-east-1.amazonaws.com',
+        'Access-Control-Allow-Origin': 'https://d11rn2gcciu6ti.cloudfront.net',
         'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key',
         'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
         'X-Powered-By': 'TurboParse™ Engine'
