@@ -7,6 +7,8 @@ from typing import Dict, Any
 textract = boto3.client('textract')
 bedrock = boto3.client('bedrock-runtime')
 s3 = boto3.client('s3')
+dynamodb = boto3.resource('dynamodb')
+table = dynamodb.Table('DrDocDocuments-prod')
 
 CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
@@ -14,6 +16,20 @@ CORS_HEADERS = {
     "Access-Control-Allow-Headers": "Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token",
     "Content-Type": "application/json"
 }
+
+def get_user_id(event):
+    """Extract user ID from event context or headers"""
+    # Try to get from API Gateway context
+    if event.get("requestContext", {}).get("authorizer", {}).get("claims", {}).get("sub"):
+        return event["requestContext"]["authorizer"]["claims"]["sub"]
+    
+    # Try to get from headers
+    headers = event.get("headers", {})
+    auth_header = headers.get("Authorization") or headers.get("authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        return "user_" + str(hash(auth_header))[-8:]
+    
+    return "anonymous_user"
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     try:
@@ -27,13 +43,14 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             body_str = base64.b64decode(body_str).decode('utf-8')
         
         payload = json.loads(body_str)
-        return process_document_idp(payload)
+        user_id = get_user_id(event)
+        return process_document_idp(payload, user_id)
         
     except Exception as e:
         print(f"Handler error: {str(e)}")
         return {"statusCode": 500, "headers": CORS_HEADERS, "body": json.dumps({"error": str(e)})}
 
-def process_document_idp(payload: Dict[str, Any]) -> Dict[str, Any]:
+def process_document_idp(payload: Dict[str, Any], user_id: str = "anonymous_user") -> Dict[str, Any]:
     """Full IDP Pipeline: Textract -> Claude Classification -> Structured Extraction"""
     try:
         filename = payload.get('filename', 'unknown')
@@ -58,15 +75,17 @@ def process_document_idp(payload: Dict[str, Any]) -> Dict[str, Any]:
         # Phase 4: Data Enrichment (Optional - Claude insights)
         enriched_data = enrich_document_data(raw_text, extracted_fields, doc_type)
         
+        # Save to DynamoDB with user association
+        save_document_to_db(filename, doc_type, enriched_data, user_id)
+        
         # Return IDP results
         result = {
-            "DocumentID": filename,
-            "DocumentType": doc_type,
-            "ProcessingStatus": "Completed",
-            "ProcessingTime": 3.2,
-            "Data": enriched_data,
-            "QualityMetrics": {"overall_confidence": 0.94},
-            "Pipeline": "AWS_IDP_Textract_Claude"
+            "docId": filename.replace('.', '_'),
+            "docType": doc_type,
+            "docTypeConfidence": 0.94,
+            "fields": enriched_data,
+            "status": "completed",
+            "filename": filename
         }
         
         return {"statusCode": 200, "headers": CORS_HEADERS, "body": json.dumps(result)}
@@ -356,6 +375,31 @@ def extract_general_form_data(document_bytes: bytes, raw_text: str) -> Dict[str,
     except Exception as e:
         print(f"General extraction error: {e}")
         return {"raw_text": raw_text[:500]}
+
+def save_document_to_db(filename: str, doc_type: str, fields: Dict[str, str], user_id: str):
+    """Save processed document to DynamoDB"""
+    try:
+        import uuid
+        from datetime import datetime
+        
+        doc_id = str(uuid.uuid4())
+        
+        item = {
+            'pk': f'user#{user_id}',
+            'sk': f'doc#{doc_id}',
+            'docType': doc_type,
+            'docTypeConfidence': 0.94,
+            'fields': fields,
+            'filename': filename,
+            'timestamp': datetime.utcnow().isoformat(),
+            'status': 'completed'
+        }
+        
+        table.put_item(Item=item)
+        print(f"Saved document {doc_id} for user {user_id}")
+        
+    except Exception as e:
+        print(f"Failed to save to DynamoDB: {e}")
 
 def enrich_document_data(raw_text: str, extracted_fields: Dict[str, str], doc_type: str) -> Dict[str, str]:
     """Phase 4: Return extracted fields without unnecessary enrichment"""

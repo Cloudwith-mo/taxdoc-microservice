@@ -32,11 +32,15 @@
             font-weight: bold; margin-bottom: 10px; text-transform: uppercase;
         }
         .doc-type.w-2 { background: #e74c3c; color: white; }
+        .doc-type.1099-nec { background: #d35400; color: white; }
         .doc-type.invoice { background: #f39c12; color: white; }
         .doc-type.receipt { background: #27ae60; color: white; }
-        .doc-type.unknown { background: #95a5a6; color: white; }
+        .doc-type.paystub { background: #3498db; color: white; }
+        .doc-type.bank-statement { background: #2c3e50; color: white; }
+        .doc-type.utility-bill { background: #16a085; color: white; }
+        .doc-type.id-card { background: #9b59b6; color: white; }
         .doc-type.contract { background: #8e44ad; color: white; }
-        .doc-type.letter { background: #34495e; color: white; }
+        .doc-type.unknown { background: #95a5a6; color: white; }
         .confidence { font-size: 12px; color: #7f8c8d; margin-bottom: 10px; }
         .confidence.high { color: #27ae60; }
         .confidence.medium { color: #f39c12; }
@@ -112,10 +116,14 @@
         <div class="filter-tabs" id="filterTabs">
             <div class="filter-tab active" data-filter="all">All Documents</div>
             <div class="filter-tab" data-filter="W-2">W-2 Forms</div>
+            <div class="filter-tab" data-filter="1099-NEC">1099-NEC</div>
             <div class="filter-tab" data-filter="INVOICE">Invoices</div>
             <div class="filter-tab" data-filter="RECEIPT">Receipts</div>
+            <div class="filter-tab" data-filter="PAYSTUB">Paystubs</div>
+            <div class="filter-tab" data-filter="BANK_STATEMENT">Bank Statements</div>
+            <div class="filter-tab" data-filter="UTILITY_BILL">Utility Bills</div>
+            <div class="filter-tab" data-filter="ID_CARD">ID Cards</div>
             <div class="filter-tab" data-filter="CONTRACT">Contracts</div>
-            <div class="filter-tab" data-filter="LETTER">Letters</div>
             <div class="filter-tab" data-filter="UNKNOWN">Other</div>
         </div>
 
@@ -180,42 +188,44 @@
             updateUI();
 
             try {
-                // Convert to base64
-                const base64 = await fileToBase64(file);
+                // Convert file to base64
+                const base64Content = await fileToBase64(file);
                 
-                // Send to API
-                const response = await fetch(`${API_BASE}/process`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
+                // Process document directly
+                const processResponse = await fetch(`${API_BASE}/process-document`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ 
                         filename: file.name,
-                        contentBase64: base64
+                        contentBase64: base64Content
                     })
                 });
-
-                const result = await response.json();
                 
-                if (response.ok) {
-                    // Update document with results
-                    const docIndex = documents.findIndex(d => d.docId === docId);
-                    if (docIndex !== -1) {
-                        documents[docIndex] = {
-                            ...result,
-                            filename: file.name,
-                            status: 'completed'
-                        };
-                    }
-                } else {
-                    // Handle error
-                    const docIndex = documents.findIndex(d => d.docId === docId);
-                    if (docIndex !== -1) {
-                        documents[docIndex] = {
-                            ...processingDoc,
-                            status: 'error',
-                            docType: 'ERROR',
-                            summary: result.error || 'Processing failed'
-                        };
-                    }
+                if (!processResponse.ok) {
+                    const errorText = await processResponse.text();
+                    throw new Error(`Process failed: ${processResponse.status} - ${errorText}`);
+                }
+                
+                const result = await processResponse.json();
+                
+                // Debug logging
+                console.log('API Response:', result);
+                console.log('Fields:', result.fields);
+                console.log('KeyValues:', result.keyValues);
+                
+                // Update document with results
+                const docIndex = documents.findIndex(d => d.docId === docId);
+                if (docIndex !== -1) {
+                    documents[docIndex] = {
+                        docId: result.docId || docId,
+                        filename: file.name,
+                        status: 'completed',
+                        docType: result.docType || 'Unknown',
+                        docTypeConfidence: result.docTypeConfidence || 0,
+                        fields: result.fields || {},
+                        keyValues: result.keyValues || [],
+                        summary: result.summary || 'Document processed successfully'
+                    };
                 }
             } catch (error) {
                 console.error('Processing error:', error);
@@ -225,7 +235,7 @@
                         ...processingDoc,
                         status: 'error',
                         docType: 'ERROR',
-                        summary: 'Network error occurred'
+                        summary: error.message || 'Processing failed'
                     };
                 }
             }
@@ -309,20 +319,9 @@
                     
                     ${doc.summary ? `<div class="summary">${doc.summary}</div>` : ''}
                     
-                    ${Object.keys(doc.fields || {}).length > 0 ? `
-                        <div class="extracted-fields">
-                            <strong>Extracted Fields:</strong>
-                            ${Object.entries(doc.fields).slice(0, 5).map(([key, value]) => `
-                                <div class="field-item">
-                                    <span class="field-label">${formatFieldName(key)}</span>
-                                    <span class="field-value">${value}</span>
-                                </div>
-                            `).join('')}
-                            ${Object.keys(doc.fields).length > 5 ? `<div class="field-item"><em>+${Object.keys(doc.fields).length - 5} more fields</em></div>` : ''}
-                        </div>
-                    ` : ''}
+                    ${renderExtractedFields(doc.fields)}
                     
-                    ${(doc.keyValues || []).length > 0 ? `
+                    ${(!doc.fields || Object.keys(doc.fields).length === 0) && (doc.keyValues || []).length > 0 ? `
                         <div class="extracted-fields">
                             <strong>Key Information:</strong>
                             ${doc.keyValues.slice(0, 3).map(kv => `
@@ -331,6 +330,45 @@
                                     <span class="field-value">${kv.value}</span>
                                 </div>
                             `).join('')}
+                            ${doc.keyValues.length > 3 ? `<div class="field-item"><em>+${doc.keyValues.length - 3} more fields</em></div>` : ''}
+                        </div>
+                    ` : ''}
+                    
+                    ${(doc.lineItems || []).length > 0 ? `
+                        <div class="extracted-fields">
+                            <strong>Line Items (${doc.lineItems.length}):</strong>
+                            ${doc.lineItems.slice(0, 2).map(item => `
+                                <div class="field-item">
+                                    <span class="field-label">${Object.keys(item)[0] || 'Item'}</span>
+                                    <span class="field-value">${Object.values(item)[0] || ''}</span>
+                                </div>
+                            `).join('')}
+                            ${doc.lineItems.length > 2 ? `<div class="field-item"><em>+${doc.lineItems.length - 2} more items</em></div>` : ''}
+                        </div>
+                    ` : ''}
+                    
+                    ${(doc.transactions || []).length > 0 ? `
+                        <div class="extracted-fields">
+                            <strong>Transactions (${doc.transactions.length}):</strong>
+                            ${doc.transactions.slice(0, 2).map(tx => `
+                                <div class="field-item">
+                                    <span class="field-label">${Array.isArray(tx) ? tx[0] || 'Date' : 'Transaction'}</span>
+                                    <span class="field-value">${Array.isArray(tx) ? tx[1] || '' : tx}</span>
+                                </div>
+                            `).join('')}
+                            ${doc.transactions.length > 2 ? `<div class="field-item"><em>+${doc.transactions.length - 2} more transactions</em></div>` : ''}
+                        </div>
+                    ` : ''}
+                    
+                    ${(doc.flags && doc.flags.contains_pii) ? `
+                        <div class="field-item" style="color: #e74c3c; font-size: 12px;">
+                            <span class="field-label">⚠️ Contains PII</span>
+                        </div>
+                    ` : ''}
+                    
+                    ${(doc.flags && doc.flags.needs_review) ? `
+                        <div class="field-item" style="color: #f39c12; font-size: 12px;">
+                            <span class="field-label">⚠️ Needs Review</span>
                         </div>
                     ` : ''}
                 </div>
@@ -343,8 +381,71 @@
             return 'low';
         }
 
+        // Pretty labels for common keys
+        const FIELD_LABELS = {
+            employee_ssn: "Employee SSN",
+            employer_ein: "Employer EIN",
+            employee_name: "Employee Name",
+            employer_address: "Employer Address",
+            "Employee SSN": "Employee SSN",
+            "Employee Name": "Employee Name",
+            "Employer EIN": "Employer EIN",
+            "Box 1 - Wages": "Wages, tips, other compensation (Box 1)",
+            "Box 2 - Federal Tax": "Federal income tax withheld (Box 2)",
+            "Box 3 - SS Wages": "Social security wages (Box 3)",
+            "Box 4 - SS Tax": "Social security tax withheld (Box 4)",
+            "Box 5 - Medicare Wages": "Medicare wages and tips (Box 5)",
+            "Box 6 - Medicare Tax": "Medicare tax withheld (Box 6)",
+            box1_wages: "Wages, tips, other compensation (Box 1)",
+            box2_fed_tax: "Federal income tax withheld (Box 2)",
+            box3_ss_wages: "Social security wages (Box 3)",
+            box4_ss_tax: "Social security tax withheld (Box 4)",
+            box5_medicare_wages: "Medicare wages and tips (Box 5)",
+            box6_medicare_tax: "Medicare tax withheld (Box 6)",
+            box12a: "Box 12a",
+            box12b: "Box 12b",
+            box12c: "Box 12c",
+            box12d: "Box 12d",
+            state: "State (Box 15)",
+            state_wages: "State wages (Box 16)",
+            state_tax: "State income tax (Box 17)",
+            local_wages: "Local wages (Box 18)",
+            local_tax: "Local income tax (Box 19)",
+            locality: "Locality name (Box 20)",
+            taxyear: "Tax Year",
+            "Tax Year": "Tax Year"
+        };
+
         function formatFieldName(key) {
-            return key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            return FIELD_LABELS[key] || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        }
+
+        function renderExtractedFields(fields) {
+            if (!fields || Object.keys(fields).length === 0) return '';
+            
+            const items = Object.entries(fields)
+                .filter(([_, v]) => v && String(v).trim() !== "" && String(v) !== "null")
+                .map(([k, v]) => ({
+                    label: formatFieldName(k),
+                    value: typeof v === "object" ? v.value : v,
+                    confidence: typeof v === "object" ? Math.round(100 * (v.confidence || 0.9)) : 90
+                }))
+                .sort((a, b) => a.label.localeCompare(b.label));
+
+            if (items.length === 0) return '';
+
+            return `
+                <div class="extracted-fields">
+                    <strong>Extracted Fields (${items.length}):</strong>
+                    ${items.slice(0, 8).map(item => `
+                        <div class="field-item">
+                            <span class="field-label">${item.label}</span>
+                            <span class="field-value">${item.value}</span>
+                        </div>
+                    `).join('')}
+                    ${items.length > 8 ? `<div class="field-item"><em>+${items.length - 8} more fields</em></div>` : ''}
+                </div>
+            `;
         }
 
         // Filter tabs

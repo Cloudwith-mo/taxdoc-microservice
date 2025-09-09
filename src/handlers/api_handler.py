@@ -1,216 +1,106 @@
-import json
-import boto3
-import base64
-import time
-from typing import Dict, Any
-import sys
-import os
+import os, json, uuid, re, base64, boto3, decimal
+from datetime import datetime
 
-# Add the src directory to the path
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+textract = boto3.client("textract")
+s3 = boto3.client("s3")
+ddb = boto3.resource("dynamodb").Table(os.environ.get("META_TABLE","TaxFlowsAI_Metadata"))
+bedrock = boto3.client("bedrock-runtime")
 
-from services.any_doc_processor import AnyDocProcessor
-from services.storage_service import StorageService
+UPLOAD_BUCKET = os.environ.get("UPLOAD_BUCKET","taxflowsai-uploads")
+CORS = {"Access-Control-Allow-Origin":"*","Access-Control-Allow-Methods":"POST,OPTIONS","Access-Control-Allow-Headers":"Content-Type","Content-Type":"application/json"}
 
-def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    """API Gateway handler for Any-Doc processing"""
+def ret(code, body): 
+    return {"statusCode":code, "headers":CORS, "body":json.dumps(body, default=lambda o: float(o) if isinstance(o, decimal.Decimal) else o)}
+
+def clean_b64(s):
+    s = re.sub(r'^data:.*;base64,','',s, flags=re.I)
+    s = re.sub(r'\s+','',s)
+    s = s.replace('-','+').replace('_','/')
+    rem = len(s)%4
+    s += '='*(4-rem) if rem else ''
+    return s
+
+def detect_text_bytes(body):
+    """Call Textract with Bytes"""
+    response = textract.detect_document_text(Document={"Bytes": body})
+    lines = [b["Text"] for b in response.get("Blocks", []) if b["BlockType"] == "LINE"]
+    text = "\n".join(lines)
+    print(f"OCR bytes={len(body)}, lines={len(lines)}")
+    return text
+
+def classify_doc(text):
+    """Simple document classification"""
+    t = text.lower()
+    if "wage and tax statement" in t or "form w-2" in t: return "W-2", 0.99
+    if "form 1099-nec" in t: return "1099-NEC", 0.98
+    if "form 1099-misc" in t: return "1099-MISC", 0.98
+    if "invoice" in t and "total" in t: return "INVOICE", 0.9
+    if "receipt" in t: return "RECEIPT", 0.85
+    return "UNKNOWN", 0.6
+
+def lambda_handler(event, context):
+    print(f"Event: {json.dumps(event)}")
+    
+    # Handle OPTIONS for CORS
+    method = event.get("httpMethod", "")
+    if method == "OPTIONS":
+        return {"statusCode": 200, "headers": CORS, "body": ""}
+    
+    if method != "POST":
+        return ret(405, {"error": "Method not allowed"})
     
     try:
-        http_method = event['httpMethod']
-        path = event['path']
+        body = json.loads(event.get("body", "{}"))
+        fname = body.get("filename", "upload.bin")
+        b64 = clean_b64(body.get("contentBase64", ""))
         
-        if http_method == 'POST' and path == '/process-document':
-            return process_document_sync(event)
-        elif http_method == 'POST' and path == '/process-batch':
-            return process_batch_documents(event)
-        elif http_method == 'GET' and '/result/' in path:
-            doc_id = event['pathParameters']['doc_id']
-            return get_processing_result(doc_id)
-        elif http_method == 'GET' and path == '/supported-types':
-            return get_supported_types()
-        else:
-            return {
-                'statusCode': 404,
-                'body': json.dumps({'error': 'Endpoint not found'})
-            }
-            
-    except Exception as e:
-        return {
-            'statusCode': 500,
-            'body': json.dumps({'error': str(e)})
-        }
-
-def process_document_sync(event: Dict[str, Any]) -> Dict[str, Any]:
-    """Process any document type synchronously via API using Any-Doc processor"""
-    
-    try:
-        # Parse request body
-        body = json.loads(event.get('body', '{}'))
-        filename = body.get('filename', 'unknown')
-        file_content = body.get('file_content')  # Base64 encoded file
+        if not b64:
+            return ret(400, {"error": "No contentBase64 provided"})
         
-        if not file_content:
-            return {
-                'statusCode': 400,
-                'headers': {'Access-Control-Allow-Origin': '*'},
-                'body': json.dumps({'error': 'No file content provided'})
-            }
+        content = base64.b64decode(b64)
+        if not content:
+            return ret(400, {"error": "Empty file"})
         
-        # Decode base64 file content
-        document_bytes = base64.b64decode(file_content)
+        # Extract text using Textract
+        text = detect_text_bytes(content)
+        if not text.strip():
+            return ret(400, {"error": "No readable text found in document"})
         
-        # Initialize Any-Doc processor
-        processor = AnyDocProcessor()
+        # Classify document
+        docType, confidence = classify_doc(text)
         
-        # Process document through complete pipeline
-        processing_result = processor.process_document(document_bytes, filename)
+        # Generate document ID
+        doc_id = str(uuid.uuid4())
         
-        # Format result for API response
+        # Simple field extraction for demo
+        fields = {}
+        keyValues = []
+        
+        # Extract basic info from text
+        lines = text.split('\n')
+        for line in lines[:10]:  # First 10 lines
+            if ':' in line:
+                parts = line.split(':', 1)
+                if len(parts) == 2:
+                    key = parts[0].strip()
+                    value = parts[1].strip()
+                    if key and value:
+                        fields[key] = value
+                        keyValues.append({"key": key, "value": value})
+        
         result = {
-            "DocumentID": filename,
-            "DocumentType": processing_result.get('DocumentType', 'Unknown'),
-            "UploadDate": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "S3Location": f"api-upload/{filename}",
-            "ProcessingStatus": "Completed" if processing_result.get('QualityMetrics', {}).get('overall_confidence', 0) > 0 else "Failed",
-            "ProcessingMetadata": processing_result.get('ProcessingMetadata', {}),
-            "QualityMetrics": processing_result.get('QualityMetrics', {}),
-            "Data": processing_result.get('ExtractedData', {}),
-            "ExtractionMetadata": processing_result.get('ExtractionMetadata', {})
+            "docId": doc_id,
+            "docType": docType,
+            "docTypeConfidence": confidence,
+            "summary": f"Processed {docType} document with {len(fields)} fields extracted",
+            "fields": fields,
+            "keyValues": keyValues
         }
         
-        # Store in DynamoDB
-        storage = StorageService()
-        storage.save_document_metadata(result)
-        
-        return {
-            'statusCode': 200,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
-                'Access-Control-Allow-Headers': 'Content-Type'
-            },
-            'body': json.dumps(result)
-        }
+        return ret(200, result)
         
     except Exception as e:
-        return {
-            'statusCode': 500,
-            'headers': {
-                'Access-Control-Allow-Origin': '*'
-            },
-            'body': json.dumps({'error': f'Processing failed: {str(e)}'})
-        }
-
-def process_batch_documents(event: Dict[str, Any]) -> Dict[str, Any]:
-    """Process multiple documents in batch"""
-    
-    try:
-        body = json.loads(event.get('body', '{}'))
-        files = body.get('files', [])
-        
-        if not files:
-            return {
-                'statusCode': 400,
-                'headers': {'Access-Control-Allow-Origin': '*'},
-                'body': json.dumps({'error': 'No files provided'})
-            }
-        
-        # Prepare files for batch processing
-        batch_files = []
-        for i, file_data in enumerate(files):
-            batch_files.append({
-                'id': file_data.get('id', f'batch_{i}'),
-                'filename': file_data.get('filename', f'unknown_{i}'),
-                'bytes': base64.b64decode(file_data['file_content'])
-            })
-        
-        # Process batch
-        processor = AnyDocProcessor()
-        results = processor.process_batch(batch_files)
-        
-        return {
-            'statusCode': 200,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Methods': 'POST, OPTIONS',
-                'Access-Control-Allow-Headers': 'Content-Type'
-            },
-            'body': json.dumps({
-                'batch_id': f'batch_{len(files)}_{int(time.time())}',
-                'total_files': len(files),
-                'results': results
-            })
-        }
-        
-    except Exception as e:
-        return {
-            'statusCode': 500,
-            'headers': {'Access-Control-Allow-Origin': '*'},
-            'body': json.dumps({'error': f'Batch processing failed: {str(e)}'})
-        }
-
-def get_processing_result(doc_id: str) -> Dict[str, Any]:
-    """Get processing result by document ID"""
-    
-    try:
-        storage = StorageService()
-        result = storage.get_document_metadata(doc_id)
-        
-        if result:
-            return {
-                'statusCode': 200,
-                'headers': {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*',
-                    'Access-Control-Allow-Methods': 'GET, OPTIONS',
-                    'Access-Control-Allow-Headers': 'Content-Type'
-                },
-                'body': json.dumps(result)
-            }
-        else:
-            return {
-                'statusCode': 404,
-                'headers': {
-                    'Access-Control-Allow-Origin': '*'
-                },
-                'body': json.dumps({'error': 'Document not found'})
-            }
-            
-    except Exception as e:
-        return {
-            'statusCode': 500,
-            'headers': {
-                'Access-Control-Allow-Origin': '*'
-            },
-            'body': json.dumps({'error': str(e)})
-        }
-
-def get_supported_types() -> Dict[str, Any]:
-    """Get list of supported file types"""
-    
-    try:
-        processor = AnyDocProcessor()
-        supported_types = processor.get_supported_file_types()
-        
-        return {
-            'statusCode': 200,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Methods': 'GET, OPTIONS',
-                'Access-Control-Allow-Headers': 'Content-Type'
-            },
-            'body': json.dumps({
-                'supported_types': supported_types,
-                'total_types': len(supported_types)
-            })
-        }
-        
-    except Exception as e:
-        return {
-            'statusCode': 500,
-            'headers': {'Access-Control-Allow-Origin': '*'},
-            'body': json.dumps({'error': str(e)})
-        }
+        print(f"Error: {str(e)}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
+        return ret(500, {"error": str(e)})

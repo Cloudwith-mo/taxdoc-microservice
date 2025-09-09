@@ -250,7 +250,25 @@ def merge_generic_kv(textract_kv, claude_pairs):
     
     return merged
 
+def get_user_id(event):
+    """Extract user ID from event context or headers"""
+    # Try to get from API Gateway context
+    if event.get("requestContext", {}).get("authorizer", {}).get("claims", {}).get("sub"):
+        return event["requestContext"]["authorizer"]["claims"]["sub"]
+    
+    # Try to get from headers
+    headers = event.get("headers", {})
+    auth_header = headers.get("Authorization") or headers.get("authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        # For now, use a simple user ID extraction
+        return "user_" + str(hash(auth_header))[-8:]
+    
+    # Default fallback
+    return "anonymous_user"
+
 def lambda_handler(event, ctx):
+    user_id = get_user_id(event)
+    
     # S3 event
     if "Records" in event and event["Records"][0].get("s3"):
         rec = event["Records"][0]["s3"]
@@ -281,11 +299,12 @@ def lambda_handler(event, ctx):
             issues = validate_w2_fields(fields)
             
             item = {
-                "pk": f"user#unknown", "sk": f"doc#{doc_id}",
+                "pk": f"user#{user_id}", "sk": f"doc#{doc_id}",
                 "docType": docType, "docTypeConfidence": decimal.Decimal(str(cls_conf)),
                 "fields": fields, "issues": issues, 
                 "s3": {"bucket":bucket,"key":key}, 
-                "ts": datetime.utcnow().isoformat()
+                "ts": datetime.utcnow().isoformat(),
+                "filename": key.split('/')[-1]
             }
             ddb.put_item(Item=item)
             s3.put_object_tagging(Bucket=bucket, Key=key, Tagging={"TagSet":[{"Key":"DocType","Value":docType}]})
@@ -302,10 +321,11 @@ def lambda_handler(event, ctx):
             fields = normalize_expense(exp)
             
             item = {
-                "pk": "user#unknown", "sk": f"doc#{doc_id}",
+                "pk": f"user#{user_id}", "sk": f"doc#{doc_id}",
                 "docType": docType, "fields": fields,
                 "s3": {"bucket":bucket,"key":key}, 
-                "ts": datetime.utcnow().isoformat()
+                "ts": datetime.utcnow().isoformat(),
+                "filename": key.split('/')[-1]
             }
             ddb.put_item(Item=item)
             s3.put_object_tagging(Bucket=bucket, Key=key, Tagging={"TagSet":[{"Key":"DocType","Value":docType}]})
@@ -370,7 +390,7 @@ TEXT:\n{text[:15000]}"""
         "s3": {"bucket": bucket, "key": key}
     }
     
-    ddb.put_item(Item={"pk":"user#unknown","sk":f"doc#{doc_id}", **payload})
+    ddb.put_item(Item={"pk":f"user#{user_id}","sk":f"doc#{doc_id}", "filename": key.split('/')[-1], **payload})
     s3.put_object_tagging(Bucket=bucket, Key=key, Tagging={"TagSet":[{"Key":"DocType","Value":docType}]})
     
     return ret(200, payload)
@@ -419,9 +439,12 @@ def extract_tables(analyzed):
         key = f"uploads/{uuid.uuid4()}_{fname}"
         s3.put_object(Bucket=UPLOAD_BUCKET, Key=key, Body=content)
         
-        # Recurse as S3 event
-        return lambda_handler({
-            "Records":[{"s3":{"bucket":{"name":UPLOAD_BUCKET},"object":{"key":key}}}]
-        }, None)
+        # Recurse as S3 event with user context
+        s3_event = {
+            "Records":[{"s3":{"bucket":{"name":UPLOAD_BUCKET},"object":{"key":key}}}],
+            "requestContext": event.get("requestContext", {}),
+            "headers": event.get("headers", {})
+        }
+        return lambda_handler(s3_event, None)
     
     return ret(400, {"error":"bad request"})

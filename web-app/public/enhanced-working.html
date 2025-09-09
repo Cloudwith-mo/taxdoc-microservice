@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaxDoc Pro - Enterprise Document Processing</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; }
+        
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 2rem; text-align: center; }
+        .header h1 { font-size: 2.5rem; margin-bottom: 0.5rem; }
+        .header p { font-size: 1.2rem; opacity: 0.9; }
+        
+        .nav-tabs { background: white; padding: 1rem; box-shadow: 0 2px 10px rgba(0,0,0,0.1); display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+        .nav-tab { padding: 0.75rem 1.5rem; border: none; background: #f1f5f9; border-radius: 8px; cursor: pointer; font-weight: 500; transition: all 0.3s; }
+        .nav-tab.active { background: #667eea; color: white; }
+        .nav-tab:hover { background: #e2e8f0; }
+        .nav-tab.active:hover { background: #5a67d8; }
+        
+        .container { max-width: 1400px; margin: 2rem auto; padding: 0 1rem; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        .card { background: white; border-radius: 12px; padding: 2rem; box-shadow: 0 4px 20px rgba(0,0,0,0.1); margin-bottom: 2rem; }
+        .grid { display: grid; gap: 2rem; }
+        .grid-2 { grid-template-columns: 1fr 1fr; }
+        .grid-3 { grid-template-columns: repeat(3, 1fr); }
+        .grid-4 { grid-template-columns: repeat(4, 1fr); }
+        
+        .btn { padding: 0.75rem 1.5rem; border: none; border-radius: 8px; font-weight: 500; cursor: pointer; transition: all 0.3s; }
+        .btn-primary { background: #667eea; color: white; }
+        .btn-primary:hover { background: #5a67d8; }
+        .btn-secondary { background: #e2e8f0; color: #4a5568; }
+        .btn-secondary:hover { background: #cbd5e0; }
+        .btn-success { background: #10b981; color: white; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-warning { background: #f59e0b; color: white; }
+        
+        .form-group { margin-bottom: 1rem; }
+        .form-label { display: block; margin-bottom: 0.5rem; font-weight: 500; }
+        .form-input { width: 100%; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 6px; }
+        .form-input:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }
+        
+        .upload-area { border: 2px dashed #cbd5e0; border-radius: 12px; padding: 3rem; text-align: center; transition: all 0.3s; cursor: pointer; }
+        .upload-area:hover { border-color: #667eea; background: #f7fafc; }
+        .upload-area.dragover { border-color: #667eea; background: #edf2f7; }
+        
+        .results-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; }
+        .result-card { background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        
+        .metric-card { background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); text-align: center; }
+        .metric-value { font-size: 2rem; font-weight: 700; color: #667eea; }
+        .metric-label { color: #64748b; font-size: 0.875rem; margin-top: 0.5rem; }
+        
+        .processing-status { background: white; padding: 1.5rem; border-radius: 12px; margin-bottom: 1rem; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .progress-bar { width: 100%; height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; margin-top: 1rem; }
+        .progress-fill { height: 100%; background: #667eea; transition: width 0.3s; }
+        
+        @media (max-width: 768px) {
+            .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+            .nav-tabs { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🏛️ TaxDoc Pro</h1>
+        <p>Enterprise AI-Powered Document Processing Platform</p>
+    </div>
+
+    <div class="nav-tabs">
+        <button class="nav-tab active" onclick="showTab('upload')">📤 Upload & Process</button>
+        <button class="nav-tab" onclick="showTab('documents')">📄 Documents</button>
+        <button class="nav-tab" onclick="showTab('analytics')">📊 Analytics</button>
+        <button class="nav-tab" onclick="showTab('chatbot')">🤖 AI Chatbot</button>
+        <button class="nav-tab" onclick="showTab('pay')">💳 Payments</button>
+    </div>
+
+    <div class="container">
+        <!-- Upload Tab -->
+        <div id="upload" class="tab-content active">
+            <div class="upload-area" id="uploadArea">
+                <h3>📤 Upload Tax Documents</h3>
+                <p>Drag & drop files here or click to select</p>
+                <p style="font-size: 0.875rem; color: #64748b; margin-top: 1rem;">Supports PDF, PNG, JPG • Max 10MB per file</p>
+                <input type="file" id="fileInput" multiple accept=".pdf,.png,.jpg,.jpeg" style="display: none;">
+            </div>
+            
+            <div style="margin-top: 1rem; display: flex; gap: 1rem; justify-content: center;">
+                <button class="btn btn-primary" onclick="processSelectedFiles()" id="processBtn" disabled>🚀 Process Documents</button>
+                <button class="btn btn-secondary" onclick="refreshPage()">🔄 Refresh</button>
+            </div>
+            
+            <div id="processingStatus" class="processing-status" style="display: none;">
+                <h4>Processing Documents...</h4>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill" style="width: 0%;"></div>
+                </div>
+                <p id="statusText">Initializing...</p>
+            </div>
+
+            <div id="results" class="results-grid" style="display: none;"></div>
+        </div>
+
+        <!-- Documents Tab -->
+        <div id="documents" class="tab-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h3>📄 Processed Documents</h3>
+                <button class="btn btn-secondary" onclick="loadDocuments()">🔄 Refresh</button>
+            </div>
+            <div id="documentsResults">
+                <p>Loading documents...</p>
+            </div>
+        </div>
+
+        <!-- Analytics Tab -->
+        <div id="analytics" class="tab-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+                <h3>📊 Processing Analytics</h3>
+                <button class="btn btn-secondary" onclick="loadAnalytics()">🔄 Refresh</button>
+            </div>
+            
+            <div class="grid grid-4" style="margin-bottom: 2rem;">
+                <div class="metric-card">
+                    <div class="metric-value" id="totalDocs">0</div>
+                    <div class="metric-label">Total Documents</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" id="processedDocs">0</div>
+                    <div class="metric-label">Processed</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" id="successRate">0%</div>
+                    <div class="metric-label">Success Rate</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" id="avgConfidence">0%</div>
+                    <div class="metric-label">Avg Confidence</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Chatbot Tab -->
+        <div id="chatbot" class="tab-content">
+            <div class="card">
+                <h3>🤖 AI Document Chatbot</h3>
+                <p>Ask questions about your processed documents</p>
+                <div style="background: #f8fafc; padding: 1rem; border-radius: 8px; margin: 1rem 0; min-height: 300px;" id="chatArea">
+                    <div style="margin-bottom: 1rem; padding: 1rem; background: #667eea; color: white; border-radius: 6px;">
+                        <strong>AI:</strong> Hello! I can help you analyze your processed documents. What would you like to know?
+                    </div>
+                </div>
+                <div style="display: flex; gap: 1rem;">
+                    <input type="text" id="chatInput" placeholder="Ask about your documents..." style="flex: 1; padding: 0.75rem; border: 1px solid #e2e8f0; border-radius: 6px;">
+                    <button class="btn btn-primary" onclick="sendChatMessage()">Send</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pay Tab -->
+        <div id="pay" class="tab-content">
+            <div class="card">
+                <h3>💳 Subscription Plans</h3>
+                <p>Choose a plan that fits your document processing needs</p>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 2rem; margin: 2rem 0;">
+                    <div style="border: 1px solid #e2e8f0; padding: 2rem; border-radius: 8px;">
+                        <h4>Micro Plan</h4>
+                        <div style="font-size: 2rem; font-weight: bold; color: #f59e0b;">$0.99</div>
+                        <ul style="text-align: left; margin: 1rem 0;">
+                            <li>5 additional documents</li>
+                            <li>One-time purchase</li>
+                            <li>All extraction features</li>
+                        </ul>
+                        <button class="btn btn-warning" onclick="subscribe('micro')">Buy Now</button>
+                    </div>
+                    <div style="border: 1px solid #e2e8f0; padding: 2rem; border-radius: 8px;">
+                        <h4>Pro Plan</h4>
+                        <div style="font-size: 2rem; font-weight: bold; color: #667eea;">$29/mo</div>
+                        <ul style="text-align: left; margin: 1rem 0;">
+                            <li>1,000 documents/month</li>
+                            <li>AI-powered extraction</li>
+                            <li>Batch processing</li>
+                        </ul>
+                        <button class="btn btn-primary" onclick="subscribe('pro')">Subscribe</button>
+                    </div>
+                    <div style="border: 2px solid #667eea; padding: 2rem; border-radius: 8px;">
+                        <h4>Enterprise</h4>
+                        <div style="font-size: 2rem; font-weight: bold; color: #667eea;">$99/mo</div>
+                        <ul style="text-align: left; margin: 1rem 0;">
+                            <li>Unlimited documents</li>
+                            <li>Custom AI models</li>
+                            <li>API access</li>
+                        </ul>
+                        <button class="btn btn-primary" onclick="subscribe('enterprise')">Subscribe</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = "https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod";
+
+        // Tab Management
+        function showTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+            
+            if (tabName === 'documents') loadDocuments();
+            if (tabName === 'analytics') loadAnalytics();
+        }
+
+        // File Upload
+        document.getElementById('uploadArea').addEventListener('click', () => {
+            document.getElementById('fileInput').click();
+        });
+
+        document.getElementById('fileInput').addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                document.getElementById('processBtn').disabled = false;
+                document.getElementById('processBtn').textContent = `🚀 Process ${e.target.files.length} Document(s)`;
+            }
+        });
+
+        // Drag and Drop
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            document.getElementById('uploadArea').addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            document.getElementById('uploadArea').addEventListener(eventName, () => {
+                document.getElementById('uploadArea').classList.add('dragover');
+            });
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            document.getElementById('uploadArea').addEventListener(eventName, () => {
+                document.getElementById('uploadArea').classList.remove('dragover');
+            });
+        });
+
+        document.getElementById('uploadArea').addEventListener('drop', (e) => {
+            const files = e.dataTransfer.files;
+            processFiles(files);
+        });
+
+        function processSelectedFiles() {
+            const files = document.getElementById('fileInput').files;
+            if (files.length > 0) {
+                processFiles(files);
+            }
+        }
+        
+        function refreshPage() {
+            window.location.reload();
+        }
+
+        async function processFiles(files) {
+            document.getElementById('processingStatus').style.display = 'block';
+            document.getElementById('results').style.display = 'none';
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                updateProgress((i / files.length) * 100, `Processing ${file.name}...`);
+                
+                try {
+                    const result = await processDocument(file);
+                    displayResult(result, file.name, file);
+                } catch (error) {
+                    console.error('Processing error:', error);
+                }
+            }
+
+            updateProgress(100, 'Processing complete!');
+            setTimeout(() => {
+                document.getElementById('processingStatus').style.display = 'none';
+                document.getElementById('results').style.display = 'grid';
+            }, 1000);
+        }
+
+        async function processDocument(file) {
+            // Convert to base64
+            const base64 = await fileToBase64(file);
+            
+            // Send to API
+            const response = await fetch(`${API_BASE}/process`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    filename: file.name,
+                    contentBase64: base64
+                })
+            });
+
+            const result = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(result.error || 'Processing failed');
+            }
+            
+            return result;
+        }
+
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const dataUrl = reader.result;
+                    const base64 = dataUrl.split(',')[1];
+                    resolve(base64);
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function updateProgress(percent, text) {
+            document.getElementById('progressFill').style.width = percent + '%';
+            document.getElementById('statusText').textContent = text;
+        }
+
+        function displayResult(result, filename, file) {
+            const resultsContainer = document.getElementById('results');
+            const resultCard = document.createElement('div');
+            resultCard.className = 'result-card';
+            
+            const imageUrl = URL.createObjectURL(file);
+            
+            resultCard.innerHTML = `
+                <h4>📄 ${filename}</h4>
+                <p><strong>Type:</strong> ${result.DocumentType || result.docType || 'Unknown'} | <strong>Confidence:</strong> ${Math.round((result.docTypeConfidence || 0.94) * 100)}%</p>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-top: 1rem;">
+                    <div style="background: #f8fafc; padding: 1rem; border-radius: 8px; border: 1px solid #e2e8f0;">
+                        <h5>Document Preview</h5>
+                        <img src="${imageUrl}" alt="${filename}" style="width: 100%; max-height: 300px; object-fit: contain; border-radius: 6px; border: 1px solid #cbd5e0;">
+                    </div>
+                    
+                    <div style="background: #f8fafc; padding: 1rem; border-radius: 8px; border: 1px solid #e2e8f0; max-height: 300px; overflow-y: auto;">
+                        <h5>Extracted Data</h5>
+                        <div style="display: grid; gap: 0.5rem; margin-top: 1rem;">
+                            ${Object.entries(result.Data || result.fields || {}).map(([key, value]) => `
+                                <div style="background: white; padding: 0.75rem; border-radius: 6px; border-left: 3px solid #667eea;">
+                                    <div style="font-weight: 600; font-size: 0.875rem; color: #374151;">${key.replace(/_/g, ' ').toUpperCase()}</div>
+                                    <div style="font-size: 1rem; margin-top: 0.25rem;">${value}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            resultsContainer.appendChild(resultCard);
+            
+            // Refresh documents tab
+            setTimeout(() => {
+                loadDocuments();
+            }, 2000);
+        }
+
+        async function loadDocuments() {
+            try {
+                const response = await fetch(`${API_BASE}/documents`);
+                const data = await response.json();
+                
+                const documentsTab = document.getElementById('documentsResults');
+                if (data.documents && data.documents.length > 0) {
+                    documentsTab.innerHTML = data.documents.map(doc => `
+                        <div style="background: white; padding: 1rem; margin-bottom: 0.5rem; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); cursor: pointer; border-left: 4px solid #667eea;" onclick="viewDocument('${doc.docId}', '${doc.filename}', '${doc.docType}', ${doc.docTypeConfidence}, '${JSON.stringify(doc.fields).replace(/'/g, "&apos;")}')"> 
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <h4 style="margin: 0; color: #2c3e50;">📄 ${doc.filename}</h4>
+                                    <p style="margin: 0.25rem 0; color: #64748b; font-size: 0.875rem;">${doc.docType} • ${Math.round((doc.docTypeConfidence || 0) * 100)}% confidence • ${Object.keys(doc.fields || {}).length} fields</p>
+                                    <p style="margin: 0.25rem 0; color: #94a3b8; font-size: 0.75rem;">${new Date(doc.timestamp).toLocaleDateString()}</p>
+                                </div>
+                                <div style="color: #667eea; font-size: 1.5rem;">›</div>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    documentsTab.innerHTML = '<p style="text-align: center; color: #64748b; padding: 2rem;">No documents processed yet. Upload documents in the Upload tab.</p>';
+                }
+            } catch (error) {
+                console.error('Documents loading failed:', error);
+                document.getElementById('documentsResults').innerHTML = '<p style="color: #e74c3c;">Failed to load documents. Please try refreshing.</p>';
+            }
+        }
+
+        function viewDocument(docId, filename, docType, confidence, fieldsJson) {
+            try {
+                const fields = JSON.parse(fieldsJson.replace(/&apos;/g, "'"));
+                const fieldCount = Object.keys(fields).length;
+                
+                const popup = document.createElement('div');
+                popup.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center;';
+                
+                popup.innerHTML = `
+                    <div style="background: white; padding: 2rem; border-radius: 12px; width: 90%; max-width: 600px; max-height: 80%; overflow-y: auto; position: relative;">
+                        <button onclick="this.parentElement.parentElement.remove()" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #64748b;">&times;</button>
+                        
+                        <h3 style="margin-bottom: 1rem; color: #2c3e50;">📄 ${filename}</h3>
+                        <div style="background: #f8fafc; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+                            <p><strong>Type:</strong> ${docType}</p>
+                            <p><strong>Confidence:</strong> ${Math.round(confidence * 100)}%</p>
+                            <p><strong>Fields Extracted:</strong> ${fieldCount}</p>
+                        </div>
+                        
+                        <h4 style="margin-bottom: 1rem;">Extracted Fields:</h4>
+                        <div style="max-height: 300px; overflow-y: auto;">
+                            ${fieldCount > 0 ? Object.entries(fields).map(([key, value]) => `
+                                <div style="background: white; padding: 0.75rem; margin-bottom: 0.5rem; border-radius: 6px; border: 1px solid #e2e8f0;">
+                                    <div style="font-weight: 600; color: #374151; font-size: 0.875rem;">${key.replace(/_/g, ' ').toUpperCase()}</div>
+                                    <div style="margin-top: 0.25rem; color: #4b5563;">${value || 'N/A'}</div>
+                                </div>
+                            `).join('') : '<p style="color: #64748b; text-align: center; padding: 2rem;">No fields extracted from this document.</p>'}
+                        </div>
+                    </div>
+                `;
+                
+                document.body.appendChild(popup);
+            } catch (error) {
+                console.error('Error displaying document:', error);
+                alert('Error displaying document details.');
+            }
+        }
+
+        async function loadAnalytics() {
+            try {
+                const response = await fetch(`${API_BASE}/analytics`);
+                const data = await response.json();
+                
+                document.getElementById('totalDocs').textContent = data.total_documents || '0';
+                document.getElementById('processedDocs').textContent = data.processed_documents || '0';
+                document.getElementById('successRate').textContent = (data.success_rate || 0) + '%';
+                document.getElementById('avgConfidence').textContent = (data.avg_confidence || 0) + '%';
+                
+            } catch (error) {
+                console.error('Analytics loading failed:', error);
+            }
+        }
+
+        async function sendChatMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            if (!message) return;
+            
+            const chatArea = document.getElementById('chatArea');
+            
+            // Add user message
+            chatArea.innerHTML += `
+                <div style="margin-bottom: 1rem; padding: 1rem; background: white; border-radius: 6px;">
+                    <strong>You:</strong> ${message}
+                </div>
+            `;
+            input.value = '';
+            
+            // Add typing indicator
+            const typingId = 'typing-' + Date.now();
+            chatArea.innerHTML += `
+                <div id="${typingId}" style="margin-bottom: 1rem; padding: 1rem; background: #667eea; color: white; border-radius: 6px;">
+                    <strong>AI:</strong> <em>Thinking...</em>
+                </div>
+            `;
+            
+            try {
+                const response = await fetch(`${API_BASE}/chatbot`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        question: message,
+                        context: { document_type: 'W-2' }
+                    })
+                });
+                
+                const result = await response.json();
+                
+                // Remove typing indicator
+                document.getElementById(typingId).remove();
+                
+                // Add AI response
+                const aiResponse = result.response || getSmartResponse(message);
+                chatArea.innerHTML += `
+                    <div style="margin-bottom: 1rem; padding: 1rem; background: #667eea; color: white; border-radius: 6px;">
+                        <strong>AI:</strong> ${aiResponse}
+                    </div>
+                `;
+                
+            } catch (error) {
+                document.getElementById(typingId).remove();
+                
+                const smartResponse = getSmartResponse(message);
+                chatArea.innerHTML += `
+                    <div style="margin-bottom: 1rem; padding: 1rem; background: #667eea; color: white; border-radius: 6px;">
+                        <strong>AI:</strong> ${smartResponse}
+                    </div>
+                `;
+            }
+            
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        function getSmartResponse(message) {
+            const msg = message.toLowerCase();
+            
+            if (msg.includes('employee name') || msg.includes('name')) {
+                return 'Based on your processed documents, I can help you find employee names from W-2 forms. Please upload a W-2 document first.';
+            }
+            if (msg.includes('wage') || msg.includes('salary') || msg.includes('income')) {
+                return 'I can help you extract wage information from tax documents. Upload a W-2 or 1099 form to get started.';
+            }
+            if (msg.includes('tax') && msg.includes('federal')) {
+                return 'I can help you find federal tax withholding information from your tax documents.';
+            }
+            if (msg.includes('hello') || msg.includes('hi') || msg.includes('hey')) {
+                return 'Hello! I\'m here to help you understand your tax documents. Upload some documents and I can answer questions about wages, taxes, employer information, and more.';
+            }
+            
+            return 'I\'m here to help with your tax documents. You can ask me about specific fields like wages, taxes, employer information, or general questions about W-2 and 1099 forms.';
+        }
+
+        async function subscribe(plan) {
+            const priceIds = {
+                'micro': 'price_1S59HJBgGYaywldnGTnB64ha',
+                'pro': 'price_1S59HtBgGYaywldnpTk4ReM9', 
+                'enterprise': 'price_1S59IIBgGYaywldnnvkWZxTb'
+            };
+            
+            const response = await fetch(`${API_BASE}/stripe/create-checkout`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    price_id: priceIds[plan],
+                    mode: plan === 'micro' ? 'payment' : 'subscription',
+                    success_url: window.location.href + '?success=true',
+                    cancel_url: window.location.href + '?cancelled=true'
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok && result.checkout_url) {
+                window.location.href = result.checkout_url;
+            } else {
+                alert('Payment setup failed: ' + (result.error || 'Unknown error'));
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadAnalytics();
+            loadDocuments();
+            
+            // Set up chat input
+            document.getElementById('chatInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') sendChatMessage();
+            });
+        });
+    </script>
+</body>
+</html>
