@@ -432,7 +432,7 @@
                 document.getElementById('processBtn').textContent = `🚀 Process ${e.target.files.length} Document(s)`;
             }
         });
-        document.getElementById('batchFileInput').addEventListener('change', handleBatchFileUpload);
+        // Removed batch file input listener as element doesn't exist
 
         // Drag and Drop
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -472,11 +472,7 @@
             window.location.reload();
         }
 
-        function handleBatchFileUpload(e) {
-            batchFiles = Array.from(e.target.files);
-            displayBatchFiles();
-            document.getElementById('processBatchBtn').disabled = false;
-        }
+        // Removed handleBatchFileUpload function as batch processing was removed
 
         async function processFiles(files) {
             currentFiles = Array.from(files);
@@ -647,7 +643,7 @@
             window.uploadResults = window.uploadResults || {};
             window.uploadResults[filename] = docData;
             
-            await saveDocumentToPersistentStorage(docData);
+            saveDocumentToPersistentStorage(docData);
             updateAnalytics();
         }
 
