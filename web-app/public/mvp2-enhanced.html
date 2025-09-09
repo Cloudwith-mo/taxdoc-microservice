@@ -75,66 +75,39 @@
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>🏛️ TaxDoc Pro</h1>
-        <p>AI-Powered Document Processing with Parseur-Level Features</p>
+    <div class="header" style="display: flex; justify-content: space-between; align-items: center; padding: 1.5rem 2rem;">
+        <div>
+            <h1 style="margin: 0;">🏛️ TaxDoc AI</h1>
+            <p style="margin: 0.5rem 0 0 0;">AI-Powered Document Processing</p>
+        </div>
+        <div class="auth-section" style="position: relative;">
+            <button class="user-dropdown" id="userDropdown" style="background: rgba(255,255,255,0.2); color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                <span id="userDisplayName">Guest User</span>
+                <span>▼</span>
+            </button>
+            <div class="dropdown-menu" id="dropdownMenu" style="position: absolute; top: 100%; right: 0; background: white; border: 1px solid #ddd; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); min-width: 200px; display: none; z-index: 1000;">
+                <div class="dropdown-item" id="profileItem" style="padding: 12px 16px; border-bottom: 1px solid #f0f0f0; color: #333;">
+                    <strong id="userEmail">guest@example.com</strong><br>
+                    <small>Free Plan</small>
+                </div>
+                <div class="dropdown-item" onclick="showSettings()" style="padding: 12px 16px; border-bottom: 1px solid #f0f0f0; cursor: pointer; color: #333; transition: background 0.2s;">Account Settings</div>
+                <div class="dropdown-item" onclick="showBilling()" style="padding: 12px 16px; border-bottom: 1px solid #f0f0f0; cursor: pointer; color: #333; transition: background 0.2s;">Billing & Plans</div>
+                <div class="dropdown-item" onclick="logout()" style="padding: 12px 16px; cursor: pointer; color: #333; transition: background 0.2s;">Sign Out</div>
+            </div>
+        </div>
     </div>
 
     <div class="nav-tabs">
-        <button class="nav-tab" onclick="showTab('register')">👤 Register</button>
-        <button class="nav-tab active" onclick="showTab('upload')">📤 Upload & Batch</button>
-        <button class="nav-tab" onclick="showTab('documents')">📄 Documents</button>
+        <button class="nav-tab active" onclick="showTab('upload')">📤 Upload Documents</button>
+        <button class="nav-tab" onclick="showTab('documents')">📄 My Documents</button>
         <button class="nav-tab" onclick="showTab('chatbot')">🤖 AI Chatbot</button>
-        <button class="nav-tab" onclick="showTab('pay')">💳 Pay</button>
-        <button class="nav-tab" onclick="showTab('templates')">🎨 Template Editor</button>
         <button class="nav-tab" onclick="showTab('analytics')">📊 Analytics</button>
+        <button class="nav-tab" onclick="showTab('pay')">💳 Plans</button>
         <button class="nav-tab" onclick="showTab('integrations')">🔗 Integrations</button>
     </div>
 
     <div class="container">
-        <!-- Register Tab -->
-        <div id="register" class="tab-content">
-            <div style="background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); text-align: center;">
-                <h3>👤 User Registration & Authentication</h3>
-                <p>Create an account or login to access premium features</p>
-                <button class="btn btn-primary" onclick="openAuthModal()" style="margin: 1rem;">Login / Register</button>
-                <div id="authStatus" style="margin-top: 1rem;"></div>
-                
-                <!-- Auth Modal -->
-                <div id="authModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
-                    <div style="background: white; padding: 2rem; border-radius: 12px; width: 90%; max-width: 400px; position: relative;">
-                        <button onclick="closeAuthModal()" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; font-size: 1.5rem; cursor: pointer;">&times;</button>
-                        
-                        <div style="display: flex; margin-bottom: 2rem; border-bottom: 1px solid #e2e8f0;">
-                            <button id="loginTab" class="tab-btn active" onclick="showLogin()" style="flex: 1; padding: 1rem; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent;">Login</button>
-                            <button id="registerTab" class="tab-btn" onclick="showRegister()" style="flex: 1; padding: 1rem; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent;">Register</button>
-                        </div>
-                        
-                        <!-- Login Form -->
-                        <div id="loginForm">
-                            <h3>Login to Your Account</h3>
-                            <div style="margin-bottom: 1rem;">
-                                <input type="email" id="loginEmail" placeholder="Email" style="width: 100%; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 6px; margin-bottom: 1rem;">
-                                <input type="password" id="loginPassword" placeholder="Password" style="width: 100%; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 6px;">
-                            </div>
-                            <button onclick="handleLogin()" class="btn btn-primary" style="width: 100%; margin-bottom: 1rem;">Login</button>
-                            <div id="loginError" style="color: red; font-size: 0.875rem;"></div>
-                        </div>
-                        
-                        <!-- Register Form -->
-                        <div id="registerForm" style="display: none;">
-                            <h3>Create New Account</h3>
-                            <div style="margin-bottom: 1rem;">
-                                <input type="email" id="registerEmail" placeholder="Email" style="width: 100%; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 6px; margin-bottom: 1rem;">
-                                <input type="password" id="registerPassword" placeholder="Password (min 8 characters)" style="width: 100%; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 6px;">
-                            </div>
-                            <button onclick="handleRegister()" class="btn btn-primary" style="width: 100%; margin-bottom: 1rem;">Register</button>
-                            <div id="registerError" style="color: red; font-size: 0.875rem;"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+
 
         <!-- Upload & Batch Tab -->
         <div id="upload" class="tab-content active">
@@ -167,10 +140,43 @@
         <!-- Documents Tab -->
         <div id="documents" class="tab-content">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                <h3>📄 Processed Documents</h3>
+                <h3>📄 My Documents</h3>
                 <button class="btn btn-secondary" onclick="loadDocuments()">🔄 Refresh</button>
             </div>
-            <div id="documentsResults">
+            
+            <div class="analytics-grid" style="margin-bottom: 2rem;">
+                <div class="metric-card">
+                    <div class="metric-value" id="totalDocsCount">0</div>
+                    <div class="metric-label">Total Documents</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" id="processedDocsCount">0</div>
+                    <div class="metric-label">Processed</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" id="avgConfidenceScore">0%</div>
+                    <div class="metric-label">Avg Confidence</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" id="thisMonthCount">0</div>
+                    <div class="metric-label">This Month</div>
+                </div>
+            </div>
+            
+            <input type="text" id="searchBar" placeholder="Search documents by content, type, or extracted fields..." style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 20px; font-size: 16px;">
+            
+            <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;" id="filterTabs">
+                <div class="filter-tab active" data-filter="all" style="padding: 8px 16px; border: 1px solid #ddd; border-radius: 20px; background: #667eea; color: white; cursor: pointer; transition: all 0.3s;">All Documents</div>
+                <div class="filter-tab" data-filter="W-2" style="padding: 8px 16px; border: 1px solid #ddd; border-radius: 20px; background: white; cursor: pointer; transition: all 0.3s;">W-2 Forms</div>
+                <div class="filter-tab" data-filter="1099-NEC" style="padding: 8px 16px; border: 1px solid #ddd; border-radius: 20px; background: white; cursor: pointer; transition: all 0.3s;">1099-NEC</div>
+                <div class="filter-tab" data-filter="INVOICE" style="padding: 8px 16px; border: 1px solid #ddd; border-radius: 20px; background: white; cursor: pointer; transition: all 0.3s;">Invoices</div>
+                <div class="filter-tab" data-filter="RECEIPT" style="padding: 8px 16px; border: 1px solid #ddd; border-radius: 20px; background: white; cursor: pointer; transition: all 0.3s;">Receipts</div>
+                <div class="filter-tab" data-filter="PAYSTUB" style="padding: 8px 16px; border: 1px solid #ddd; border-radius: 20px; background: white; cursor: pointer; transition: all 0.3s;">Paystubs</div>
+                <div class="filter-tab" data-filter="BANK_STATEMENT" style="padding: 8px 16px; border: 1px solid #ddd; border-radius: 20px; background: white; cursor: pointer; transition: all 0.3s;">Bank Statements</div>
+                <div class="filter-tab" data-filter="UNKNOWN" style="padding: 8px 16px; border: 1px solid #ddd; border-radius: 20px; background: white; cursor: pointer; transition: all 0.3s;">Other</div>
+            </div>
+            
+            <div id="documentsResults" class="results-grid">
                 <p>Loading documents...</p>
             </div>
         </div>
@@ -243,56 +249,9 @@
             </div>
         </div>
 
-        <!-- Template Editor Tab -->
-        <div id="templates" class="tab-content">
-            <div class="template-editor">
-                <h3>🎨 Visual Template Editor</h3>
-                <p>Create custom extraction templates with point-and-click field selection</p>
-                
-                <div style="margin: 1rem 0;">
-                    <input type="text" id="templateName" placeholder="Template Name" style="padding: 0.5rem; border: 1px solid #e2e8f0; border-radius: 6px; margin-right: 1rem;">
-                    <button class="btn btn-primary" onclick="saveTemplate()">Save Template</button>
-                    <button class="btn btn-secondary" onclick="loadSampleDocument()">Load Sample</button>
-                </div>
 
-                <div class="template-grid">
-                    <div class="document-preview" id="documentPreview">
-                        <div style="padding: 2rem; text-align: center; color: #64748b;">
-                            Click "Load Sample" to start creating a template
-                        </div>
-                    </div>
-                    
-                    <div class="field-properties">
-                        <h4>Template Fields</h4>
-                        <div id="fieldsList">
-                            <p style="color: #64748b; font-size: 0.875rem;">No fields defined yet</p>
-                        </div>
-                        <button class="btn btn-secondary" onclick="addField()" style="margin-top: 1rem; width: 100%;">+ Add Field</button>
-                    </div>
-                </div>
-            </div>
-        </div>
 
-        <!-- Batch Processing Tab -->
-        <div id="batch" class="tab-content">
-            <div class="batch-processor">
-                <h3>📚 Batch Document Processing</h3>
-                <p>Upload and process multiple documents simultaneously</p>
-                
-                <div class="upload-area" onclick="document.getElementById('batchFileInput').click()">
-                    <h4>Select Multiple Files</h4>
-                    <p>Choose up to 50 documents for batch processing</p>
-                    <input type="file" id="batchFileInput" multiple accept=".pdf,.png,.jpg,.jpeg" style="display: none;">
-                </div>
 
-                <div style="margin: 1rem 0;">
-                    <button class="btn btn-primary" onclick="processBatch()" id="processBatchBtn" disabled>Process All Files</button>
-                    <button class="btn btn-secondary" onclick="exportBatchResults()" id="exportBatchBtn" disabled>Export Results</button>
-                </div>
-
-                <div class="file-list" id="batchFileList"></div>
-            </div>
-        </div>
 
         <!-- Analytics Tab -->
         <div id="analytics" class="tab-content">
@@ -392,18 +351,73 @@
         </div>
     </div>
 
+    <!-- Edit Document Modal -->
+    <div id="editModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center;">
+        <div style="background: white; border-radius: 12px; padding: 30px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #eee;">
+                <h3 style="margin: 0;">Edit Document Fields</h3>
+                <button onclick="closeEditModal()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #999; padding: 0; width: 30px; height: 30px;">&times;</button>
+            </div>
+            <div id="editForm">
+                <!-- Form fields will be populated here -->
+            </div>
+            <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
+                <button class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+                <button class="btn" onclick="saveDocument()" style="background: #27ae60; color: white;">Save Changes</button>
+                <button class="btn btn-primary" onclick="downloadDocument()">Download</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         let currentFiles = [];
-        let batchFiles = [];
-        let templates = [];
-        let currentTemplate = { name: '', fields: [] };
+        let documents = [];
+        let currentEditingDoc = null;
+        const API_BASE = "https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod";
 
+        // User management
+        function getUserId() {
+            return localStorage.getItem('userId') || 'ANON';
+        }
+        
+        function getUserEmail() {
+            return localStorage.getItem('userEmail') || 'guest@example.com';
+        }
+        
+        function getUserName() {
+            return localStorage.getItem('userName') || 'Guest User';
+        }
+        
         // Tab Management
         function showTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
             document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
             document.getElementById(tabName).classList.add('active');
             event.target.classList.add('active');
+            
+            if (tabName === 'documents') {
+                loadDocuments();
+            }
+        }
+        
+        // Auth functions
+        function toggleDropdown() {
+            document.getElementById('dropdownMenu').classList.toggle('show');
+        }
+        
+        function showSettings() {
+            alert('Account settings coming soon...');
+        }
+        
+        function showBilling() {
+            alert('Billing & plans coming soon...');
+        }
+        
+        function logout() {
+            localStorage.removeItem('userId');
+            localStorage.removeItem('userEmail');
+            localStorage.removeItem('userName');
+            window.location.reload();
         }
 
         // File Upload
@@ -487,13 +501,7 @@
             }, 1000);
         }
 
-        const API_BASE = "https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod";
 
-        function getUserId() {
-            let id = localStorage.getItem('taxdoc_user');
-            if (!id) { id = 'ANON'; localStorage.setItem('taxdoc_user', id); }
-            return id;
-        }
 
 
 
@@ -615,153 +623,24 @@
             
             resultsContainer.appendChild(resultCard);
             
-            // Refresh documents tab after processing
-            setTimeout(() => {
+            // Save to persistent storage and refresh documents tab
+            setTimeout(async () => {
+                await saveDocumentToPersistentStorage({
+                    docId: generateId(),
+                    filename: filename,
+                    status: 'completed',
+                    docType: result.document_type,
+                    docTypeConfidence: result.confidence_score / 100,
+                    fields: Object.fromEntries(Object.entries(result.extracted_data).map(([k, v]) => [k, v.value])),
+                    summary: `Processed ${result.document_type} with ${result.confidence_score}% confidence`,
+                    uploadDate: new Date().toISOString(),
+                    userId: getUserId()
+                });
                 loadDocuments();
             }, 2000);
         }
 
-        // Template Editor Functions
-        function loadSampleDocument() {
-            const preview = document.getElementById('documentPreview');
-            preview.innerHTML = `
-                <img src="data:image/svg+xml;base64,${btoa(`
-                    <svg width="400" height="600" xmlns="http://www.w3.org/2000/svg">
-                        <rect width="400" height="600" fill="#f8fafc" stroke="#e2e8f0"/>
-                        <text x="200" y="50" text-anchor="middle" font-size="16" font-weight="bold">W-2 Wage and Tax Statement</text>
-                        <rect x="20" y="80" width="150" height="30" fill="white" stroke="#cbd5e0"/>
-                        <text x="25" y="100" font-size="12">Employee Name</text>
-                        <rect x="20" y="130" width="150" height="30" fill="white" stroke="#cbd5e0"/>
-                        <text x="25" y="150" font-size="12">Employer Name</text>
-                        <rect x="200" y="80" width="100" height="30" fill="white" stroke="#cbd5e0"/>
-                        <text x="205" y="100" font-size="12">Wages</text>
-                        <rect x="200" y="130" width="100" height="30" fill="white" stroke="#cbd5e0"/>
-                        <text x="205" y="150" font-size="12">Federal Tax</text>
-                    </svg>
-                `)}" alt="Sample W-2" onclick="selectField(event)">
-            `;
-        }
 
-        function selectField(event) {
-            const rect = event.target.getBoundingClientRect();
-            const x = ((event.clientX - rect.left) / rect.width * 100).toFixed(2);
-            const y = ((event.clientY - rect.top) / rect.height * 100).toFixed(2);
-            
-            const fieldName = prompt('Enter field name:');
-            if (fieldName) {
-                addFieldOverlay(x, y, fieldName);
-            }
-        }
-
-        function addFieldOverlay(x, y, name) {
-            const preview = document.getElementById('documentPreview');
-            const overlay = document.createElement('div');
-            overlay.className = 'field-overlay';
-            overlay.style.left = x + '%';
-            overlay.style.top = y + '%';
-            overlay.style.width = '15%';
-            overlay.style.height = '5%';
-            overlay.title = name;
-            
-            preview.appendChild(overlay);
-            
-            currentTemplate.fields.push({ name, x: parseFloat(x), y: parseFloat(y) });
-            updateFieldsList();
-        }
-
-        function updateFieldsList() {
-            const fieldsList = document.getElementById('fieldsList');
-            if (currentTemplate.fields.length === 0) {
-                fieldsList.innerHTML = '<p style="color: #64748b; font-size: 0.875rem;">No fields defined yet</p>';
-                return;
-            }
-            
-            fieldsList.innerHTML = currentTemplate.fields.map((field, index) => `
-                <div class="field-item">
-                    <input type="text" value="${field.name}" onchange="updateFieldName(${index}, this.value)" style="width: 100%; border: none; background: transparent;">
-                    <button onclick="removeField(${index})" style="float: right; background: #fee2e2; color: #991b1b; border: none; padding: 0.25rem 0.5rem; border-radius: 4px; cursor: pointer;">×</button>
-                </div>
-            `).join('');
-        }
-
-        function addField() {
-            const name = prompt('Enter field name:');
-            if (name) {
-                addFieldOverlay(50, 50, name);
-            }
-        }
-
-        function removeField(index) {
-            currentTemplate.fields.splice(index, 1);
-            updateFieldsList();
-            // Remove overlay from preview
-            const overlays = document.querySelectorAll('.field-overlay');
-            if (overlays[index]) overlays[index].remove();
-        }
-
-        function updateFieldName(index, newName) {
-            currentTemplate.fields[index].name = newName;
-        }
-
-        function saveTemplate() {
-            const name = document.getElementById('templateName').value;
-            if (!name) {
-                alert('Please enter a template name');
-                return;
-            }
-            
-            currentTemplate.name = name;
-            templates.push({...currentTemplate});
-            alert('Template saved successfully!');
-        }
-
-        // Batch Processing Functions
-        function displayBatchFiles() {
-            const fileList = document.getElementById('batchFileList');
-            fileList.innerHTML = batchFiles.map((file, index) => `
-                <div class="file-item">
-                    <span>${file.name}</span>
-                    <span class="status pending">Pending</span>
-                </div>
-            `).join('');
-        }
-
-        async function processBatch() {
-            document.getElementById('processBatchBtn').disabled = true;
-            const fileItems = document.querySelectorAll('#batchFileList .file-item');
-            
-            for (let i = 0; i < batchFiles.length; i++) {
-                const statusSpan = fileItems[i].querySelector('.status');
-                statusSpan.textContent = 'Processing';
-                statusSpan.className = 'status processing';
-                
-                try {
-                    await processDocument(batchFiles[i]);
-                    statusSpan.textContent = 'Completed';
-                    statusSpan.className = 'status completed';
-                } catch (error) {
-                    statusSpan.textContent = 'Failed';
-                    statusSpan.className = 'status failed';
-                }
-            }
-            
-            document.getElementById('exportBatchBtn').disabled = false;
-        }
-
-        function exportBatchResults() {
-            const results = batchFiles.map(file => ({
-                filename: file.name,
-                status: 'completed',
-                data: { /* extracted data */ }
-            }));
-            
-            const blob = new Blob([JSON.stringify(results, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'batch_results.json';
-            a.click();
-        }
 
         // Export Functions
         async function downloadJSON(filename) {
@@ -975,67 +854,342 @@
         }
         
         async function loadDocuments() {
-            // Documents loading disabled until endpoint is implemented
-            document.getElementById('documentsResults').innerHTML = '<p style="color: #64748b; text-align: center; padding: 2rem;">Documents will appear here after processing. Upload documents in the Upload & Batch tab.</p>';
-        }
-        
-        function renderDocuments(items) {
-            const documentsTab = document.getElementById('documentsResults');
-            if (items && items.length > 0) {
-                documentsTab.innerHTML = items.map(doc => `
-                    <div style="background: white; padding: 1rem; margin-bottom: 0.5rem; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); cursor: pointer; border-left: 4px solid #667eea;" onclick="viewDocument('${doc.docId}', '${doc.filename}', '${doc.docType}', ${doc.docTypeConfidence}, '${JSON.stringify(doc.fields).replace(/'/g, "&apos;")}')"> 
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <div>
-                                <h4 style="margin: 0; color: #2c3e50;">📄 ${doc.filename}</h4>
-                                <p style="margin: 0.25rem 0; color: #64748b; font-size: 0.875rem;">${doc.docType} • ${Math.round(doc.docTypeConfidence * 100)}% confidence • ${Object.keys(doc.fields || {}).length} fields</p>
-                                <p style="margin: 0.25rem 0; color: #94a3b8; font-size: 0.75rem;">${new Date(doc.timestamp).toLocaleDateString()}</p>
-                            </div>
-                            <div style="color: #667eea; font-size: 1.5rem;">›</div>
-                        </div>
-                    </div>
-                `).join('');
-            } else {
-                documentsTab.innerHTML = '<p style="text-align: center; color: #64748b; padding: 2rem;">No documents processed yet. Upload documents in the Upload & Batch tab.</p>';
-            }
-        }
-        
-        function viewDocument(docId, filename, docType, confidence, fieldsJson) {
             try {
-                const fields = JSON.parse(fieldsJson.replace(/&apos;/g, "'"));
-                const fieldCount = Object.keys(fields).length;
+                // Try to load from backend first
+                const response = await fetch(`${API_BASE}/documents?userId=${getUserId()}`);
+                if (response.ok) {
+                    documents = await response.json();
+                } else {
+                    throw new Error('Backend unavailable');
+                }
+            } catch (error) {
+                console.log('Loading from local storage');
+                // Fallback to local storage
+                documents = JSON.parse(localStorage.getItem(`docs_${getUserId()}`) || '[]');
+            }
+            
+            updateDocumentStats();
+            updateDocumentGrid();
+        }
+        
+        function updateDocumentStats() {
+            const total = documents.length;
+            const processed = documents.filter(d => d.status === 'completed').length;
+            const avgConf = processed > 0 ? 
+                Math.round(documents.filter(d => d.status === 'completed')
+                    .reduce((sum, d) => sum + (d.docTypeConfidence || 0), 0) / processed * 100) : 0;
+            
+            const thisMonth = documents.filter(d => {
+                const docDate = new Date(d.uploadDate || d.createdAt || Date.now());
+                const now = new Date();
+                return docDate.getMonth() === now.getMonth() && docDate.getFullYear() === now.getFullYear();
+            }).length;
+
+            document.getElementById('totalDocsCount').textContent = total;
+            document.getElementById('processedDocsCount').textContent = processed;
+            document.getElementById('avgConfidenceScore').textContent = avgConf + '%';
+            document.getElementById('thisMonthCount').textContent = thisMonth;
+        }
+        
+        function updateDocumentGrid() {
+            const grid = document.getElementById('documentsResults');
+            const searchTerm = document.getElementById('searchBar').value.toLowerCase();
+            const activeFilter = document.querySelector('.filter-tab.active').dataset.filter;
+
+            const filteredDocs = documents.filter(doc => {
+                // Filter by type
+                if (activeFilter !== 'all' && doc.docType !== activeFilter) return false;
                 
-                const popup = document.createElement('div');
-                popup.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center;';
+                // Filter by search term
+                if (searchTerm) {
+                    const searchableText = [
+                        doc.filename,
+                        doc.docType,
+                        doc.summary,
+                        ...Object.values(doc.fields || {}),
+                        ...Object.values(doc.keyValues || []).map(kv => kv.key + ' ' + kv.value)
+                    ].join(' ').toLowerCase();
+                    
+                    if (!searchableText.includes(searchTerm)) return false;
+                }
                 
-                popup.innerHTML = `
-                    <div style="background: white; padding: 2rem; border-radius: 12px; width: 90%; max-width: 600px; max-height: 80%; overflow-y: auto; position: relative;">
-                        <button onclick="this.parentElement.parentElement.remove()" style="position: absolute; top: 1rem; right: 1rem; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #64748b;">&times;</button>
-                        
-                        <h3 style="margin-bottom: 1rem; color: #2c3e50;">📄 ${filename}</h3>
-                        <div style="background: #f8fafc; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
-                            <p><strong>Type:</strong> ${docType}</p>
-                            <p><strong>Confidence:</strong> ${Math.round(confidence * 100)}%</p>
-                            <p><strong>Fields Extracted:</strong> ${fieldCount}</p>
+                return true;
+            });
+
+            if (filteredDocs.length === 0) {
+                grid.innerHTML = '<p style="color: #64748b; text-align: center; padding: 2rem;">No documents found. Upload documents in the Upload tab.</p>';
+                return;
+            }
+
+            grid.innerHTML = filteredDocs.map(doc => createDocumentCard(doc)).join('');
+        }
+        
+        function createDocumentCard(doc) {
+            const confidenceClass = getConfidenceClass(doc.docTypeConfidence);
+            const docTypeClass = doc.docType.toLowerCase().replace(/[^a-z0-9]/g, '-');
+            
+            return `
+                <div class="result-card" style="position: relative;">
+                    ${doc.status === 'completed' ? `
+                        <div style="position: absolute; top: 15px; right: 15px; display: flex; gap: 8px;">
+                            <button onclick="editDocument('${doc.docId}')" style="background: #f8f9fa; border: 1px solid #ddd; border-radius: 4px; padding: 6px 10px; font-size: 12px; cursor: pointer;">Edit</button>
+                            <button onclick="downloadDocument('${doc.docId}')" style="background: #f8f9fa; border: 1px solid #ddd; border-radius: 4px; padding: 6px 10px; font-size: 12px; cursor: pointer;">Download</button>
                         </div>
-                        
-                        <h4 style="margin-bottom: 1rem;">Extracted Fields:</h4>
-                        <div style="max-height: 300px; overflow-y: auto;">
-                            ${fieldCount > 0 ? Object.entries(fields).map(([key, value]) => `
-                                <div style="background: white; padding: 0.75rem; margin-bottom: 0.5rem; border-radius: 6px; border: 1px solid #e2e8f0;">
-                                    <div style="font-weight: 600; color: #374151; font-size: 0.875rem;">${key.replace(/_/g, ' ').toUpperCase()}</div>
-                                    <div style="margin-top: 0.25rem; color: #4b5563;">${value || 'N/A'}</div>
-                                </div>
-                            `).join('') : '<p style="color: #64748b; text-align: center; padding: 2rem;">No fields extracted from this document.</p>'}
+                    ` : ''}
+                    
+                    <div style="display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; margin-bottom: 10px; text-transform: uppercase; background: #667eea; color: white;">${doc.docType}</div>
+                    <div style="font-size: 12px; color: #7f8c8d; margin-bottom: 10px;">Confidence: ${Math.round((doc.docTypeConfidence || 0) * 100)}%</div>
+                    <h4>${doc.filename}</h4>
+                    
+                    ${doc.summary ? `<div style="background: #f8f9fa; padding: 12px; border-radius: 6px; margin-top: 10px; font-style: italic; color: #5a6c7d; font-size: 14px;">${doc.summary}</div>` : ''}
+                    
+                    ${renderExtractedFields(doc.fields)}
+                </div>
+            `;
+        }
+        
+        function getConfidenceClass(confidence) {
+            if (confidence >= 0.8) return 'high';
+            if (confidence >= 0.6) return 'medium';
+            return 'low';
+        }
+        
+        function renderExtractedFields(fields) {
+            if (!fields || Object.keys(fields).length === 0) return '';
+            
+            const items = Object.entries(fields)
+                .filter(([_, v]) => v && String(v).trim() !== "" && String(v) !== "null")
+                .map(([k, v]) => ({
+                    label: formatFieldName(k),
+                    value: typeof v === "object" ? v.value : v,
+                    confidence: typeof v === "object" ? Math.round(100 * (v.confidence || 0.9)) : 90
+                }))
+                .sort((a, b) => a.label.localeCompare(b.label));
+
+            if (items.length === 0) return '';
+
+            return `
+                <div style="margin-top: 15px;">
+                    <strong>Extracted Fields (${items.length}):</strong>
+                    ${items.slice(0, 8).map(item => `
+                        <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #ecf0f1; font-size: 14px;">
+                            <span style="font-weight: 600; color: #2c3e50;">${item.label}</span>
+                            <span style="color: #34495e; text-align: right; max-width: 60%; word-break: break-word;">${item.value}</span>
+                        </div>
+                    `).join('')}
+                    ${items.length > 8 ? `<div style="padding: 8px 0; font-style: italic;"><em>+${items.length - 8} more fields</em></div>` : ''}
+                </div>
+            `;
+        }
+        
+        const FIELD_LABELS = {
+            employee_ssn: "Employee SSN",
+            employer_ein: "Employer EIN",
+            employee_name: "Employee Name",
+            employer_address: "Employer Address",
+            "Employee SSN": "Employee SSN",
+            "Employee Name": "Employee Name",
+            "Employer EIN": "Employer EIN",
+            "Box 1 - Wages": "Wages, tips, other compensation (Box 1)",
+            "Box 2 - Federal Tax": "Federal income tax withheld (Box 2)",
+            "Box 3 - SS Wages": "Social security wages (Box 3)",
+            "Box 4 - SS Tax": "Social security tax withheld (Box 4)",
+            "Box 5 - Medicare Wages": "Medicare wages and tips (Box 5)",
+            "Box 6 - Medicare Tax": "Medicare tax withheld (Box 6)",
+            box1_wages: "Wages, tips, other compensation (Box 1)",
+            box2_fed_tax: "Federal income tax withheld (Box 2)",
+            box3_ss_wages: "Social security wages (Box 3)",
+            box4_ss_tax: "Social security tax withheld (Box 4)",
+            box5_medicare_wages: "Medicare wages and tips (Box 5)",
+            box6_medicare_tax: "Medicare tax withheld (Box 6)",
+            box12a: "Box 12a", box12b: "Box 12b", box12c: "Box 12c", box12d: "Box 12d",
+            state: "State (Box 15)", state_wages: "State wages (Box 16)",
+            state_tax: "State income tax (Box 17)", local_wages: "Local wages (Box 18)",
+            local_tax: "Local income tax (Box 19)", locality: "Locality name (Box 20)",
+            taxyear: "Tax Year", "Tax Year": "Tax Year"
+        };
+        
+        function formatFieldName(key) {
+            return FIELD_LABELS[key] || key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        }
+        
+        // Edit document functions
+        function editDocument(docId) {
+            const doc = documents.find(d => d.docId === docId);
+            if (!doc) return;
+
+            currentEditingDoc = doc;
+            populateEditForm(doc);
+            document.getElementById('editModal').style.display = 'flex';
+        }
+        
+        function populateEditForm(doc) {
+            const form = document.getElementById('editForm');
+            const fields = doc.fields || {};
+            
+            let formHTML = `
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #333;">Document Type</label>
+                    <input type="text" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;" value="${doc.docType}" readonly>
+                </div>
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #333;">Filename</label>
+                    <input type="text" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;" value="${doc.filename}" readonly>
+                </div>
+            `;
+
+            // Add existing fields
+            Object.entries(fields).forEach(([key, value]) => {
+                const displayValue = typeof value === 'object' ? value.value : value;
+                formHTML += `
+                    <div style="margin-bottom: 1rem;">
+                        <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #333;">${formatFieldName(key)}</label>
+                        <div style="display: flex; align-items: center;">
+                            <input type="text" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;" data-field="${key}" value="${displayValue || ''}">
+                            <button type="button" onclick="removeField('${key}')" style="background: #e74c3c; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 12px; margin-left: 10px;">Remove</button>
                         </div>
                     </div>
                 `;
-                
-                document.body.appendChild(popup);
-            } catch (error) {
-                console.error('Error displaying document:', error);
-                alert('Error displaying document details.');
+            });
+
+            // Add new field section
+            formHTML += `
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; margin-bottom: 5px; font-weight: 600; color: #333;">Add New Field</label>
+                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                        <input type="text" id="newFieldName" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;" placeholder="Field name">
+                        <input type="text" id="newFieldValue" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;" placeholder="Field value">
+                        <button type="button" onclick="addNewField()" style="background: #27ae60; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 14px;">Add</button>
+                    </div>
+                </div>
+            `;
+
+            form.innerHTML = formHTML;
+        }
+        
+        function addNewField() {
+            const nameInput = document.getElementById('newFieldName');
+            const valueInput = document.getElementById('newFieldValue');
+            
+            if (!nameInput.value.trim() || !valueInput.value.trim()) return;
+
+            const key = nameInput.value.trim();
+            const value = valueInput.value.trim();
+
+            // Add to current editing doc
+            if (!currentEditingDoc.fields) currentEditingDoc.fields = {};
+            currentEditingDoc.fields[key] = value;
+
+            // Refresh form
+            populateEditForm(currentEditingDoc);
+        }
+        
+        function removeField(fieldKey) {
+            if (currentEditingDoc.fields) {
+                delete currentEditingDoc.fields[fieldKey];
+                populateEditForm(currentEditingDoc);
             }
         }
+        
+        async function saveDocument() {
+            if (!currentEditingDoc) return;
+
+            // Collect form data
+            const formInputs = document.querySelectorAll('#editForm input[data-field]');
+            const updatedFields = {};
+            
+            formInputs.forEach(input => {
+                const fieldKey = input.dataset.field;
+                const fieldValue = input.value.trim();
+                if (fieldValue) {
+                    updatedFields[fieldKey] = fieldValue;
+                }
+            });
+
+            currentEditingDoc.fields = updatedFields;
+
+            try {
+                // Save to backend
+                await fetch(`${API_BASE}/document/${currentEditingDoc.docId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        fields: updatedFields,
+                        userId: getUserId()
+                    })
+                });
+
+                // Update local documents array
+                const docIndex = documents.findIndex(d => d.docId === currentEditingDoc.docId);
+                if (docIndex !== -1) {
+                    documents[docIndex] = { ...currentEditingDoc };
+                }
+
+                // Update local storage
+                localStorage.setItem(`docs_${getUserId()}`, JSON.stringify(documents));
+
+                closeEditModal();
+                updateDocumentGrid();
+                
+            } catch (error) {
+                console.error('Failed to save document:', error);
+                alert('Failed to save changes. Please try again.');
+            }
+        }
+        
+        function downloadDocument(docId) {
+            const doc = currentEditingDoc || documents.find(d => d.docId === docId);
+            if (!doc) return;
+
+            const data = {
+                filename: doc.filename,
+                docType: doc.docType,
+                fields: doc.fields || {},
+                extractedAt: new Date().toISOString()
+            };
+
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${doc.filename.replace(/\.[^/.]+$/, '')}_extracted.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+        
+        function closeEditModal() {
+            document.getElementById('editModal').style.display = 'none';
+            currentEditingDoc = null;
+        }
+        
+        async function saveDocumentToPersistentStorage(doc) {
+            try {
+                // Save to backend
+                await fetch(`${API_BASE}/documents`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(doc)
+                });
+                
+                // Also save locally
+                const savedDocs = JSON.parse(localStorage.getItem(`docs_${getUserId()}`) || '[]');
+                savedDocs.unshift(doc);
+                localStorage.setItem(`docs_${getUserId()}`, JSON.stringify(savedDocs));
+                
+            } catch (error) {
+                console.error('Failed to save document:', error);
+                // Fallback to local storage only
+                const savedDocs = JSON.parse(localStorage.getItem(`docs_${getUserId()}`) || '[]');
+                savedDocs.unshift(doc);
+                localStorage.setItem(`docs_${getUserId()}`, JSON.stringify(savedDocs));
+            }
+        }
+        
+        function generateId() {
+            return 'doc_' + Math.random().toString(36).substr(2, 9);
+        }
+        
+
         
         async function startFreeTrial() {
             // Activate trial locally
@@ -1076,6 +1230,47 @@
         
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
+            // Initialize auth UI
+            document.getElementById('userDisplayName').textContent = getUserName();
+            document.getElementById('userEmail').textContent = getUserEmail();
+            
+            // Setup event listeners
+            document.getElementById('userDropdown').addEventListener('click', toggleDropdown);
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.auth-section')) {
+                    const dropdown = document.getElementById('dropdownMenu');
+                    if (dropdown.style.display === 'block') {
+                        dropdown.style.display = 'none';
+                    }
+                }
+            });
+            
+            // Search and filters
+            document.getElementById('searchBar').addEventListener('input', updateDocumentGrid);
+            document.getElementById('filterTabs').addEventListener('click', (e) => {
+                if (e.target.classList.contains('filter-tab')) {
+                    document.querySelectorAll('.filter-tab').forEach(tab => {
+                        tab.classList.remove('active');
+                        tab.style.background = 'white';
+                        tab.style.color = '#333';
+                    });
+                    e.target.classList.add('active');
+                    e.target.style.background = '#667eea';
+                    e.target.style.color = 'white';
+                    updateDocumentGrid();
+                }
+            });
+            
+            // Dropdown hover effects
+            document.querySelectorAll('.dropdown-item').forEach(item => {
+                item.addEventListener('mouseenter', () => {
+                    item.style.background = '#f8f9fa';
+                });
+                item.addEventListener('mouseleave', () => {
+                    item.style.background = 'white';
+                });
+            });
+            
             loadAnalytics();
             loadDocuments();
             
