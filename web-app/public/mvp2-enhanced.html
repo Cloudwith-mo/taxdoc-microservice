@@ -49,11 +49,16 @@
         .status.completed { background: #d1fae5; color: #065f46; }
         .status.failed { background: #fee2e2; color: #991b1b; }
         
-        .btn { padding: 0.75rem 1.5rem; border: none; border-radius: 8px; font-weight: 500; cursor: pointer; transition: all 0.3s; }
-        .btn-primary { background: #667eea; color: white; }
-        .btn-primary:hover { background: #5a67d8; }
-        .btn-secondary { background: #e2e8f0; color: #4a5568; }
-        .btn-secondary:hover { background: #cbd5e0; }
+        .btn { padding: 0.75rem 1.5rem; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.3s; box-shadow: 0 2px 8px rgba(0,0,0,0.1); position: relative; overflow: hidden; }
+        .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        .btn-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+        .btn-primary:hover { background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%); }
+        .btn-secondary { background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%); color: #4a5568; border: 1px solid #cbd5e0; }
+        .btn-secondary:hover { background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e0 100%); }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .progress-bar { position: relative; overflow: hidden; }
+        .progress-bar::after { content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent); animation: shimmer 2s infinite; }
+        @keyframes shimmer { 0% { left: -100%; } 100% { left: 100%; } }
         
         .analytics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
         .metric-card { background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
@@ -77,8 +82,16 @@
 <body>
     <div class="header" style="display: flex; justify-content: space-between; align-items: center; padding: 1.5rem 2rem;">
         <div>
-            <h1 style="margin: 0;">🚁 ParsePilot</h1>
-            <p style="margin: 0.5rem 0 0 0;">Autopilot for your paperwork</p>
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                <div style="width: 48px; height: 48px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);">
+                    <div style="position: absolute; width: 100%; height: 100%; background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.3) 0%, transparent 50%); border-radius: 12px;"></div>
+                    <div style="color: white; font-size: 24px; font-weight: bold; z-index: 1;">⚡</div>
+                    <div style="position: absolute; top: 8px; right: 8px; width: 6px; height: 6px; background: #00ff88; border-radius: 50%; box-shadow: 0 0 8px #00ff88; animation: pulse 2s infinite;"></div>
+                </div>
+                <h1 style="margin: 0; font-size: 2.2rem; font-weight: 700; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">ParsePilot</h1>
+            </div>
+            <p style="margin: 0; font-size: 1.1rem; opacity: 0.95; font-weight: 500;">Automate • Extract • Accelerate</p>
+            <p style="margin: 4px 0 0 0; font-size: 0.9rem; opacity: 0.8;">Powered by TurboParse™ AI Engine</p>
         </div>
         <div class="auth-section" style="position: relative;">
             <button class="user-dropdown" id="userDropdown" style="background: rgba(255,255,255,0.2); color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 8px;">
@@ -112,8 +125,15 @@
         <!-- Upload & Batch Tab -->
         <div id="upload" class="tab-content active">
             <div class="upload-area" id="uploadArea">
-                <h3>📤 Upload Documents</h3>
-                <p>From doc to data, on autopilot</p>
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                    <div style="width: 40px; height: 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                        <span style="color: white; font-size: 20px;">📤</span>
+                    </div>
+                    <div>
+                        <h3 style="margin: 0; color: #1a202c;">Upload Documents</h3>
+                        <p style="margin: 0; color: #64748b; font-size: 0.9rem;">From doc to data, on autopilot</p>
+                    </div>
+                </div>
                 <p style="font-size: 0.875rem; color: #64748b; margin-top: 1rem;">Supports PDF, PNG, JPG • Max 10MB per file</p>
                 <div id="uploadTrialInfo" style="background: #f0f9ff; padding: 1rem; border-radius: 6px; margin-top: 1rem; border-left: 4px solid #0ea5e9;">
                     <strong>🚁 Free Trial:</strong> Process up to 50 documents per month with TurboParse™ acceleration!
@@ -127,12 +147,18 @@
             </div>
             
             <div id="processingStatus" class="processing-status" style="display: none;">
-                <h4>Processing Documents...</h4>
-                <div class="progress-bar">
-                    <div class="progress-fill" id="progressFill" style="width: 0%;"></div>
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                    <div style="width: 32px; height: 32px; border: 3px solid #667eea; border-top: 3px solid transparent; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                    <h4 style="margin: 0;">Processing with TurboParse™...</h4>
                 </div>
-                <p id="statusText">Initializing...</p>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill" style="width: 0%; background: linear-gradient(90deg, #667eea, #764ba2);"></div>
+                </div>
+                <p id="statusText" style="margin-top: 8px; color: #64748b;">Initializing AI extraction...</p>
             </div>
+            <style>
+                @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+            </style>
 
             <div id="results" class="results-grid" style="display: none;"></div>
         </div>
