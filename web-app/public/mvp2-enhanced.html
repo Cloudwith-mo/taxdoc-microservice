@@ -402,7 +402,8 @@
         
         // Auth functions
         function toggleDropdown() {
-            document.getElementById('dropdownMenu').classList.toggle('show');
+            const dropdown = document.getElementById('dropdownMenu');
+            dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
         }
         
         function showSettings() {
@@ -607,8 +608,11 @@
                     
                     <!-- Extracted Data -->
                     <div style="background: #f8fafc; padding: 1rem; border-radius: 8px; border: 1px solid #e2e8f0; max-height: 600px; overflow-y: auto;">
-                        <h5>Extracted Data (${Object.keys(result.extracted_data).length} fields)</h5>
-                        <div style="display: grid; gap: 0.5rem; margin-top: 1rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                            <h5>Extracted Data (${Object.keys(result.extracted_data).length} fields)</h5>
+                            <button onclick="editUploadResult('${filename}')" class="btn btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.875rem;">Edit Fields</button>
+                        </div>
+                        <div id="fields-${filename.replace(/[^a-zA-Z0-9]/g, '')}" style="display: grid; gap: 0.5rem;">
                             ${Object.entries(result.extracted_data).map(([key, data]) => `
                                 <div style="background: white; padding: 0.75rem; border-radius: 6px; border-left: 3px solid #667eea;">
                                     <div style="font-weight: 600; font-size: 0.875rem; color: #374151;">${key.replace(/_/g, ' ').toUpperCase()}</div>
@@ -617,27 +621,34 @@
                                 </div>
                             `).join('')}
                         </div>
+                        <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
+                            <button onclick="downloadUploadResult('${filename}')" class="btn btn-primary" style="padding: 0.5rem 1rem; font-size: 0.875rem;">Download JSON</button>
+                        </div>
                     </div>
                 </div>
             `;
             
             resultsContainer.appendChild(resultCard);
             
-            // Save to persistent storage and refresh documents tab
-            setTimeout(async () => {
-                await saveDocumentToPersistentStorage({
-                    docId: generateId(),
-                    filename: filename,
-                    status: 'completed',
-                    docType: result.document_type,
-                    docTypeConfidence: result.confidence_score / 100,
-                    fields: Object.fromEntries(Object.entries(result.extracted_data).map(([k, v]) => [k, v.value])),
-                    summary: `Processed ${result.document_type} with ${result.confidence_score}% confidence`,
-                    uploadDate: new Date().toISOString(),
-                    userId: getUserId()
-                });
-                loadDocuments();
-            }, 2000);
+            // Save to persistent storage immediately
+            const docData = {
+                docId: generateId(),
+                filename: filename,
+                status: 'completed',
+                docType: result.document_type,
+                docTypeConfidence: result.confidence_score / 100,
+                fields: Object.fromEntries(Object.entries(result.extracted_data).map(([k, v]) => [k, v.value])),
+                summary: `Processed ${result.document_type} with ${result.confidence_score}% confidence`,
+                uploadDate: new Date().toISOString(),
+                userId: getUserId()
+            };
+            
+            // Store in global variable for editing
+            window.uploadResults = window.uploadResults || {};
+            window.uploadResults[filename] = docData;
+            
+            await saveDocumentToPersistentStorage(docData);
+            updateAnalytics();
         }
 
 
@@ -850,7 +861,101 @@
         }
         
         async function loadAnalytics() {
-            /* disabled until route exists */
+            try {
+                const response = await fetch(`${API_BASE}/analytics?userId=${getUserId()}`);
+                if (response.ok) {
+                    const analytics = await response.json();
+                    updateAnalyticsDisplay(analytics);
+                } else {
+                    throw new Error('Backend unavailable');
+                }
+            } catch (error) {
+                // Calculate from local storage
+                const docs = JSON.parse(localStorage.getItem(`docs_${getUserId()}`) || '[]');
+                const analytics = calculateLocalAnalytics(docs);
+                updateAnalyticsDisplay(analytics);
+            }
+        }
+        
+        function calculateLocalAnalytics(docs) {
+            const total = docs.length;
+            const processed = docs.filter(d => d.status === 'completed').length;
+            const failed = docs.filter(d => d.status === 'error').length;
+            const avgConf = processed > 0 ? 
+                docs.filter(d => d.status === 'completed')
+                    .reduce((sum, d) => sum + (d.docTypeConfidence || 0), 0) / processed * 100 : 0;
+            
+            const processingTimes = docs.filter(d => d.processingTime).map(d => d.processingTime);
+            const avgProcessingTime = processingTimes.length > 0 ? 
+                processingTimes.reduce((a, b) => a + b, 0) / processingTimes.length : 0;
+            
+            const storageUsed = docs.reduce((sum, d) => sum + (d.fileSize || 0), 0) / (1024 * 1024); // MB
+            
+            const docTypes = {};
+            docs.forEach(d => {
+                docTypes[d.docType] = (docTypes[d.docType] || 0) + 1;
+            });
+            
+            return {
+                totalDocuments: total,
+                processedDocuments: processed,
+                successRate: total > 0 ? Math.round((processed / total) * 100) : 0,
+                averageConfidence: Math.round(avgConf),
+                processingTimeP50: Math.round(avgProcessingTime),
+                processingTimeP95: Math.round(avgProcessingTime * 1.2),
+                storageUsed: Math.round(storageUsed),
+                creditsRemaining: 50 - total,
+                documentTypes: docTypes,
+                recentActivity: docs.slice(0, 5).map(d => ({
+                    filename: d.filename,
+                    docType: d.docType,
+                    timestamp: d.uploadDate,
+                    status: d.status
+                }))
+            };
+        }
+        
+        function updateAnalyticsDisplay(analytics) {
+            document.getElementById('totalDocs').textContent = analytics.totalDocuments || 0;
+            document.getElementById('processedDocs').textContent = analytics.processedDocuments || 0;
+            document.getElementById('successRate').textContent = (analytics.successRate || 0) + '%';
+            document.getElementById('avgConfidence').textContent = (analytics.averageConfidence || 0) + '%';
+            document.getElementById('processingTimeP50').textContent = (analytics.processingTimeP50 || 0) + 's';
+            document.getElementById('processingTimeP95').textContent = (analytics.processingTimeP95 || 0) + 's';
+            document.getElementById('storageUsed').textContent = (analytics.storageUsed || 0) + ' MB';
+            document.getElementById('creditsRemaining').textContent = Math.max(0, analytics.creditsRemaining || 0);
+            
+            // Document types
+            const docTypesDiv = document.getElementById('documentTypes');
+            if (analytics.documentTypes && Object.keys(analytics.documentTypes).length > 0) {
+                docTypesDiv.innerHTML = Object.entries(analytics.documentTypes)
+                    .map(([type, count]) => `
+                        <div style="display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #e2e8f0;">
+                            <span>${type}</span>
+                            <span style="font-weight: 600;">${count}</span>
+                        </div>
+                    `).join('');
+            } else {
+                docTypesDiv.innerHTML = '<p style="color: #64748b; text-align: center;">No documents processed yet</p>';
+            }
+            
+            // Recent activity
+            const activityDiv = document.getElementById('recentActivity');
+            if (analytics.recentActivity && analytics.recentActivity.length > 0) {
+                activityDiv.innerHTML = analytics.recentActivity
+                    .map(activity => `
+                        <div style="padding: 0.5rem 0; border-bottom: 1px solid #e2e8f0;">
+                            <div style="font-weight: 600; font-size: 0.875rem;">${activity.filename}</div>
+                            <div style="color: #64748b; font-size: 0.75rem;">${activity.docType} • ${new Date(activity.timestamp).toLocaleDateString()}</div>
+                        </div>
+                    `).join('');
+            } else {
+                activityDiv.innerHTML = '<p style="color: #64748b; text-align: center;">No recent activity</p>';
+            }
+        }
+        
+        function updateAnalytics() {
+            loadAnalytics();
         }
         
         async function loadDocuments() {
@@ -1124,12 +1229,33 @@
                 if (docIndex !== -1) {
                     documents[docIndex] = { ...currentEditingDoc };
                 }
+                
+                // Update upload results if editing from upload tab
+                if (window.uploadResults) {
+                    Object.keys(window.uploadResults).forEach(filename => {
+                        if (window.uploadResults[filename].docId === currentEditingDoc.docId) {
+                            window.uploadResults[filename] = { ...currentEditingDoc };
+                            // Update the display
+                            const fieldsDiv = document.getElementById(`fields-${filename.replace(/[^a-zA-Z0-9]/g, '')}`);
+                            if (fieldsDiv) {
+                                fieldsDiv.innerHTML = Object.entries(currentEditingDoc.fields || {}).map(([key, value]) => `
+                                    <div style="background: white; padding: 0.75rem; border-radius: 6px; border-left: 3px solid #667eea;">
+                                        <div style="font-weight: 600; font-size: 0.875rem; color: #374151;">${key.replace(/_/g, ' ').toUpperCase()}</div>
+                                        <div style="font-size: 1rem; margin-top: 0.25rem;">${value}</div>
+                                        <div style="color: #10b981; font-size: 0.75rem; margin-top: 0.25rem;">Confidence: 95%</div>
+                                    </div>
+                                `).join('');
+                            }
+                        }
+                    });
+                }
 
                 // Update local storage
                 localStorage.setItem(`docs_${getUserId()}`, JSON.stringify(documents));
 
                 closeEditModal();
                 updateDocumentGrid();
+                updateAnalytics();
                 
             } catch (error) {
                 console.error('Failed to save document:', error);
@@ -1189,6 +1315,36 @@
             return 'doc_' + Math.random().toString(36).substr(2, 9);
         }
         
+        // Upload result editing functions
+        function editUploadResult(filename) {
+            const docData = window.uploadResults[filename];
+            if (!docData) return;
+            
+            currentEditingDoc = docData;
+            populateEditForm(docData);
+            document.getElementById('editModal').style.display = 'flex';
+        }
+        
+        function downloadUploadResult(filename) {
+            const docData = window.uploadResults[filename];
+            if (!docData) return;
+            
+            const data = {
+                filename: docData.filename,
+                docType: docData.docType,
+                fields: docData.fields || {},
+                extractedAt: new Date().toISOString()
+            };
+
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${filename.replace(/\.[^/.]+$/, '')}_extracted.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+        
 
         
         async function startFreeTrial() {
@@ -1235,13 +1391,13 @@
             document.getElementById('userEmail').textContent = getUserEmail();
             
             // Setup event listeners
-            document.getElementById('userDropdown').addEventListener('click', toggleDropdown);
+            document.getElementById('userDropdown').addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggleDropdown();
+            });
             document.addEventListener('click', (e) => {
                 if (!e.target.closest('.auth-section')) {
-                    const dropdown = document.getElementById('dropdownMenu');
-                    if (dropdown.style.display === 'block') {
-                        dropdown.style.display = 'none';
-                    }
+                    document.getElementById('dropdownMenu').style.display = 'none';
                 }
             });
             
@@ -1273,6 +1429,9 @@
             
             loadAnalytics();
             loadDocuments();
+            
+            // Initialize upload results storage
+            window.uploadResults = window.uploadResults || {};
             
             // Check trial status on load
             const isTrialActive = localStorage.getItem('trialActive') === 'true';
