@@ -36,7 +36,8 @@
                     "dynamodb:BatchWriteItem"
                   ],
                   "Resource": [
-                    "arn:aws:dynamodb:*:*:table/ParsePilot-Facts"
+                    "arn:aws:dynamodb:*:*:table/ParsePilot-Facts",
+                    "arn:aws:dynamodb:*:*:table/TaxDocuments-prod"
                   ]
                 }
               ]

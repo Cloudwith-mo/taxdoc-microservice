@@ -503,7 +503,17 @@
 
         // User management - now uses auth system
         function getUserId() {
-            return auth.getProfile().userId;
+            const profile = auth.getProfile();
+            if (profile.loggedIn) {
+                return profile.userId;
+            }
+            // Generate stable guest ID
+            let guestId = localStorage.getItem('pp_guest_id');
+            if (!guestId) {
+                guestId = 'guest_' + Math.random().toString(36).substr(2, 9);
+                localStorage.setItem('pp_guest_id', guestId);
+            }
+            return guestId;
         }
         
         function getUserEmail() {
@@ -1497,8 +1507,8 @@
         
         async function saveDocumentToPersistentStorage(doc) {
             try {
-                // Save to backend with auth headers
-                await fetch(`${API_BASE}/documents`, {
+                console.log('Saving document:', doc);
+                const response = await fetch(`${API_BASE}/documents`, {
                     method: 'POST',
                     headers: { 
                         'Content-Type': 'application/json',
@@ -1507,18 +1517,40 @@
                     body: JSON.stringify(doc)
                 });
                 
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+                }
+                
+                console.log('Document saved to backend successfully');
+                
                 // Also save locally
                 const savedDocs = JSON.parse(localStorage.getItem(`docs_${getUserId()}`) || '[]');
                 savedDocs.unshift(doc);
                 localStorage.setItem(`docs_${getUserId()}`, JSON.stringify(savedDocs));
                 
             } catch (error) {
-                console.error('Failed to save document:', error);
+                console.error('Failed to save document to backend:', error);
+                // Show user notification
+                showNotification('Document saved locally only - backend sync failed', 'warning');
+                
                 // Fallback to local storage only
                 const savedDocs = JSON.parse(localStorage.getItem(`docs_${getUserId()}`) || '[]');
                 savedDocs.unshift(doc);
                 localStorage.setItem(`docs_${getUserId()}`, JSON.stringify(savedDocs));
             }
+        }
+        
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed; top: 20px; right: 20px; z-index: 9999;
+                padding: 12px 20px; border-radius: 6px; color: white;
+                background: ${type === 'warning' ? '#f39c12' : '#667eea'};
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            `;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            setTimeout(() => notification.remove(), 5000);
         }
         
         function generateId() {
