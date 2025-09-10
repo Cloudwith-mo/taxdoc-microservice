@@ -1,0 +1,14 @@
+{
+  "schema_version": "2025-09-A",
+  "document_type": "1099-NEC",
+  "tax_year": 2021,
+  "payer": { "name": "Business Company", "address": "1234 Long Street, Bigtown, US State, 12345", "tin": "12-3456789" },
+  "recipient": { "name": "Peter Payer", "address": "5678 Short Ave., Littleville, US State, 67890", "tin": "123-45-6789" },
+  "boxes": {
+    "1_nonemployee_comp": "12345.00",
+    "4_federal_tax_withheld": "0.00",
+    "5_state_tax_withheld": "0.00",
+    "6_state_payer_state_no": "ST 123456",
+    "7_state_income": "12345.00"
+  }
+}

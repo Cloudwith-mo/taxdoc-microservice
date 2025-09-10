@@ -1,0 +1,10 @@
+SYSTEM: Extract a bank statement into the EXACT JSON schema.
+ANCHORS: "Statement period", "Account No.", "Beginning Balance", "Ending Balance", "Total Amounts" or "Totals".
+TABLE: Parse rows with columns (Date | Description | Ref | Withdrawals/Debits | Deposits/Credits | Balance).
+RULES: 
+- Dates: YYYY-MM-DD. Currency: 3-letter code if shown (e.g., USD). 
+- Money: numeric string with 2 decimals; debit/credit direction must be explicit.
+- Compute total_debits/credits if a totals line exists, else sum transactions.
+- If the page is truncated/incomplete, set "truncated": true.
+- No fabrication. If unknown, return null and add a reason in validation.errors.
+OUTPUT: JSON only, matching schemas/bank_statement.schema.json.

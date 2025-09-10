@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "W-2 v2025-09-A",
+  "type": "object",
+  "required": ["schema_version", "document_type", "tax_year", "employee", "employer", "boxes"],
+  "properties": {
+    "schema_version": { "type": "string", "const": "2025-09-A" },
+    "document_type": { "type": "string", "enum": ["W-2", "W2"] },
+    "tax_year": { "type": "integer" },
+    "employee": { "type": "object", "properties": { "name": { "type": "string" }, "address": { "type": "string" }, "ssn": { "type": "string" } } },
+    "employer": { "type": "object", "properties": { "name": { "type": "string" }, "address": { "type": "string" }, "ein": { "type": "string" } } },
+    "boxes": {
+      "type": "object",
+      "properties": {
+        "1_wages": { "type": "string", "pattern": "^\\d+\\.\\d{2}$" },
+        "2_federal_tax_withheld": { "type": "string", "pattern": "^\\d+\\.\\d{2}$" },
+        "3_social_security_wages": { "type": "string", "pattern": "^\\d+\\.\\d{2}$" },
+        "4_social_security_tax_withheld": { "type": "string", "pattern": "^\\d+\\.\\d{2}$" },
+        "5_medicare_wages": { "type": "string", "pattern": "^\\d+\\.\\d{2}$" },
+        "6_medicare_tax_withheld": { "type": "string", "pattern": "^\\d+\\.\\d{2}$" },
+        "12a": { "type": "object", "properties": { "code": { "type": "string" }, "amount": { "type": "string", "pattern": "^\\d+\\.\\d{2}$" } } },
+        "12b": { "type": "object", "properties": { "code": { "type": "string" }, "amount": { "type": "string", "pattern": "^\\d+\\.\\d{2}$" } } },
+        "12c": { "type": "object", "properties": { "code": { "type": "string" }, "amount": { "type": "string", "pattern": "^\\d+\\.\\d{2}$" } } },
+        "15_state": { "type": "string" },
+        "16_state_wages": { "type": "string", "pattern": "^\\d+\\.\\d{2}$" },
+        "17_state_income_tax": { "type": "string", "pattern": "^\\d+\\.\\d{2}$" },
+        "18_local_wages": { "type": "string", "pattern": "^\\d+\\.\\d{2}$" },
+        "19_local_income_tax": { "type": "string", "pattern": "^\\d+\\.\\d{2}$" },
+        "20_locality_name": { "type": "string" }
+      }
+    }
+  }
+}

@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ParsePilot - High-Accuracy Document Viewer</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f8fafc;
+            height: 100vh;
+            display: flex;
+        }
+        
+        .sidebar {
+            width: 400px;
+            background: white;
+            border-right: 1px solid #e2e8f0;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        
+        .main-viewer {
+            flex: 1;
+            position: relative;
+            background: #f1f5f9;
+            overflow: hidden;
+        }
+        
+        .review-banner {
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            padding: 12px 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            display: none;
+        }
+        
+        .review-banner.show {
+            display: block;
+        }
+        
+        .doc-header {
+            margin-bottom: 24px;
+        }
+        
+        .doc-type {
+            display: inline-block;
+            background: #3b82f6;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 16px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .doc-confidence {
+            font-size: 14px;
+            color: #64748b;
+        }
+        
+        .field-group {
+            margin-bottom: 24px;
+        }
+        
+        .field-group h3 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .field-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            margin-bottom: 8px;
+            background: #f8fafc;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .field-item:hover {
+            background: #e2e8f0;
+            transform: translateX(2px);
+        }
+        
+        .field-item.highlighted {
+            background: #dbeafe;
+            border: 2px solid #3b82f6;
+        }
+        
+        .field-label {
+            font-weight: 500;
+            color: #374151;
+            flex: 1;
+        }
+        
+        .field-value {
+            font-family: 'SF Mono', Monaco, monospace;
+            background: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            border: 1px solid #d1d5db;
+            margin: 0 8px;
+            min-width: 120px;
+            text-align: right;
+        }
+        
+        .confidence-badge {
+            padding: 2px 6px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            min-width: 45px;
+            text-align: center;
+        }
+        
+        .confidence-high { background: #dcfce7; color: #166534; }
+        .confidence-medium { background: #fef3c7; color: #92400e; }
+        .confidence-low { background: #fee2e2; color: #991b1b; }
+        
+        .source-badge {
+            font-size: 10px;
+            padding: 2px 4px;
+            border-radius: 4px;
+            background: #f3f4f6;
+            color: #6b7280;
+            margin-left: 4px;
+        }
+        
+        .document-canvas {
+            position: relative;
+            margin: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        .document-image {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        
+        .bbox-overlay {
+            position: absolute;
+            border: 2px solid #3b82f6;
+            background: rgba(59, 130, 246, 0.1);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            border-radius: 2px;
+        }
+        
+        .bbox-overlay.show {
+            opacity: 1;
+        }
+        
+        .line-items {
+            margin-top: 24px;
+        }
+        
+        .line-items table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .line-items th,
+        .line-items td {
+            padding: 8px 12px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .line-items th {
+            background: #f8fafc;
+            font-weight: 600;
+            color: #374151;
+        }
+        
+        .actions {
+            margin-top: 24px;
+            padding-top: 20px;
+            border-top: 1px solid #e2e8f0;
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: none;
+            font-weight: 500;
+            cursor: pointer;
+            margin-right: 8px;
+            margin-bottom: 8px;
+            transition: all 0.2s;
+        }
+        
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+        
+        .btn-secondary {
+            background: #f3f4f6;
+            color: #374151;
+            border: 1px solid #d1d5db;
+        }
+        
+        .btn-secondary:hover {
+            background: #e5e7eb;
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <div class="review-banner" id="reviewBanner">
+            ⚠️ <strong>Review Required:</strong> Low confidence fields or validation errors detected.
+        </div>
+        
+        <div class="doc-header">
+            <div class="doc-type" id="docType">PAYSTUB</div>
+            <div class="doc-confidence" id="docConfidence">Confidence: 85%</div>
+        </div>
+        
+        <div class="field-group">
+            <h3>Employee Information</h3>
+            <div class="field-item" data-field="employee_name">
+                <span class="field-label">Employee Name</span>
+                <input class="field-value" value="John Doe" readonly>
+                <span class="confidence-badge confidence-high">95%</span>
+                <span class="source-badge">textract</span>
+            </div>
+        </div>
+        
+        <div class="field-group">
+            <h3>Employer Information</h3>
+            <div class="field-item" data-field="employer_name">
+                <span class="field-label">Employer Name</span>
+                <input class="field-value" value="ACME Corp" readonly>
+                <span class="confidence-badge confidence-high">92%</span>
+                <span class="source-badge">textract</span>
+            </div>
+        </div>
+        
+        <div class="field-group">
+            <h3>Pay Period</h3>
+            <div class="field-item" data-field="pay_period_start">
+                <span class="field-label">Period Start</span>
+                <input class="field-value" value="2024-01-01" readonly>
+                <span class="confidence-badge confidence-medium">78%</span>
+                <span class="source-badge">pattern</span>
+            </div>
+            <div class="field-item" data-field="pay_period_end">
+                <span class="field-label">Period End</span>
+                <input class="field-value" value="2024-01-15" readonly>
+                <span class="confidence-badge confidence-medium">76%</span>
+                <span class="source-badge">pattern</span>
+            </div>
+            <div class="field-item" data-field="pay_date">
+                <span class="field-label">Pay Date</span>
+                <input class="field-value" value="2024-01-20" readonly>
+                <span class="confidence-badge confidence-high">88%</span>
+                <span class="source-badge">textract</span>
+            </div>
+        </div>
+        
+        <div class="field-group">
+            <h3>Pay Summary</h3>
+            <div class="field-item" data-field="gross_pay_current">
+                <span class="field-label">Gross Pay (Current)</span>
+                <input class="field-value" value="$2,500.00" readonly>
+                <span class="confidence-badge confidence-high">94%</span>
+                <span class="source-badge">textract</span>
+            </div>
+            <div class="field-item" data-field="gross_pay_ytd">
+                <span class="field-label">Gross Pay (YTD)</span>
+                <input class="field-value" value="$5,000.00" readonly>
+                <span class="confidence-badge confidence-high">91%</span>
+                <span class="source-badge">textract</span>
+            </div>
+            <div class="field-item" data-field="net_pay_current">
+                <span class="field-label">Net Pay (Current)</span>
+                <input class="field-value" value="$1,875.00" readonly>
+                <span class="confidence-badge confidence-high">96%</span>
+                <span class="source-badge">textract</span>
+            </div>
+        </div>
+        
+        <div class="line-items">
+            <h3>Earnings & Deductions</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Current</th>
+                        <th>YTD</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Regular Pay</td>
+                        <td>$2,000.00</td>
+                        <td>$4,000.00</td>
+                    </tr>
+                    <tr>
+                        <td>Overtime</td>
+                        <td>$500.00</td>
+                        <td>$1,000.00</td>
+                    </tr>
+                    <tr style="color: #dc2626;">
+                        <td>Federal Tax</td>
+                        <td>-$375.00</td>
+                        <td>-$750.00</td>
+                    </tr>
+                    <tr style="color: #dc2626;">
+                        <td>State Tax</td>
+                        <td>-$125.00</td>
+                        <td>-$250.00</td>
+                    </tr>
+                    <tr style="color: #dc2626;">
+                        <td>Social Security</td>
+                        <td>-$125.00</td>
+                        <td>-$250.00</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="actions">
+            <button class="btn btn-primary" onclick="downloadJSON()">Download JSON</button>
+            <button class="btn btn-secondary" onclick="copyToClipboard()">Copy to Clipboard</button>
+            <button class="btn btn-secondary" onclick="exportToSheets()">Export to Sheets</button>
+        </div>
+    </div>
+    
+    <div class="main-viewer">
+        <div class="document-canvas" id="documentCanvas">
+            <img class="document-image" id="documentImage" 
+                 src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAwIiBoZWlnaHQ9IjgwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjlmYWZiIi8+CiAgPHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC1zaXplPSIyNCIgZmlsbD0iIzY2NzM4YiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkRvY3VtZW50IFByZXZpZXc8L3RleHQ+Cjwvc3ZnPgo=" 
+                 alt="Document Preview">
+            
+            <!-- Bounding box overlays will be dynamically added here -->
+        </div>
+    </div>
+
+    <script>
+        // Sample document data with bounding boxes
+        const documentData = {
+            classification: { type: "PAYSTUB", confidence: 0.85 },
+            fields: {
+                employee_name: { 
+                    value: "John Doe", 
+                    confidence: 0.95, 
+                    source: "textract_query",
+                    bbox: { Left: 0.1, Top: 0.15, Width: 0.3, Height: 0.03 }
+                },
+                employer_name: { 
+                    value: "ACME Corp", 
+                    confidence: 0.92, 
+                    source: "textract_query",
+                    bbox: { Left: 0.1, Top: 0.08, Width: 0.25, Height: 0.03 }
+                },
+                gross_pay_current: { 
+                    value: "$2,500.00", 
+                    confidence: 0.94, 
+                    source: "textract_query",
+                    bbox: { Left: 0.7, Top: 0.4, Width: 0.15, Height: 0.03 }
+                },
+                net_pay_current: { 
+                    value: "$1,875.00", 
+                    confidence: 0.96, 
+                    source: "textract_query",
+                    bbox: { Left: 0.7, Top: 0.7, Width: 0.15, Height: 0.03 }
+                }
+            },
+            needs_review: false
+        };
+
+        function initializeViewer() {
+            const image = document.getElementById('documentImage');
+            const canvas = document.getElementById('documentCanvas');
+            
+            // Create bounding box overlays
+            Object.entries(documentData.fields).forEach(([fieldName, fieldData]) => {
+                if (fieldData.bbox) {
+                    createBoundingBoxOverlay(fieldName, fieldData.bbox, canvas);
+                }
+            });
+            
+            // Add field hover interactions
+            document.querySelectorAll('.field-item').forEach(item => {
+                const fieldName = item.dataset.field;
+                
+                item.addEventListener('mouseenter', () => {
+                    highlightField(fieldName);
+                });
+                
+                item.addEventListener('mouseleave', () => {
+                    unhighlightField(fieldName);
+                });
+                
+                item.addEventListener('click', () => {
+                    scrollToField(fieldName);
+                });
+            });
+            
+            // Show review banner if needed
+            if (documentData.needs_review) {
+                document.getElementById('reviewBanner').classList.add('show');
+            }
+        }
+
+        function createBoundingBoxOverlay(fieldName, bbox, container) {
+            const overlay = document.createElement('div');
+            overlay.className = 'bbox-overlay';
+            overlay.id = `bbox-${fieldName}`;
+            
+            // Position overlay based on bounding box coordinates
+            const image = document.getElementById('documentImage');
+            
+            function updateOverlayPosition() {
+                const rect = image.getBoundingClientRect();
+                const containerRect = container.getBoundingClientRect();
+                
+                overlay.style.left = `${bbox.Left * rect.width}px`;
+                overlay.style.top = `${bbox.Top * rect.height}px`;
+                overlay.style.width = `${bbox.Width * rect.width}px`;
+                overlay.style.height = `${bbox.Height * rect.height}px`;
+            }
+            
+            // Update position when image loads or window resizes
+            image.addEventListener('load', updateOverlayPosition);
+            window.addEventListener('resize', updateOverlayPosition);
+            
+            container.appendChild(overlay);
+            
+            // Initial position
+            setTimeout(updateOverlayPosition, 100);
+        }
+
+        function highlightField(fieldName) {
+            // Highlight field in sidebar
+            const fieldItem = document.querySelector(`[data-field="${fieldName}"]`);
+            if (fieldItem) {
+                fieldItem.classList.add('highlighted');
+            }
+            
+            // Show bounding box overlay
+            const overlay = document.getElementById(`bbox-${fieldName}`);
+            if (overlay) {
+                overlay.classList.add('show');
+            }
+        }
+
+        function unhighlightField(fieldName) {
+            // Remove highlight from sidebar
+            const fieldItem = document.querySelector(`[data-field="${fieldName}"]`);
+            if (fieldItem) {
+                fieldItem.classList.remove('highlighted');
+            }
+            
+            // Hide bounding box overlay
+            const overlay = document.getElementById(`bbox-${fieldName}`);
+            if (overlay) {
+                overlay.classList.remove('show');
+            }
+        }
+
+        function scrollToField(fieldName) {
+            const overlay = document.getElementById(`bbox-${fieldName}`);
+            if (overlay) {
+                overlay.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                
+                // Flash the overlay
+                overlay.style.borderColor = '#ef4444';
+                overlay.style.backgroundColor = 'rgba(239, 68, 68, 0.2)';
+                
+                setTimeout(() => {
+                    overlay.style.borderColor = '#3b82f6';
+                    overlay.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
+                }, 1000);
+            }
+        }
+
+        function toPixels(bbox, imgWidth, imgHeight) {
+            return {
+                left: bbox.Left * imgWidth,
+                top: bbox.Top * imgHeight,
+                width: bbox.Width * imgWidth,
+                height: bbox.Height * imgHeight
+            };
+        }
+
+        function downloadJSON() {
+            const dataStr = JSON.stringify(documentData, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'paystub-data.json';
+            link.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function copyToClipboard() {
+            const dataStr = JSON.stringify(documentData, null, 2);
+            navigator.clipboard.writeText(dataStr).then(() => {
+                alert('Data copied to clipboard!');
+            });
+        }
+
+        function exportToSheets() {
+            // Placeholder for Google Sheets integration
+            alert('Export to Google Sheets functionality would be implemented here');
+        }
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', initializeViewer);
+    </script>
+</body>
+</html>

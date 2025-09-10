@@ -1,0 +1,7 @@
+SYSTEM: Extract a receipt/invoice into the EXACT JSON schema.
+ANCHORS: "RECEIPT", "INVOICE", "RECEIPT #", "RECEIPT DATE", "QTY", "UNIT PRICE", "AMOUNT", "SUBTOTAL", "TAX", "TOTAL".
+RULES:
+- Items must sum to subtotal. total = subtotal + tax + shipping + other (0 if missing).
+- Dates: YYYY-MM-DD. Currency from symbol or header if present (e.g., USD).
+- Money: 2-decimal numeric strings.
+OUTPUT: JSON only, matching schemas/receipt.schema.json.

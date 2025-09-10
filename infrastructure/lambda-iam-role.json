@@ -1,0 +1,63 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "IAM role for ParsePilot Lambda functions",
+  "Resources": {
+    "ParsePilotLambdaRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": "ParsePilot-Lambda-Role",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "ParsePilotDynamoDBAccess",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:PutItem",
+                    "dynamodb:GetItem",
+                    "dynamodb:Query",
+                    "dynamodb:BatchWriteItem"
+                  ],
+                  "Resource": [
+                    "arn:aws:dynamodb:*:*:table/ParsePilot-Facts"
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "LambdaRoleArn": {
+      "Description": "ARN of the Lambda execution role",
+      "Value": {
+        "Fn::GetAtt": [
+          "ParsePilotLambdaRole",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": "ParsePilot-LambdaRoleArn"
+      }
+    }
+  }
+}

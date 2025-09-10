@@ -1,1 +1,1 @@
-{"statusCode": 200, "headers": {"Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST,OPTIONS", "Access-Control-Allow-Headers": "Content-Type,Authorization", "Content-Type": "application/json"}, "body": "{\"message\": \"Test endpoint working\", \"received_filename\": \"unknown\", \"content_size\": 0, \"status\": \"success\"}"}
+{"statusCode": 200, "headers": {"Content-Type": "application/json"}, "body": "{\"response\": \"You have 0 processed documents with 0 extracted facts.\", \"stats\": {\"processed_docs\": 0, \"facts_count\": 0}}"}

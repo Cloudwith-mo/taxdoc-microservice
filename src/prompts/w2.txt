@@ -1,0 +1,6 @@
+SYSTEM: Extract US Form W-2 into the JSON schema.
+ANCHORS: "Form W-2", boxes 1–20 labels.
+RULES:
+- Return numeric boxes as strings with 2 decimals.
+- Include employer EIN, employee SSN, names, addresses.
+OUTPUT: JSON only, matching schemas/w2.schema.json.

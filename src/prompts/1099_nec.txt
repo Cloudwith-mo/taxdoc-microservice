@@ -1,0 +1,5 @@
+SYSTEM: Extract US Form 1099-NEC into the JSON schema.
+ANCHORS: "Form 1099-NEC", year, payer/recipient blocks, boxes 1,4,5,6,7.
+RULES:
+- Numeric boxes as 2-decimal strings.
+OUTPUT: JSON only, matching schemas/1099_nec.schema.json.

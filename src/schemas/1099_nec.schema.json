@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "1099-NEC v2025-09-A",
+  "type": "object",
+  "required": ["schema_version", "document_type", "tax_year", "payer", "recipient", "boxes"],
+  "properties": {
+    "schema_version": { "type": "string", "const": "2025-09-A" },
+    "document_type": { "type": "string", "enum": ["1099-NEC", "FORM_1099_NEC"] },
+    "tax_year": { "type": "integer" },
+    "payer": { "type": "object", "properties": { "name": { "type": "string" }, "address": { "type": "string" }, "tin": { "type": "string" } } },
+    "recipient": { "type": "object", "properties": { "name": { "type": "string" }, "address": { "type": "string" }, "tin": { "type": "string" } } },
+    "boxes": {
+      "type": "object",
+      "properties": {
+        "1_nonemployee_comp": { "type": "string", "pattern": "^\\d+\\.\\d{2}$" },
+        "4_federal_tax_withheld": { "type": "string", "pattern": "^\\d+\\.\\d{2}$" },
+        "5_state_tax_withheld": { "type": "string", "pattern": "^\\d+\\.\\d{2}$" },
+        "6_state_payer_state_no": { "type": "string" },
+        "7_state_income": { "type": "string", "pattern": "^\\d+\\.\\d{2}$" }
+      }
+    }
+  }
+}

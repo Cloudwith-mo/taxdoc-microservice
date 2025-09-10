@@ -1004,32 +1004,33 @@
             `;
             
             try {
-                // Load memory and try to answer from processed docs
-                const memory = await loadChatMemory();
-                let smartResponse = '';
+                // Use new facts-based chat endpoint
+                const response = await fetch(`${API_BASE}/chat-facts`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...auth.authHeaders()
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        user_id: getUserId()
+                    })
+                });
                 
-                // Simple pattern matching for common questions
-                const msgLower = message.toLowerCase();
-                if (msgLower.includes('employer ein') || msgLower.includes('ein')) {
-                    const einFact = memory.facts.find(f => f.toLowerCase().includes('employer ein'));
-                    smartResponse = einFact || "I couldn't find an Employer EIN in your processed docs yet.";
-                } else if (msgLower.includes('wages') || msgLower.includes('box 1')) {
-                    const wagesFact = memory.facts.find(f => f.toLowerCase().includes('wages'));
-                    smartResponse = wagesFact || "I couldn't find wage information in your processed docs yet.";
-                } else if (msgLower.includes('total') || msgLower.includes('amount')) {
-                    const totalFact = memory.facts.find(f => f.toLowerCase().includes('total'));
-                    smartResponse = totalFact || "I couldn't find total amounts in your processed docs yet.";
-                } else {
-                    smartResponse = `I found ${memory.facts.length} facts from your ${Object.keys(memory.index).length} processed documents. Try asking about specific fields like "Employer EIN", "wages", or "totals".`;
-                }
+                const data = await response.json();
                 
                 // Remove typing indicator
                 document.getElementById(typingId).remove();
                 
+                // Handle source highlighting
+                if (data.source && data.source.bbox) {
+                    console.log('Highlight source:', data.source);
+                }
+                
                 // Add AI response
                 chatArea.innerHTML += `
                     <div style="margin-bottom: 1rem; padding: 1rem; background: #667eea; color: white; border-radius: 6px;">
-                        <strong>AI:</strong> ${smartResponse}
+                        <strong>AI:</strong> ${data.response || 'Sorry, I could not process your request.'}
                     </div>
                 `;
                 

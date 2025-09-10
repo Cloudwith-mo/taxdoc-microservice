@@ -1,0 +1,34 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Receipt v2025-09-A",
+  "type": "object",
+  "required": ["schema_version", "document_type", "seller", "receipt", "currency", "totals"],
+  "properties": {
+    "schema_version": { "type": "string", "const": "2025-09-A" },
+    "document_type": { "type": "string", "enum": ["Receipt", "SALES_RECEIPT", "INVOICE_RECEIPT"] },
+    "seller": { "type": "object", "required": ["name"], "properties": { "name": { "type": "string" }, "address": { "type": "string" }, "email": { "type": "string" }, "phone": { "type": "string" } } },
+    "buyer": { "type": "object", "properties": { "name": { "type": "string" }, "address": { "type": "string" } } },
+    "ship_to": { "type": "object", "properties": { "name": { "type": "string" }, "address": { "type": "string" } } },
+    "receipt": { "type": "object", "properties": { "number": { "type": "string" }, "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }, "po_number": { "type": "string" }, "due_date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" } } },
+    "currency": { "type": "string" },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["description", "qty", "unit_price", "amount"],
+        "properties": {
+          "description": { "type": "string" },
+          "sku": { "type": "string" },
+          "qty": { "type": "number" },
+          "unit_price": { "type": "string", "pattern": "^\\d+\\.\\d{2}$" },
+          "amount": { "type": "string", "pattern": "^\\d+\\.\\d{2}$" }
+        }
+      }
+    },
+    "charges": { "type": "object", "properties": { "shipping": { "type": "string", "pattern": "^\\d+\\.\\d{2}$" }, "other": { "type": "string", "pattern": "^\\d+\\.\\d{2}$" } } },
+    "taxes": { "type": "array", "items": { "type": "object", "properties": { "name": { "type": "string" }, "rate": { "type": "string" }, "amount": { "type": "string", "pattern": "^\\d+\\.\\d{2}$" } } } },
+    "totals": { "type": "object", "required": ["subtotal", "tax", "total"], "properties": { "subtotal": { "type": "string", "pattern": "^\\d+\\.\\d{2}$" }, "tax": { "type": "string", "pattern": "^\\d+\\.\\d{2}$" }, "total": { "type": "string", "pattern": "^\\d+\\.\\d{2}$" } } },
+    "payment": { "type": "object", "properties": { "method": { "type": "string" }, "terms": { "type": "string" } } },
+    "validation": { "type": "object", "properties": { "confidence": { "type": "number" }, "errors": { "type": "array", "items": { "type": "string" } } } }
+  }
+}

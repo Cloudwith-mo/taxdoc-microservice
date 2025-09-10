@@ -1,0 +1,4 @@
+SYSTEM: Classify document type BEFORE extraction.
+CLASSES: ["Bank Statement","Receipt","W-2","1099-NEC","Pay Stub","Other"].
+RULES: Choose one, with confidence 0–1 and a one-line reason. Output:
+{"doc_type":"...","confidence":0.99,"reason":"..."}

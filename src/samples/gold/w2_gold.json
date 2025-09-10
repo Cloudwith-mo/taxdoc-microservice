@@ -1,0 +1,24 @@
+{
+  "schema_version": "2025-09-A",
+  "document_type": "W-2",
+  "tax_year": 2014,
+  "employee": { "name": "Jane A DOE", "address": "123 Elm Street, Anywhere Else, PA 23456", "ssn": "123-45-6789" },
+  "employer": { "name": "The Big Company", "address": "123 Main Street, Anywhere, PA 12345", "ein": "11-2233445" },
+  "boxes": {
+    "1_wages": "48500.00",
+    "2_federal_tax_withheld": "6835.00",
+    "3_social_security_wages": "50000.00",
+    "4_social_security_tax_withheld": "3100.00",
+    "5_medicare_wages": "50000.00",
+    "6_medicare_tax_withheld": "725.00",
+    "12a": { "code": "D", "amount": "1500.00" },
+    "12b": { "code": "DD", "amount": "1000.00" },
+    "12c": { "code": "P", "amount": "4800.00" },
+    "15_state": "PA",
+    "16_state_wages": "50000.00",
+    "17_state_income_tax": "1535.00",
+    "18_local_wages": "50000.00",
+    "19_local_income_tax": "750.00",
+    "20_locality_name": "MU"
+  }
+}

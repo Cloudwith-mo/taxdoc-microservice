@@ -1,0 +1,15 @@
+{
+  "schema_version": "2025-09-A",
+  "document_type": "Bank Statement",
+  "issuer": { "name": "Sample Bank", "address": "1 Bank Way, City, ST" },
+  "account": { "institution": "Sample Bank", "number": "1234-5678", "holder": "John Doe" },
+  "statement_period": { "start": "2025-08-01", "end": "2025-08-31" },
+  "currency": "USD",
+  "balances": { "beginning": "1000.00", "ending": "1400.00", "total_debits": "200.00", "total_credits": "600.00" },
+  "transactions": [
+    { "date": "2025-08-05", "type": "deposit", "check_no": null, "description": "Payroll", "reference": null, "direction": "credit", "amount": "500.00", "balance_after": "1500.00" },
+    { "date": "2025-08-12", "type": "debit", "check_no": null, "description": "Groceries", "reference": null, "direction": "debit", "amount": "200.00", "balance_after": "1300.00" },
+    { "date": "2025-08-20", "type": "deposit", "check_no": null, "description": "Refund", "reference": null, "direction": "credit", "amount": "100.00", "balance_after": "1400.00" }
+  ],
+  "validation": { "confidence": 0.99, "errors": [] }
+}
