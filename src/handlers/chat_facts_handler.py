@@ -4,8 +4,18 @@ from facts_publisher import resolve_field_key, query_facts, get_facts_count
 
 def lambda_handler(event, context):
     """Handle chat queries using facts store"""
+    headers = {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key',
+        'Access-Control-Allow-Methods': 'POST,OPTIONS'
+    }
+    
+    if event.get('httpMethod') == 'OPTIONS':
+        return {'statusCode': 200, 'headers': headers, 'body': ''}
+    
     try:
-        body = json.loads(event['body'])
+        body = json.loads(event.get('body', '{}'))
         user_id = body.get('user_id', 'guest')
         prompt = body.get('message', '').strip()
         
@@ -14,7 +24,7 @@ def lambda_handler(event, context):
             stats = get_facts_count(user_id)
             return {
                 'statusCode': 200,
-                'headers': {'Content-Type': 'application/json'},
+                'headers': headers,
                 'body': json.dumps({
                     'response': f"You have {stats['processed_docs']} processed documents with {stats['facts_count']} extracted facts.",
                     'stats': stats
@@ -49,7 +59,7 @@ def lambda_handler(event, context):
                     
                 return {
                     'statusCode': 200,
-                    'headers': {'Content-Type': 'application/json'},
+                    'headers': headers,
                     'body': json.dumps(response)
                 }
         
@@ -63,7 +73,7 @@ def lambda_handler(event, context):
             
             return {
                 'statusCode': 200,
-                'headers': {'Content-Type': 'application/json'},
+                'headers': headers,
                 'body': json.dumps({
                     'response': f"I found these recent facts:\n" + "\n".join(fact_list) + f"\n\nTry asking about specific fields like 'employee name' or 'net pay'."
                 })
@@ -73,7 +83,7 @@ def lambda_handler(event, context):
         stats = get_facts_count(user_id)
         return {
             'statusCode': 200,
-            'headers': {'Content-Type': 'application/json'},
+            'headers': headers,
             'body': json.dumps({
                 'response': f"I don't have any processed documents for you yet. Upload a document to get started! (Current stats: {stats['processed_docs']} docs, {stats['facts_count']} facts)",
                 'stats': stats
@@ -83,6 +93,6 @@ def lambda_handler(event, context):
     except Exception as e:
         return {
             'statusCode': 500,
-            'headers': {'Content-Type': 'application/json'},
+            'headers': headers,
             'body': json.dumps({'error': str(e)})
         }
