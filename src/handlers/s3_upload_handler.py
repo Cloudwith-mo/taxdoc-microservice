@@ -10,8 +10,10 @@ sqs = boto3.client('sqs')
 UPLOAD_BUCKET = os.environ.get('UPLOAD_BUCKET', 'taxflowsai-uploads')
 INGEST_QUEUE_URL = os.environ.get('INGEST_QUEUE_URL', '')
 
+ALLOWED_ORIGIN = os.environ.get('ALLOWED_ORIGIN', '*')
+
 CORS = {
-    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
     "Access-Control-Allow-Methods": "POST,OPTIONS,GET",
     "Access-Control-Allow-Headers": "Content-Type,Authorization",
     "Content-Type": "application/json"
@@ -26,11 +28,12 @@ def ret(code, body):
 
 def lambda_handler(event, context):
     method = event.get('httpMethod', '')
+    path = event.get('path', '') or ''
     
     if method == 'OPTIONS':
         return {"statusCode": 200, "headers": CORS, "body": ""}
     
-    if method == 'GET' and event.get('path', '').endswith('/upload-url'):
+    if method == 'GET' and (path.endswith('/upload-url') or path.endswith('/presign') or path.endswith('/presign1')):
         # Generate presigned URL for upload
         filename = event.get('queryStringParameters', {}).get('filename', 'document.pdf')
         content_type = event.get('queryStringParameters', {}).get('contentType', 'application/pdf')
