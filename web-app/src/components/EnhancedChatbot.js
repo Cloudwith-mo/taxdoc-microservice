@@ -80,7 +80,7 @@ const EnhancedChatbot = ({ documentData }) => {
     setIsLoading(true);
 
     try {
-      const response = await fetch('https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod/chat', {
+      const response = await fetch('https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod/chat-facts', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -88,6 +88,7 @@ const EnhancedChatbot = ({ documentData }) => {
         },
         body: JSON.stringify({
           message: inputMessage,
+          user_id: user?.email || localStorage.getItem('taxdoc_user') || 'guest',
           document_data: documentData,
           user_sentiment: sentiment,
           response_tone: getResponseTone(sentiment),
