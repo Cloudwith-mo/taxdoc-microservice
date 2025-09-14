@@ -9,7 +9,7 @@ resource "aws_apigatewayv2_api" "idp_api" {
   description   = "IDP Pipeline API with CORS"
 
   cors_configuration {
-    allow_origins     = ["http://taxdoc-mvp-web-1754513919.s3-website-us-east-1.amazonaws.com"]
+    allow_origins     = ["*"]
     allow_methods     = ["GET", "POST", "PUT", "OPTIONS"]
     allow_headers     = ["Content-Type", "Authorization", "Idempotency-Key", "x-amz-meta-userid", "x-amz-meta-docid"]
     expose_headers    = ["ETag"]
@@ -22,6 +22,19 @@ resource "aws_apigatewayv2_api" "idp_api" {
 resource "aws_apigatewayv2_route" "upload_url" {
   api_id    = aws_apigatewayv2_api.idp_api.id
   route_key = "GET /upload-url"
+  target    = "integrations/${aws_apigatewayv2_integration.upload_url_integration.id}"
+}
+
+# Alias routes for legacy/frontends expecting /presign or /presign1
+resource "aws_apigatewayv2_route" "presign" {
+  api_id    = aws_apigatewayv2_api.idp_api.id
+  route_key = "GET /presign"
+  target    = "integrations/${aws_apigatewayv2_integration.upload_url_integration.id}"
+}
+
+resource "aws_apigatewayv2_route" "presign1" {
+  api_id    = aws_apigatewayv2_api.idp_api.id
+  route_key = "GET /presign1"
   target    = "integrations/${aws_apigatewayv2_integration.upload_url_integration.id}"
 }
 
@@ -53,7 +66,7 @@ resource "aws_s3_bucket_cors_configuration" "uploads_cors" {
   cors_rule {
     allowed_headers = ["*"]
     allowed_methods = ["PUT", "GET", "HEAD"]
-    allowed_origins = ["http://taxdoc-mvp-web-1754513919.s3-website-us-east-1.amazonaws.com"]
+    allowed_origins = ["*"]
     expose_headers  = ["ETag"]
     max_age_seconds = 3000
   }

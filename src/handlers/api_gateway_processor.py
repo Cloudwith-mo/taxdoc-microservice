@@ -3,8 +3,9 @@ import boto3
 import base64
 import uuid
 from typing import Dict, Any
+import os
 
-ORIGIN = "http://taxdoc-mvp-web-1754513919.s3-website-us-east-1.amazonaws.com"
+ORIGIN = os.environ.get("ALLOWED_ORIGIN", "*")
 
 def with_cors(resp):
     h = resp.get("headers", {})
