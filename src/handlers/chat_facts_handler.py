@@ -1,6 +1,12 @@
 import json
 import boto3
-from facts_publisher import resolve_field_key, query_facts, get_facts_count
+
+try:
+    # Try relative import first (for package context)
+    from .facts_publisher import resolve_field_key, query_facts, get_facts_count
+except ImportError:
+    # Fall back to absolute import (for direct execution/testing)
+    from facts_publisher import resolve_field_key, query_facts, get_facts_count
 
 def lambda_handler(event, context):
     """Handle chat queries using facts store"""
