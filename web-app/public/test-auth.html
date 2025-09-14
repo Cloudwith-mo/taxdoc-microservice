@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Authentication - TaxDoc AI</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            background: #f5f7fa; 
+            padding: 20px;
+        }
+        .container { 
+            max-width: 800px; 
+            margin: 0 auto; 
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { margin-bottom: 20px; color: #2c3e50; }
+        .status-box {
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .status-box.authenticated {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status-box.unauthenticated {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+        .btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        .btn:hover { background: #2980b9; }
+        .btn.danger { background: #e74c3c; }
+        .btn.danger:hover { background: #c0392b; }
+        .test-section {
+            margin: 30px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .test-result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .test-result.success { background: #d4edda; color: #155724; }
+        .test-result.error { background: #f8d7da; color: #721c24; }
+        .test-result.info { background: #d1ecf1; color: #0c5460; }
+        pre {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 Authentication Test Page</h1>
+        
+        <div id="authStatus" class="status-box"></div>
+        
+        <div class="test-section">
+            <h2>Authentication Actions</h2>
+            <button class="btn" onclick="signIn()">Sign In</button>
+            <button class="btn danger" onclick="signOut()">Sign Out</button>
+            <button class="btn" onclick="refreshStatus()">Refresh Status</button>
+        </div>
+        
+        <div class="test-section">
+            <h2>API Tests</h2>
+            <button class="btn" onclick="testPresignEndpoint()">Test /presign Endpoint</button>
+            <button class="btn" onclick="testUploadUrl()">Test /upload-url Endpoint</button>
+            <button class="btn" onclick="testWithAuth()">Test With Auth Headers</button>
+            <button class="btn" onclick="testWithoutAuth()">Test Without Auth Headers</button>
+        </div>
+        
+        <div id="testResults"></div>
+        
+        <div class="test-section">
+            <h2>Token Information</h2>
+            <pre id="tokenInfo">No tokens found</pre>
+        </div>
+    </div>
+
+    <script>
+        // Configuration - update this to match your deployment
+        const API_BASE = 'https://ns7ycm3h04.execute-api.us-east-1.amazonaws.com/prod';
+        const COGNITO_CONFIG = {
+            domain: "documentgpt.auth.us-east-1.amazoncognito.com",
+            clientId: "YOUR_CLIENT_ID", // Update this
+            redirectUri: window.location.origin + window.location.pathname,
+            scope: "openid email profile"
+        };
+        
+        // Simple auth module
+        const auth = (() => {
+            const LS = {
+                idToken: 'taxdoc_id_token',
+                accessToken: 'taxdoc_access_token',
+                refreshToken: 'taxdoc_refresh_token',
+                user: 'taxdoc_user',
+                username: 'taxdoc_username'
+            };
+
+            function get(key) {
+                return localStorage.getItem(key);
+            }
+
+            function set(key, value) {
+                if (value) {
+                    localStorage.setItem(key, value);
+                } else {
+                    localStorage.removeItem(key);
+                }
+            }
+
+            function getAuthHeaders() {
+                const token = get(LS.accessToken) || get(LS.idToken);
+                return token ? { 'Authorization': `Bearer ${token}` } : {};
+            }
+
+            function isAuthenticated() {
+                return !!(get(LS.accessToken) || get(LS.idToken));
+            }
+
+            function checkUrlTokens() {
+                const params = new URLSearchParams(window.location.hash.substring(1));
+                const idToken = params.get('id_token');
+                const accessToken = params.get('access_token');
+                
+                if (idToken || accessToken) {
+                    if (idToken) set(LS.idToken, idToken);
+                    if (accessToken) set(LS.accessToken, accessToken);
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                    return true;
+                }
+                return false;
+            }
+
+            function signIn() {
+                const authUrl = `https://${COGNITO_CONFIG.domain}/login?` +
+                    `response_type=token&` +
+                    `client_id=${COGNITO_CONFIG.clientId}&` +
+                    `redirect_uri=${encodeURIComponent(COGNITO_CONFIG.redirectUri)}&` +
+                    `scope=${encodeURIComponent(COGNITO_CONFIG.scope)}`;
+                window.location.href = authUrl;
+            }
+
+            function signOut() {
+                Object.values(LS).forEach(key => localStorage.removeItem(key));
+                refreshStatus();
+            }
+
+            return {
+                getAuthHeaders,
+                isAuthenticated,
+                checkUrlTokens,
+                signIn,
+                signOut,
+                get,
+                LS
+            };
+        })();
+
+        // UI Functions
+        function refreshStatus() {
+            const statusEl = document.getElementById('authStatus');
+            const tokenInfoEl = document.getElementById('tokenInfo');
+            
+            if (auth.isAuthenticated()) {
+                statusEl.className = 'status-box authenticated';
+                statusEl.innerHTML = '✅ <strong>Authenticated</strong><br>You can upload and process documents.';
+                
+                const tokenInfo = {
+                    idToken: auth.get(auth.LS.idToken) ? '✅ Present' : '❌ Missing',
+                    accessToken: auth.get(auth.LS.accessToken) ? '✅ Present' : '❌ Missing',
+                    refreshToken: auth.get(auth.LS.refreshToken) ? '✅ Present' : '❌ Missing',
+                    user: auth.get(auth.LS.user) || 'Not set',
+                    username: auth.get(auth.LS.username) || 'Not set'
+                };
+                tokenInfoEl.textContent = JSON.stringify(tokenInfo, null, 2);
+            } else {
+                statusEl.className = 'status-box unauthenticated';
+                statusEl.innerHTML = '⚠️ <strong>Not Authenticated</strong><br>Please sign in to use the service.';
+                tokenInfoEl.textContent = 'No tokens found in localStorage';
+            }
+        }
+
+        function signIn() {
+            auth.signIn();
+        }
+
+        function signOut() {
+            auth.signOut();
+        }
+
+        function showResult(message, type = 'info') {
+            const resultsEl = document.getElementById('testResults');
+            const resultDiv = document.createElement('div');
+            resultDiv.className = `test-result ${type}`;
+            resultDiv.innerHTML = `<strong>${new Date().toLocaleTimeString()}:</strong> ${message}`;
+            resultsEl.insertBefore(resultDiv, resultsEl.firstChild);
+        }
+
+        async function testPresignEndpoint() {
+            try {
+                showResult('Testing /presign endpoint...', 'info');
+                const response = await fetch(`${API_BASE}/presign?filename=test.pdf&contentType=application/pdf`, {
+                    headers: auth.getAuthHeaders()
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    showResult(`✅ /presign endpoint working! Response: ${JSON.stringify(data).substring(0, 100)}...`, 'success');
+                } else {
+                    const errorText = await response.text();
+                    showResult(`❌ /presign failed: ${response.status} - ${errorText}`, 'error');
+                }
+            } catch (error) {
+                showResult(`❌ /presign error: ${error.message}`, 'error');
+            }
+        }
+
+        async function testUploadUrl() {
+            try {
+                showResult('Testing /upload-url endpoint...', 'info');
+                const response = await fetch(`${API_BASE}/upload-url?filename=test.pdf&contentType=application/pdf`, {
+                    headers: auth.getAuthHeaders()
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    showResult(`✅ /upload-url endpoint working! Response: ${JSON.stringify(data).substring(0, 100)}...`, 'success');
+                } else {
+                    const errorText = await response.text();
+                    showResult(`❌ /upload-url failed: ${response.status} - ${errorText}`, 'error');
+                }
+            } catch (error) {
+                showResult(`❌ /upload-url error: ${error.message}`, 'error');
+            }
+        }
+
+        async function testWithAuth() {
+            try {
+                const headers = auth.getAuthHeaders();
+                showResult(`Testing with auth headers: ${JSON.stringify(headers)}`, 'info');
+                
+                const response = await fetch(`${API_BASE}/upload-url?filename=test.pdf&contentType=application/pdf`, {
+                    headers: headers
+                });
+                
+                if (response.ok) {
+                    showResult('✅ Request with auth headers succeeded!', 'success');
+                } else {
+                    showResult(`❌ Request with auth headers failed: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                showResult(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function testWithoutAuth() {
+            try {
+                showResult('Testing without auth headers...', 'info');
+                
+                const response = await fetch(`${API_BASE}/upload-url?filename=test.pdf&contentType=application/pdf`);
+                
+                if (response.ok) {
+                    showResult('✅ Request without auth headers succeeded (endpoint is public)', 'success');
+                } else {
+                    showResult(`⚠️ Request without auth headers failed: ${response.status} (endpoint requires auth)`, 'error');
+                }
+            } catch (error) {
+                showResult(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        // Initialize on load
+        window.addEventListener('load', () => {
+            auth.checkUrlTokens();
+            refreshStatus();
+        });
+    </script>
+</body>
+</html>

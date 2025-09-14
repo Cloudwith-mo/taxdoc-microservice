@@ -47,6 +47,8 @@
         <h1>TaxDoc AI - S3 Upload</h1>
         <p>Fast, reliable document processing with S3 direct upload</p>
 
+        <div id="authStatus" style="padding: 10px; margin: 10px 0; border-radius: 5px; display: none;"></div>
+
         <div class="upload-area" id="uploadArea">
             <h3>Drop files here or click to upload</h3>
             <p>Supports PDF, PNG, JPEG - No size limits</p>
@@ -61,6 +63,72 @@
     <script>
         const API_BASE = 'https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod';
         let documents = [];
+
+        // Simple auth module for managing tokens
+        const auth = (() => {
+            const LS = {
+                idToken: 'taxdoc_id_token',
+                accessToken: 'taxdoc_access_token',
+                refreshToken: 'taxdoc_refresh_token',
+                user: 'taxdoc_user',
+                username: 'taxdoc_username'
+            };
+
+            function get(key) {
+                try {
+                    return localStorage.getItem(key);
+                } catch (e) {
+                    return null;
+                }
+            }
+
+            function set(key, value) {
+                try {
+                    if (value) {
+                        localStorage.setItem(key, value);
+                    } else {
+                        localStorage.removeItem(key);
+                    }
+                } catch (e) {
+                    console.error('Storage error:', e);
+                }
+            }
+
+            function getAuthHeaders() {
+                const token = get(LS.accessToken) || get(LS.idToken);
+                return token ? { 'Authorization': `Bearer ${token}` } : {};
+            }
+
+            function isAuthenticated() {
+                return !!(get(LS.accessToken) || get(LS.idToken));
+            }
+
+            // Check URL parameters for tokens (from Cognito redirect)
+            function checkUrlTokens() {
+                const params = new URLSearchParams(window.location.hash.substring(1));
+                const idToken = params.get('id_token');
+                const accessToken = params.get('access_token');
+                
+                if (idToken || accessToken) {
+                    if (idToken) set(LS.idToken, idToken);
+                    if (accessToken) set(LS.accessToken, accessToken);
+                    
+                    // Clean URL
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                    return true;
+                }
+                return false;
+            }
+
+            // Initialize - check for tokens in URL
+            checkUrlTokens();
+
+            return {
+                getAuthHeaders,
+                isAuthenticated,
+                checkUrlTokens
+            };
+        })();
 
         // File upload handling
         const uploadArea = document.getElementById('uploadArea');
@@ -100,12 +168,17 @@
                 showStatus('Getting upload URL...', 'processing');
                 
                 // Step 1: Get presigned URL with fallbacks
-                let urlResponse = await fetch(`${API_BASE}/upload-url?filename=${encodeURIComponent(file.name)}&contentType=${encodeURIComponent(file.type)}`);
+                const authHeaders = auth.getAuthHeaders();
+                let urlResponse = await fetch(`${API_BASE}/upload-url?filename=${encodeURIComponent(file.name)}&contentType=${encodeURIComponent(file.type)}`, {
+                    headers: authHeaders
+                });
                 if (!urlResponse.ok) {
                     // try legacy aliases
                     const tryPaths = ['presign', 'presign1'];
                     for (const p of tryPaths) {
-                        const r = await fetch(`${API_BASE}/${p}?filename=${encodeURIComponent(file.name)}&contentType=${encodeURIComponent(file.type)}`);
+                        const r = await fetch(`${API_BASE}/${p}?filename=${encodeURIComponent(file.name)}&contentType=${encodeURIComponent(file.type)}`, {
+                            headers: authHeaders
+                        });
                         if (r.ok) { urlResponse = r; break; }
                     }
                 }
@@ -137,7 +210,8 @@
                 const processResponse = await fetch(`${API_BASE}/process`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        ...auth.getAuthHeaders()
                     },
                     body: JSON.stringify({
                         s3Key: key,
@@ -196,6 +270,19 @@
         function generateId() {
             return 'doc_' + Math.random().toString(36).substr(2, 9);
         }
+
+        // Check authentication status on load
+        window.addEventListener('load', () => {
+            const authStatus = document.getElementById('authStatus');
+            if (!auth.isAuthenticated()) {
+                authStatus.style.display = 'block';
+                authStatus.style.background = '#ffeaa7';
+                authStatus.style.color = '#d63031';
+                authStatus.innerHTML = '⚠️ <strong>Not Authenticated:</strong> You may need to sign in to upload documents. <a href="/login.html" style="color: #0984e3;">Sign In</a>';
+            } else {
+                console.log('✅ Authenticated - Authorization headers will be included');
+            }
+        });
     </script>
 </body>
 </html>

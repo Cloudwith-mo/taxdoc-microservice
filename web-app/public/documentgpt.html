@@ -736,6 +736,19 @@
         // ===== Document Processing =====
         async function processDocument(file) {
             try {
+                // Check authentication first
+                if (!auth.isAuthenticated()) {
+                    showMessage('error', '🔐 Please sign in to upload documents');
+                    document.getElementById('processingStatus').style.display = 'none';
+                    // Optionally trigger sign in
+                    setTimeout(() => {
+                        if (confirm('Would you like to sign in now?')) {
+                            auth.signIn();
+                        }
+                    }, 500);
+                    return;
+                }
+                
                 // Show processing status
                 document.getElementById('processingStatus').style.display = 'block';
                 document.getElementById('resultsSection').style.display = 'none';
@@ -760,6 +773,10 @@
                 
                 if (!presignResponse.ok) {
                     const errorText = await presignResponse.text();
+                    // Handle 401 specifically
+                    if (presignResponse.status === 401) {
+                        throw new Error('Authentication required. Please sign in and try again.');
+                    }
                     throw new Error(`Presign failed: ${presignResponse.status} ${errorText}`);
                 }
                 
@@ -812,7 +829,27 @@
                 
             } catch (error) {
                 console.error('Processing error:', error);
-                showMessage('error', error.message || 'Failed to process document');
+                let errorMessage = error.message || 'Failed to process document';
+                
+                // Provide specific guidance for common errors
+                if (error.message.includes('401') || error.message.includes('Authentication')) {
+                    errorMessage = `🔐 Authentication Required\n\n${error.message}\n\nPlease sign in to upload documents.`;
+                    // Show sign in prompt
+                    setTimeout(() => {
+                        if (!auth.isAuthenticated() && confirm('Would you like to sign in now?')) {
+                            auth.signIn();
+                        }
+                    }, 500);
+                } else if (error.message.includes('Missing Authorization')) {
+                    errorMessage = '🔐 Authorization Error\n\nYour session may have expired. Please sign in again.';
+                    setTimeout(() => {
+                        if (confirm('Would you like to sign in now?')) {
+                            auth.signIn();
+                        }
+                    }, 500);
+                }
+                
+                showMessage('error', errorMessage);
                 document.getElementById('processingStatus').style.display = 'none';
             }
         }
@@ -915,6 +952,19 @@
             // Check for auth tokens in URL
             auth.checkUrlTokens();
             updateAuthUI();
+            
+            // Show auth status message if not authenticated
+            if (!auth.isAuthenticated()) {
+                console.warn('⚠️ Not authenticated - users will need to sign in to upload documents');
+                // Show a banner at the top
+                const banner = document.createElement('div');
+                banner.id = 'authBanner';
+                banner.style.cssText = 'background: #fff3cd; color: #856404; padding: 12px; text-align: center; border-bottom: 1px solid #ffc107; position: fixed; top: 0; left: 0; right: 0; z-index: 1000;';
+                banner.innerHTML = '🔐 Please <a href="#" onclick="auth.signIn(); return false;" style="color: #0066cc; text-decoration: underline;">sign in</a> to upload and process documents';
+                document.body.insertBefore(banner, document.body.firstChild);
+                // Adjust body padding to account for banner
+                document.body.style.paddingTop = '50px';
+            }
             
             // User dropdown
             document.getElementById('userDropdown').addEventListener('click', () => {
