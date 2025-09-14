@@ -130,7 +130,7 @@
             COGNITO_DOMAIN: 'https://documentgpt-1757887191.auth.us-east-1.amazoncognito.com',
             COGNITO_CLIENT_ID: '65n88t230fi2pb0ukrvrtc39ue',
             COGNITO_REDIRECT_URI: 'https://documentgpt.io/',
-            API_BASE_URL: 'https://abfum9qn84.execute-api.us-east-1.amazonaws.com/prod'
+            API_BASE_URL: 'https://ns7ycm3h04.execute-api.us-east-1.amazonaws.com/prod'
         };
 
         let currentUser = null;
@@ -290,7 +290,7 @@
 
             try {
                 // Get presigned URL
-                const presignResponse = await fetch(`${CONFIG.API_BASE_URL}/upload-url`, {
+                const presignResponse = await fetch(`${CONFIG.API_BASE_URL}/presign`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -322,7 +322,7 @@
                 }
 
                 // Process document
-                const processResponse = await fetch(`${CONFIG.API_BASE_URL}/process-document`, {
+                const processResponse = await fetch(`${CONFIG.API_BASE_URL}/process`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
