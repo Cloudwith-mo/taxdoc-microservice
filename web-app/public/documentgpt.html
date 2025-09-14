@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DocumentGPT - AI-Powered Document Intelligence</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .logo {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 30px;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .brand h1 {
+            color: #2d3748;
+            font-size: 2rem;
+            margin-bottom: 0.25rem;
+        }
+        
+        .brand p {
+            color: #718096;
+            font-size: 0.95rem;
+        }
+        
+        .auth-section {
+            position: relative;
+        }
+        
+        .user-dropdown {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+        
+        .user-dropdown:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .dropdown-menu {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 0.5rem;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            padding: 0.5rem;
+            min-width: 200px;
+            display: none;
+            z-index: 1000;
+        }
+        
+        .dropdown-menu.show {
+            display: block;
+        }
+        
+        .dropdown-item {
+            padding: 0.75rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #4a5568;
+        }
+        
+        .dropdown-item:hover {
+            background: #f7fafc;
+        }
+        
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+        
+        .upload-section, .features-section {
+            background: white;
+            border-radius: 20px;
+            padding: 2.5rem;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        
+        .upload-area {
+            border: 3px dashed #cbd5e0;
+            border-radius: 15px;
+            padding: 3rem;
+            text-align: center;
+            transition: all 0.3s;
+            cursor: pointer;
+            background: #f8fafc;
+        }
+        
+        .upload-area:hover {
+            border-color: #667eea;
+            background: #edf2ff;
+        }
+        
+        .upload-area.dragover {
+            border-color: #667eea;
+            background: #e0e7ff;
+            transform: scale(1.02);
+        }
+        
+        .upload-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+        
+        .upload-text h3 {
+            color: #2d3748;
+            margin-bottom: 0.5rem;
+            font-size: 1.5rem;
+        }
+        
+        .upload-text p {
+            color: #718096;
+            margin-bottom: 1.5rem;
+        }
+        
+        .file-input {
+            display: none;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #f7fafc;
+            color: #4a5568;
+            border: 2px solid #e2e8f0;
+        }
+        
+        .btn-secondary:hover {
+            background: #edf2f7;
+        }
+        
+        .features-grid {
+            display: grid;
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+        
+        .feature-item {
+            display: flex;
+            gap: 1rem;
+            padding: 1.5rem;
+            background: #f8fafc;
+            border-radius: 12px;
+            transition: all 0.3s;
+        }
+        
+        .feature-item:hover {
+            background: #edf2ff;
+            transform: translateX(5px);
+        }
+        
+        .feature-icon {
+            font-size: 1.5rem;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+            color: white;
+        }
+        
+        .feature-content h4 {
+            color: #2d3748;
+            margin-bottom: 0.25rem;
+        }
+        
+        .feature-content p {
+            color: #718096;
+            font-size: 0.9rem;
+        }
+        
+        .processing-status {
+            display: none;
+            background: white;
+            border-radius: 20px;
+            padding: 2rem;
+            margin-top: 2rem;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 10px;
+            background: #e2e8f0;
+            border-radius: 5px;
+            overflow: hidden;
+            margin: 1rem 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .progress-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+            animation: shimmer 2s infinite;
+        }
+        
+        @keyframes shimmer {
+            0% { left: -100%; }
+            100% { left: 100%; }
+        }
+        
+        .results-section {
+            display: none;
+            margin-top: 2rem;
+        }
+        
+        .result-card {
+            background: white;
+            border-radius: 20px;
+            padding: 2rem;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+        
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid #e2e8f0;
+        }
+        
+        .result-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+        
+        .document-preview {
+            background: #f8fafc;
+            padding: 1.5rem;
+            border-radius: 12px;
+        }
+        
+        .document-preview img {
+            width: 100%;
+            max-height: 500px;
+            object-fit: contain;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .extracted-data {
+            background: #f8fafc;
+            padding: 1.5rem;
+            border-radius: 12px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        
+        .data-field {
+            background: white;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 0.75rem;
+            border-left: 4px solid #667eea;
+        }
+        
+        .field-label {
+            font-weight: 600;
+            color: #4a5568;
+            font-size: 0.875rem;
+            margin-bottom: 0.25rem;
+        }
+        
+        .field-value {
+            color: #2d3748;
+            font-size: 1rem;
+        }
+        
+        .field-confidence {
+            color: #48bb78;
+            font-size: 0.75rem;
+            margin-top: 0.25rem;
+        }
+        
+        .export-buttons {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+        
+        .error-message {
+            background: #fed7d7;
+            color: #c53030;
+            padding: 1rem;
+            border-radius: 10px;
+            margin: 1rem 0;
+            display: none;
+        }
+        
+        .success-message {
+            background: #c6f6d5;
+            color: #22543d;
+            padding: 1rem;
+            border-radius: 10px;
+            margin: 1rem 0;
+            display: none;
+        }
+        
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .result-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .header {
+                flex-direction: column;
+                gap: 1rem;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo-section">
+                <div class="logo">📄</div>
+                <div class="brand">
+                    <h1>DocumentGPT</h1>
+                    <p>Upload documents, extract data, and get intelligent insights powered by GPT-4</p>
+                </div>
+            </div>
+            <div class="auth-section">
+                <button class="user-dropdown" id="userDropdown">
+                    <span id="userDisplayName">Guest User</span>
+                    <span>▼</span>
+                </button>
+                <div class="dropdown-menu" id="dropdownMenu">
+                    <div class="dropdown-item" id="signInBtn">
+                        <span>🔐</span>
+                        <span>Sign In</span>
+                    </div>
+                    <div class="dropdown-item" id="signOutBtn" style="display: none;">
+                        <span>🚪</span>
+                        <span>Sign Out</span>
+                    </div>
+                    <div class="dropdown-item" id="upgradeBtn">
+                        <span>⚡</span>
+                        <span>Upgrade Plan</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Upload Section -->
+            <div class="upload-section">
+                <h2 style="margin-bottom: 1.5rem; color: #2d3748;">📤 Upload Document</h2>
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">📎</div>
+                    <div class="upload-text">
+                        <h3>Drop your document here</h3>
+                        <p>or click to browse</p>
+                        <p style="font-size: 0.875rem; color: #a0aec0;">
+                            Supports PDF, Word, Images (PNG, JPG) • Max 50MB
+                        </p>
+                    </div>
+                    <input type="file" id="fileInput" class="file-input" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" />
+                    <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
+                        Select File
+                    </button>
+                </div>
+                
+                <!-- Error/Success Messages -->
+                <div class="error-message" id="errorMessage"></div>
+                <div class="success-message" id="successMessage"></div>
+                
+                <!-- Processing Status -->
+                <div class="processing-status" id="processingStatus">
+                    <h3 style="color: #2d3748; margin-bottom: 1rem;">⚙️ Processing Document...</h3>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+                    </div>
+                    <p id="statusText" style="color: #718096; margin-top: 0.5rem;">Initializing...</p>
+                </div>
+            </div>
+            
+            <!-- Features Section -->
+            <div class="features-section">
+                <h2 style="margin-bottom: 1rem; color: #2d3748;">🚀 AI-Powered Features</h2>
+                <div class="features-grid">
+                    <div class="feature-item">
+                        <div class="feature-icon">✨</div>
+                        <div class="feature-content">
+                            <h4>Advanced document parsing with GPT-4</h4>
+                            <p>Extract structured data with high accuracy</p>
+                        </div>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon">📊</div>
+                        <div class="feature-content">
+                            <h4>Structured data extraction & export</h4>
+                            <p>Export to Excel, CSV, or JSON formats</p>
+                        </div>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon">💬</div>
+                        <div class="feature-content">
+                            <h4>Q&A with reliable source citations</h4>
+                            <p>Ask questions about your documents</p>
+                        </div>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon">📑</div>
+                        <div class="feature-content">
+                            <h4>Multi-format support</h4>
+                            <p>PDF, Word, Images, and more</p>
+                        </div>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon">🔒</div>
+                        <div class="feature-content">
+                            <h4>Enterprise-grade security & privacy</h4>
+                            <p>Your data is encrypted and secure</p>
+                        </div>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon">⚡</div>
+                        <div class="feature-content">
+                            <h4>Real-time processing & analysis</h4>
+                            <p>Get results in seconds, not minutes</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Results Section -->
+        <div class="results-section" id="resultsSection">
+            <div class="result-card">
+                <div class="result-header">
+                    <h3 style="color: #2d3748;">📋 Extraction Results</h3>
+                    <div class="export-buttons">
+                        <button class="btn btn-secondary" onclick="exportToExcel()">
+                            📊 Export to Excel
+                        </button>
+                        <button class="btn btn-secondary" onclick="exportToCSV()">
+                            📄 Export to CSV
+                        </button>
+                        <button class="btn btn-secondary" onclick="exportToJSON()">
+                            🔧 Export to JSON
+                        </button>
+                    </div>
+                </div>
+                <div class="result-content" id="resultContent">
+                    <!-- Results will be dynamically inserted here -->
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // ===== Configuration =====
+        // IMPORTANT: Update these values with your actual AWS Cognito configuration
+        const COGNITO_CONFIG = {
+            domain: "https://YOUR-DOMAIN.auth.us-east-1.amazoncognito.com", // Replace with your Cognito domain
+            clientId: "YOUR-CLIENT-ID", // Replace with your App Client ID
+            redirectUri: window.location.origin + window.location.pathname,
+            logoutUri: window.location.origin + window.location.pathname,
+            scope: "openid email profile offline_access"
+        };
+        
+        const API_BASE = "https://iljpaj6ogl.execute-api.us-east-1.amazonaws.com/prod"; // Your API Gateway URL
+        
+        // ===== Auth Module =====
+        const auth = (() => {
+            const LS = {
+                idToken: "documentgpt_id_token",
+                accessToken: "documentgpt_access_token",
+                refreshToken: "documentgpt_refresh_token",
+                user: "documentgpt_user",
+                username: "documentgpt_username",
+                exp: "documentgpt_token_exp"
+            };
+            
+            const get = (key) => localStorage.getItem(key);
+            const set = (key, val) => localStorage.setItem(key, val);
+            const del = (key) => localStorage.removeItem(key);
+            
+            function parseJwt(token) {
+                try {
+                    const base64Url = token.split('.')[1];
+                    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                    return JSON.parse(window.atob(base64));
+                } catch (e) {
+                    return null;
+                }
+            }
+            
+            // Check URL for tokens (OAuth callback)
+            function checkUrlTokens() {
+                const hash = window.location.hash.substring(1);
+                if (!hash) return;
+                
+                const params = new URLSearchParams(hash);
+                const idToken = params.get('id_token');
+                const accessToken = params.get('access_token');
+                const refreshToken = params.get('refresh_token');
+                
+                if (idToken || accessToken) {
+                    if (idToken) set(LS.idToken, idToken);
+                    if (accessToken) set(LS.accessToken, accessToken);
+                    if (refreshToken) set(LS.refreshToken, refreshToken);
+                    
+                    const payload = parseJwt(idToken || accessToken);
+                    if (payload && payload.sub) {
+                        set(LS.user, payload.sub);
+                        const name = payload.email || payload["cognito:username"] || "User";
+                        set(LS.username, name);
+                        if (payload.exp) set(LS.exp, payload.exp.toString());
+                    }
+                    
+                    // Clean URL
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                    
+                    // Update UI
+                    updateAuthUI();
+                    showMessage('success', 'Successfully signed in!');
+                }
+            }
+            
+            function signIn() {
+                const codeVerifier = generateCodeVerifier();
+                sessionStorage.setItem('code_verifier', codeVerifier);
+                
+                const codeChallenge = generateCodeChallenge(codeVerifier);
+                
+                const params = new URLSearchParams({
+                    response_type: "code",
+                    client_id: COGNITO_CONFIG.clientId,
+                    redirect_uri: COGNITO_CONFIG.redirectUri,
+                    scope: COGNITO_CONFIG.scope,
+                    code_challenge_method: "S256",
+                    code_challenge: codeChallenge
+                });
+                
+                window.location.href = `${COGNITO_CONFIG.domain}/oauth2/authorize?${params.toString()}`;
+            }
+            
+            function signOut() {
+                // Clear local storage
+                Object.values(LS).forEach(del);
+                
+                // Redirect to Cognito logout
+                const params = new URLSearchParams({
+                    client_id: COGNITO_CONFIG.clientId,
+                    logout_uri: COGNITO_CONFIG.logoutUri
+                });
+                
+                window.location.href = `${COGNITO_CONFIG.domain}/logout?${params.toString()}`;
+            }
+            
+            function generateCodeVerifier() {
+                const array = new Uint8Array(32);
+                crypto.getRandomValues(array);
+                return btoa(String.fromCharCode.apply(null, array))
+                    .replace(/\+/g, '-')
+                    .replace(/\//g, '_')
+                    .replace(/=/g, '');
+            }
+            
+            function generateCodeChallenge(verifier) {
+                const encoder = new TextEncoder();
+                const data = encoder.encode(verifier);
+                return crypto.subtle.digest('SHA-256', data).then(buffer => {
+                    return btoa(String.fromCharCode.apply(null, new Uint8Array(buffer)))
+                        .replace(/\+/g, '-')
+                        .replace(/\//g, '_')
+                        .replace(/=/g, '');
+                });
+            }
+            
+            function isAuthenticated() {
+                const token = get(LS.accessToken);
+                if (!token) return false;
+                
+                const exp = get(LS.exp);
+                if (exp && parseInt(exp) * 1000 < Date.now()) {
+                    // Token expired
+                    Object.values(LS).forEach(del);
+                    return false;
+                }
+                
+                return true;
+            }
+            
+            function getAuthHeaders() {
+                const token = get(LS.accessToken);
+                return token ? { 'Authorization': `Bearer ${token}` } : {};
+            }
+            
+            function getUserId() {
+                return get(LS.user) || 'anonymous';
+            }
+            
+            function getUsername() {
+                return get(LS.username) || 'Guest User';
+            }
+            
+            return {
+                checkUrlTokens,
+                signIn,
+                signOut,
+                isAuthenticated,
+                getAuthHeaders,
+                getUserId,
+                getUsername
+            };
+        })();
+        
+        // ===== UI Functions =====
+        function updateAuthUI() {
+            const isAuth = auth.isAuthenticated();
+            const username = auth.getUsername();
+            
+            document.getElementById('userDisplayName').textContent = username;
+            document.getElementById('signInBtn').style.display = isAuth ? 'none' : 'flex';
+            document.getElementById('signOutBtn').style.display = isAuth ? 'flex' : 'none';
+        }
+        
+        function showMessage(type, message) {
+            const errorEl = document.getElementById('errorMessage');
+            const successEl = document.getElementById('successMessage');
+            
+            errorEl.style.display = 'none';
+            successEl.style.display = 'none';
+            
+            if (type === 'error') {
+                errorEl.textContent = message;
+                errorEl.style.display = 'block';
+            } else if (type === 'success') {
+                successEl.textContent = message;
+                successEl.style.display = 'block';
+            }
+            
+            setTimeout(() => {
+                errorEl.style.display = 'none';
+                successEl.style.display = 'none';
+            }, 5000);
+        }
+        
+        // ===== Document Processing =====
+        async function processDocument(file) {
+            try {
+                // Show processing status
+                document.getElementById('processingStatus').style.display = 'block';
+                document.getElementById('resultsSection').style.display = 'none';
+                updateProgress(10, 'Converting document...');
+                
+                // Convert file to base64
+                const base64Content = await fileToBase64(file);
+                updateProgress(30, 'Uploading to server...');
+                
+                // Get presigned URL for upload
+                const presignResponse = await fetch(`${API_BASE}/upload-url`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...auth.getAuthHeaders()
+                    },
+                    body: JSON.stringify({
+                        filename: file.name,
+                        contentType: file.type
+                    })
+                });
+                
+                if (!presignResponse.ok) {
+                    const errorText = await presignResponse.text();
+                    throw new Error(`Presign failed: ${presignResponse.status} ${errorText}`);
+                }
+                
+                const { uploadUrl, documentId } = await presignResponse.json();
+                updateProgress(40, 'Uploading document...');
+                
+                // Upload file to S3
+                const uploadResponse = await fetch(uploadUrl, {
+                    method: 'PUT',
+                    body: file,
+                    headers: {
+                        'Content-Type': file.type
+                    }
+                });
+                
+                if (!uploadResponse.ok) {
+                    throw new Error(`Upload failed: ${uploadResponse.status}`);
+                }
+                
+                updateProgress(60, 'Processing with AI...');
+                
+                // Process document
+                const processResponse = await fetch(`${API_BASE}/process-document`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...auth.getAuthHeaders()
+                    },
+                    body: JSON.stringify({
+                        documentId: documentId,
+                        filename: file.name
+                    })
+                });
+                
+                if (!processResponse.ok) {
+                    const errorText = await processResponse.text();
+                    throw new Error(`Processing failed: ${processResponse.status} ${errorText}`);
+                }
+                
+                const result = await processResponse.json();
+                updateProgress(100, 'Complete!');
+                
+                // Display results
+                setTimeout(() => {
+                    displayResults(result, file);
+                    document.getElementById('processingStatus').style.display = 'none';
+                    document.getElementById('resultsSection').style.display = 'block';
+                    showMessage('success', 'Document processed successfully!');
+                }, 500);
+                
+            } catch (error) {
+                console.error('Processing error:', error);
+                showMessage('error', error.message || 'Failed to process document');
+                document.getElementById('processingStatus').style.display = 'none';
+            }
+        }
+        
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const dataUrl = reader.result;
+                    const base64 = dataUrl.split(',')[1];
+                    resolve(base64);
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+        
+        function updateProgress(percent, text) {
+            document.getElementById('progressFill').style.width = percent + '%';
+            document.getElementById('statusText').textContent = text;
+        }
+        
+        function displayResults(result, file) {
+            const imageUrl = URL.createObjectURL(file);
+            const extractedData = result.fields || result.extracted_data || {};
+            
+            const resultContent = `
+                <div class="document-preview">
+                    <h4 style="margin-bottom: 1rem; color: #4a5568;">Document Preview</h4>
+                    <img src="${imageUrl}" alt="${file.name}" />
+                </div>
+                <div class="extracted-data">
+                    <h4 style="margin-bottom: 1rem; color: #4a5568;">
+                        Extracted Data (${Object.keys(extractedData).length} fields)
+                    </h4>
+                    ${Object.entries(extractedData).map(([key, value]) => {
+                        const displayValue = typeof value === 'object' ? value.value : value;
+                        const confidence = typeof value === 'object' ? value.confidence : 95;
+                        return `
+                            <div class="data-field">
+                                <div class="field-label">${key.replace(/_/g, ' ').toUpperCase()}</div>
+                                <div class="field-value">${displayValue || 'N/A'}</div>
+                                <div class="field-confidence">Confidence: ${confidence}%</div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+            
+            document.getElementById('resultContent').innerHTML = resultContent;
+            window.currentResult = extractedData;
+        }
+        
+        // ===== Export Functions =====
+        function exportToExcel() {
+            // Implementation for Excel export
+            showMessage('success', 'Excel export feature coming soon!');
+        }
+        
+        function exportToCSV() {
+            if (!window.currentResult) {
+                showMessage('error', 'No data to export');
+                return;
+            }
+            
+            const csv = Object.entries(window.currentResult).map(([key, value]) => {
+                const displayValue = typeof value === 'object' ? value.value : value;
+                return `"${key}","${displayValue}"`;
+            }).join('\n');
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'extracted_data.csv';
+            a.click();
+            
+            showMessage('success', 'Data exported to CSV!');
+        }
+        
+        function exportToJSON() {
+            if (!window.currentResult) {
+                showMessage('error', 'No data to export');
+                return;
+            }
+            
+            const json = JSON.stringify(window.currentResult, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'extracted_data.json';
+            a.click();
+            
+            showMessage('success', 'Data exported to JSON!');
+        }
+        
+        // ===== Event Listeners =====
+        document.addEventListener('DOMContentLoaded', () => {
+            // Check for auth tokens in URL
+            auth.checkUrlTokens();
+            updateAuthUI();
+            
+            // User dropdown
+            document.getElementById('userDropdown').addEventListener('click', () => {
+                document.getElementById('dropdownMenu').classList.toggle('show');
+            });
+            
+            // Close dropdown when clicking outside
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.auth-section')) {
+                    document.getElementById('dropdownMenu').classList.remove('show');
+                }
+            });
+            
+            // Auth buttons
+            document.getElementById('signInBtn').addEventListener('click', auth.signIn);
+            document.getElementById('signOutBtn').addEventListener('click', auth.signOut);
+            document.getElementById('upgradeBtn').addEventListener('click', () => {
+                showMessage('info', 'Upgrade feature coming soon!');
+            });
+            
+            // File input
+            document.getElementById('fileInput').addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    processDocument(file);
+                }
+            });
+            
+            // Drag and drop
+            const uploadArea = document.getElementById('uploadArea');
+            
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                uploadArea.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                });
+            });
+            
+            ['dragenter', 'dragover'].forEach(eventName => {
+                uploadArea.addEventListener(eventName, () => {
+                    uploadArea.classList.add('dragover');
+                });
+            });
+            
+            ['dragleave', 'drop'].forEach(eventName => {
+                uploadArea.addEventListener(eventName, () => {
+                    uploadArea.classList.remove('dragover');
+                });
+            });
+            
+            uploadArea.addEventListener('drop', (e) => {
+                const file = e.dataTransfer.files[0];
+                if (file) {
+                    processDocument(file);
+                }
+            });
+        });
+    </script>
+</body>
+</html>
