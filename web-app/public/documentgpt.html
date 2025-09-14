@@ -691,7 +691,7 @@
                 return get(LS.username) || 'Guest User';
             }
             
-            return {
+            const api = {
                 checkUrlTokens,
                 signIn,
                 signOut,
@@ -700,6 +700,19 @@
                 getUserId,
                 getUsername
             };
+
+            // Provide DocGPTAuth compatibility shim if needed
+            try {
+                window.DocGPTAuth = window.DocGPTAuth || {
+                    getIdToken: () => {
+                        const headers = getAuthHeaders();
+                        const token = headers['Authorization'] ? headers['Authorization'].replace(/^Bearer\s+/, '') : null;
+                        return token || null;
+                    }
+                };
+            } catch (_) {}
+
+            return api;
         })();
         
         // ===== UI Functions =====
@@ -745,8 +758,8 @@
                 const base64Content = await fileToBase64(file);
                 updateProgress(30, 'Uploading to server...');
                 
-                // Get presigned URL for upload
-                const presignResponse = await fetch(`${API_BASE}/upload-url`, {
+                // Get presigned URL for upload with robust fallback
+                let presignResponse = await fetch(`${API_BASE}/upload-url`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -757,13 +770,24 @@
                         contentType: file.type
                     })
                 });
-                
+
+                // Fallback to legacy GET /presign if unauthorized or missing auth
+                if (!presignResponse.ok && presignResponse.status === 401) {
+                    const legacyUrl = `${API_BASE}/presign?filename=${encodeURIComponent(file.name)}&contentType=${encodeURIComponent(file.type)}`;
+                    presignResponse = await fetch(legacyUrl, { method: 'GET', headers: { ...auth.getAuthHeaders() } });
+                }
+
                 if (!presignResponse.ok) {
                     const errorText = await presignResponse.text();
+                    if (presignResponse.status === 401) {
+                        throw new Error('Presign failed: 401 Missing Authorization');
+                    }
                     throw new Error(`Presign failed: ${presignResponse.status} ${errorText}`);
                 }
-                
-                const { uploadUrl, documentId } = await presignResponse.json();
+
+                const presignData = await presignResponse.json();
+                const uploadUrl = presignData.uploadUrl || presignData.url;
+                const documentId = presignData.documentId || presignData.key?.split('/')[1] || `doc_${Date.now()}`;
                 updateProgress(40, 'Uploading document...');
                 
                 // Upload file to S3

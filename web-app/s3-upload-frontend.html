@@ -93,6 +93,15 @@
             }
         }
 
+        function getAuthHeaders() {
+            try {
+                const token = window.DocGPTAuth?.getIdToken?.();
+                return token ? { 'Authorization': `Bearer ${token}` } : {};
+            } catch (e) {
+                return {};
+            }
+        }
+
         async function processFileS3(file) {
             const docId = generateId();
             
@@ -100,12 +109,12 @@
                 showStatus('Getting upload URL...', 'processing');
                 
                 // Step 1: Get presigned URL with fallbacks
-                let urlResponse = await fetch(`${API_BASE}/upload-url?filename=${encodeURIComponent(file.name)}&contentType=${encodeURIComponent(file.type)}`);
+                let urlResponse = await fetch(`${API_BASE}/upload-url?filename=${encodeURIComponent(file.name)}&contentType=${encodeURIComponent(file.type)}`, { headers: { ...getAuthHeaders() } });
                 if (!urlResponse.ok) {
                     // try legacy aliases
                     const tryPaths = ['presign', 'presign1'];
                     for (const p of tryPaths) {
-                        const r = await fetch(`${API_BASE}/${p}?filename=${encodeURIComponent(file.name)}&contentType=${encodeURIComponent(file.type)}`);
+                        const r = await fetch(`${API_BASE}/${p}?filename=${encodeURIComponent(file.name)}&contentType=${encodeURIComponent(file.type)}`, { headers: { ...getAuthHeaders() } });
                         if (r.ok) { urlResponse = r; break; }
                     }
                 }
@@ -137,7 +146,8 @@
                 const processResponse = await fetch(`${API_BASE}/process`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        ...getAuthHeaders()
                     },
                     body: JSON.stringify({
                         s3Key: key,
