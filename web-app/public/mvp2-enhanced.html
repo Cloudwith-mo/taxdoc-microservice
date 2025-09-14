@@ -654,6 +654,10 @@
                     displayResult(result, file.name, file);
                 } catch (error) {
                     console.error('Processing error:', error);
+                    // Display error message to user
+                    alert(`Upload failed: ${error.message || 'Unknown error occurred'}`);
+                    // Update progress bar to show error
+                    updateProgress(0, `Error: ${error.message || 'Upload failed'}`);
                 }
             }
 
@@ -681,7 +685,10 @@
             // Process document directly
             const proc = await fetch(`${API_BASE}/process-document`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { 
+                    "Content-Type": "application/json",
+                    ...auth.authHeaders()  // Add authorization headers
+                },
                 body: JSON.stringify({ 
                     filename: file.name,
                     contentBase64: base64Content
@@ -690,7 +697,16 @@
             
             if (!proc.ok) {
                 const errorText = await proc.text();
-                throw new Error(`Process failed: ${proc.status} - ${errorText}`);
+                // Check for specific error codes
+                if (proc.status === 401) {
+                    throw new Error('Authorization failed. Please log in to continue.');
+                } else if (proc.status === 402) {
+                    throw new Error('Payment required. Please upgrade your subscription.');
+                } else if (proc.status === 403) {
+                    throw new Error('Access denied. Please check your permissions.');
+                } else {
+                    throw new Error(`Process failed: ${proc.status} - ${errorText}`);
+                }
             }
             
             const result = await proc.json();
@@ -818,7 +834,9 @@
         // Export Functions
         async function downloadJSON(filename) {
             try {
-                const response = await fetch(`${API_BASE}/export/json?filename=${filename}`);
+                const response = await fetch(`${API_BASE}/export/json?filename=${filename}`, {
+                    headers: { ...auth.authHeaders() }
+                });
                 const blob = await response.blob();
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
@@ -840,7 +858,10 @@
             try {
                 const response = await fetch(`${API_BASE}/integrations/sheets`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        ...auth.authHeaders()
+                    },
                     body: JSON.stringify({ action: 'connect' })
                 });
                 const result = await response.json();
