@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DocumentGPT - AI-Powered Document Processing</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { 
+            text-align: center; margin-bottom: 40px; color: white;
+            background: rgba(255,255,255,0.1); padding: 30px; border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
+        .header h1 { font-size: 2.5em; margin-bottom: 10px; }
+        .header p { font-size: 1.2em; opacity: 0.9; }
+        
+        .upload-area { 
+            border: 3px dashed #667eea; border-radius: 15px; padding: 50px; text-align: center; 
+            background: white; margin-bottom: 30px; cursor: pointer; transition: all 0.3s;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .upload-area:hover { border-color: #5a67d8; background: #f7fafc; }
+        .upload-area.dragover { border-color: #48bb78; background: #f0fff4; }
+        
+        .btn { 
+            background: #667eea; color: white; border: none; padding: 12px 24px; 
+            border-radius: 8px; cursor: pointer; font-size: 16px; transition: all 0.3s;
+            text-decoration: none; display: inline-block;
+        }
+        .btn:hover { background: #5a67d8; transform: translateY(-2px); }
+        
+        .chat-section {
+            background: white; border-radius: 15px; padding: 30px; margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .chat-messages {
+            height: 400px; overflow-y: auto; border: 1px solid #e2e8f0; 
+            border-radius: 8px; padding: 20px; margin-bottom: 20px;
+            background: #f8f9fa;
+        }
+        
+        .message {
+            margin-bottom: 15px; padding: 10px 15px; border-radius: 10px;
+            max-width: 80%;
+        }
+        
+        .message.user {
+            background: #667eea; color: white; margin-left: auto;
+        }
+        
+        .message.assistant {
+            background: #e2e8f0; color: #2d3748;
+        }
+        
+        .chat-input {
+            display: flex; gap: 10px;
+        }
+        
+        .chat-input input {
+            flex: 1; padding: 12px; border: 1px solid #e2e8f0; 
+            border-radius: 8px; font-size: 16px;
+        }
+        
+        .status-section {
+            background: white; border-radius: 15px; padding: 20px; margin-bottom: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        .status-badge { 
+            padding: 4px 12px; border-radius: 20px; font-size: 12px; 
+            font-weight: bold; text-transform: uppercase;
+        }
+        .status-processing { background: #fed7d7; color: #c53030; }
+        .status-completed { background: #c6f6d5; color: #2f855a; }
+        .status-error { background: #fed7d7; color: #c53030; }
+        
+        .notification { 
+            position: fixed; top: 20px; right: 20px; padding: 15px 20px; 
+            border-radius: 8px; color: white; font-weight: 500; z-index: 1000;
+            transform: translateX(400px); transition: transform 0.3s;
+        }
+        .notification.show { transform: translateX(0); }
+        .notification.success { background: #48bb78; }
+        .notification.error { background: #f56565; }
+        
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 DocumentGPT</h1>
+            <p>AI-Powered Document Processing & Q&A</p>
+        </div>
+
+        <div class="upload-area" id="uploadArea">
+            <h3>📄 Drop files here or click to upload</h3>
+            <p>Supports PDF, PNG, JPEG - Processing takes ~6 seconds</p>
+            <input type="file" id="fileInput" multiple accept=".pdf,.png,.jpg,.jpeg" style="display: none;">
+            <button class="btn" onclick="document.getElementById('fileInput').click()">Choose Files</button>
+        </div>
+
+        <div class="status-section" id="statusSection">
+            <h3>📊 Processing Status</h3>
+            <div id="documentStatus">No documents uploaded yet</div>
+        </div>
+
+        <div class="chat-section">
+            <h3>💬 Ask Questions About Your Documents</h3>
+            <div class="chat-messages" id="chatMessages">
+                <div class="message assistant">
+                    <strong>DocumentGPT:</strong> Upload a document and I'll help you analyze it! I can answer questions about the content, extract key information, and provide insights.
+                </div>
+            </div>
+            <div class="chat-input">
+                <input type="text" id="questionInput" placeholder="Ask a question about your documents..." onkeypress="handleKeyPress(event)">
+                <button class="btn" onclick="askQuestion()">Ask</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'https://ns7ycm3h04.execute-api.us-east-1.amazonaws.com/prod';
+        let currentDocuments = [];
+
+        // File upload handling
+        function setupFileUpload() {
+            const uploadArea = document.getElementById('uploadArea');
+            const fileInput = document.getElementById('fileInput');
+
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.classList.add('dragover');
+            });
+
+            uploadArea.addEventListener('dragleave', () => {
+                uploadArea.classList.remove('dragover');
+            });
+
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove('dragover');
+                handleFiles(e.dataTransfer.files);
+            });
+
+            fileInput.addEventListener('change', (e) => {
+                handleFiles(e.target.files);
+            });
+        }
+
+        async function handleFiles(files) {
+            for (let file of files) {
+                await uploadAndProcessFile(file);
+            }
+        }
+
+        async function uploadAndProcessFile(file) {
+            const docId = generateId();
+            
+            // Add to status
+            addDocumentStatus(docId, file.name, 'uploading');
+
+            try {
+                // Step 1: Get presigned URL
+                updateDocumentStatus(docId, 'getting upload URL...');
+                const presignResponse = await fetch(`${API_BASE_URL}/presign`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Origin': 'https://documentgpt.io'
+                    },
+                    body: JSON.stringify({
+                        filename: file.name,
+                        contentType: file.type
+                    })
+                });
+
+                if (!presignResponse.ok) {
+                    throw new Error(`Failed to get upload URL: ${presignResponse.status}`);
+                }
+
+                const { uploadUrl, key } = await presignResponse.json();
+
+                // Step 2: Upload to S3
+                updateDocumentStatus(docId, 'uploading to S3...');
+                const uploadResponse = await fetch(uploadUrl, {
+                    method: 'PUT',
+                    body: file,
+                    headers: {
+                        'Content-Type': file.type
+                    }
+                });
+
+                if (!uploadResponse.ok) {
+                    throw new Error(`Upload failed: ${uploadResponse.status}`);
+                }
+
+                // Step 3: Queue for processing
+                updateDocumentStatus(docId, 'queuing for processing...');
+                const bucket = 'documentgpt-uploads-1757887191';
+                
+                const ingestResponse = await fetch(`${API_BASE_URL}/ingest`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Origin': 'https://documentgpt.io'
+                    },
+                    body: JSON.stringify({
+                        docId: docId,
+                        docName: file.name,
+                        bucket: bucket,
+                        key: key
+                    })
+                });
+
+                if (!ingestResponse.ok) {
+                    throw new Error(`Processing queue failed: ${ingestResponse.status}`);
+                }
+
+                // Step 4: Monitor processing
+                updateDocumentStatus(docId, 'processing with AI...');
+                await monitorProcessing(docId, file.name);
+
+                showNotification(`✅ ${file.name} processed successfully!`, 'success');
+
+            } catch (error) {
+                console.error('Upload/processing error:', error);
+                updateDocumentStatus(docId, `❌ Error: ${error.message}`, 'error');
+                showNotification(`❌ Failed to process ${file.name}: ${error.message}`, 'error');
+            }
+        }
+
+        async function monitorProcessing(docId, filename) {
+            const maxAttempts = 20;
+            const interval = 3000; // 3 seconds
+            
+            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                try {
+                    updateDocumentStatus(docId, `processing... (${attempt * 3}s elapsed)`);
+                    
+                    // Test if document is ready by querying it
+                    const testResponse = await fetch(`${API_BASE_URL}/rag`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Origin': 'https://documentgpt.io'
+                        },
+                        body: JSON.stringify({
+                            question: "What is this document about?",
+                            docId: docId
+                        })
+                    });
+
+                    if (testResponse.ok) {
+                        const result = await testResponse.json();
+                        
+                        if (result.answer && !result.answer.includes('not found') && !result.answer.includes('still being processed')) {
+                            updateDocumentStatus(docId, '✅ Ready for questions!', 'completed');
+                            currentDocuments.push({ docId, filename });
+                            return;
+                        }
+                    }
+                    
+                    if (attempt < maxAttempts) {
+                        await new Promise(resolve => setTimeout(resolve, interval));
+                    }
+                    
+                } catch (error) {
+                    console.error(`Monitoring attempt ${attempt} failed:`, error);
+                }
+            }
+            
+            // Timeout
+            updateDocumentStatus(docId, '⏱️ Processing timeout - try asking questions anyway', 'completed');
+            currentDocuments.push({ docId, filename });
+        }
+
+        function addDocumentStatus(docId, filename, status) {
+            const statusDiv = document.getElementById('documentStatus');
+            
+            if (statusDiv.textContent === 'No documents uploaded yet') {
+                statusDiv.innerHTML = '';
+            }
+            
+            const docElement = document.createElement('div');
+            docElement.id = `doc-${docId}`;
+            docElement.style.cssText = 'padding: 10px; margin: 5px 0; border-radius: 8px; background: #f8f9fa; border-left: 4px solid #667eea;';
+            docElement.innerHTML = `<strong>${filename}</strong> - <span class="status">${status}</span>`;
+            
+            statusDiv.appendChild(docElement);
+        }
+
+        function updateDocumentStatus(docId, status, type = 'processing') {
+            const docElement = document.getElementById(`doc-${docId}`);
+            if (docElement) {
+                const statusSpan = docElement.querySelector('.status');
+                statusSpan.textContent = status;
+                
+                // Update styling based on type
+                if (type === 'completed') {
+                    docElement.style.borderLeftColor = '#48bb78';
+                    docElement.style.background = '#f0fff4';
+                } else if (type === 'error') {
+                    docElement.style.borderLeftColor = '#f56565';
+                    docElement.style.background = '#fed7d7';
+                }
+            }
+        }
+
+        async function askQuestion() {
+            const input = document.getElementById('questionInput');
+            const question = input.value.trim();
+            
+            if (!question) return;
+            
+            if (currentDocuments.length === 0) {
+                showNotification('Please upload and process a document first!', 'error');
+                return;
+            }
+            
+            // Add user message
+            addMessage(question, 'user');
+            input.value = '';
+            
+            // Add thinking message
+            const thinkingId = addMessage('🤔 Thinking...', 'assistant');
+            
+            try {
+                // Use the most recent document
+                const latestDoc = currentDocuments[currentDocuments.length - 1];
+                
+                const response = await fetch(`${API_BASE_URL}/rag`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Origin': 'https://documentgpt.io'
+                    },
+                    body: JSON.stringify({
+                        question: question,
+                        docId: latestDoc.docId
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Query failed: ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                // Remove thinking message and add real response
+                removeMessage(thinkingId);
+                
+                let answer = result.answer || 'Sorry, I could not find an answer.';
+                
+                // Add citations if available
+                if (result.citations && result.citations.length > 0) {
+                    answer += `\n\n📄 Source: ${latestDoc.filename}`;
+                }
+                
+                addMessage(answer, 'assistant');
+                
+            } catch (error) {
+                console.error('Question error:', error);
+                removeMessage(thinkingId);
+                addMessage(`❌ Sorry, I encountered an error: ${error.message}`, 'assistant');
+            }
+        }
+
+        function addMessage(text, sender) {
+            const messagesDiv = document.getElementById('chatMessages');
+            const messageId = 'msg-' + Date.now();
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.id = messageId;
+            messageDiv.className = `message ${sender}`;
+            messageDiv.innerHTML = `<strong>${sender === 'user' ? 'You' : 'DocumentGPT'}:</strong> ${text.replace(/\n/g, '<br>')}`;
+            
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            
+            return messageId;
+        }
+
+        function removeMessage(messageId) {
+            const messageElement = document.getElementById(messageId);
+            if (messageElement) {
+                messageElement.remove();
+            }
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                askQuestion();
+            }
+        }
+
+        function generateId() {
+            return 'doc_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        function showNotification(message, type) {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => notification.classList.add('show'), 100);
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => document.body.removeChild(notification), 300);
+            }, 4000);
+        }
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', () => {
+            setupFileUpload();
+        });
+    </script>
+</body>
+</html>
