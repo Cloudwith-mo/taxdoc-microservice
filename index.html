@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DocumentGPT - AI-Powered Document Processing</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { 
+            text-align: center; margin-bottom: 40px; color: white;
+            background: rgba(255,255,255,0.1); padding: 30px; border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
+        .header h1 { font-size: 2.5em; margin-bottom: 10px; }
+        .header p { font-size: 1.2em; opacity: 0.9; }
+        
+        .auth-section { 
+            background: white; border-radius: 15px; padding: 30px; margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        .user-info { display: flex; justify-content: space-between; align-items: center; }
+        .user-avatar { width: 40px; height: 40px; border-radius: 50%; background: #667eea; }
+        .btn { 
+            background: #667eea; color: white; border: none; padding: 12px 24px; 
+            border-radius: 8px; cursor: pointer; font-size: 16px; transition: all 0.3s;
+            text-decoration: none; display: inline-block;
+        }
+        .btn:hover { background: #5a67d8; transform: translateY(-2px); }
+        .btn-secondary { background: #e2e8f0; color: #4a5568; }
+        .btn-secondary:hover { background: #cbd5e0; }
+        
+        .upload-area { 
+            border: 3px dashed #667eea; border-radius: 15px; padding: 50px; text-align: center; 
+            background: white; margin-bottom: 30px; cursor: pointer; transition: all 0.3s;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .upload-area:hover { border-color: #5a67d8; background: #f7fafc; }
+        .upload-area.dragover { border-color: #48bb78; background: #f0fff4; }
+        
+        .document-grid { 
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); 
+            gap: 20px; margin-top: 30px;
+        }
+        .document-card { 
+            background: white; border-radius: 15px; padding: 25px; 
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        .document-card:hover { 
+            transform: translateY(-5px); 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+        }
+        
+        .status-badge { 
+            padding: 4px 12px; border-radius: 20px; font-size: 12px; 
+            font-weight: bold; text-transform: uppercase;
+        }
+        .status-processing { background: #fed7d7; color: #c53030; }
+        .status-completed { background: #c6f6d5; color: #2f855a; }
+        .status-error { background: #fed7d7; color: #c53030; }
+        
+        .field-item { 
+            display: flex; justify-content: space-between; padding: 8px 0; 
+            border-bottom: 1px solid #e2e8f0; font-size: 14px;
+        }
+        .field-label { font-weight: 600; color: #2d3748; }
+        .field-value { color: #4a5568; }
+        
+        .hidden { display: none; }
+        .loading { opacity: 0.6; pointer-events: none; }
+        
+        .notification { 
+            position: fixed; top: 20px; right: 20px; padding: 15px 20px; 
+            border-radius: 8px; color: white; font-weight: 500; z-index: 1000;
+            transform: translateX(400px); transition: transform 0.3s;
+        }
+        .notification.show { transform: translateX(0); }
+        .notification.success { background: #48bb78; }
+        .notification.error { background: #f56565; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>DocumentGPT</h1>
+            <p>AI-Powered Document Processing & Analysis</p>
+        </div>
+
+        <div class="auth-section">
+            <div id="loginSection">
+                <h3>Sign in to get started</h3>
+                <p>Secure authentication powered by AWS Cognito</p>
+                <button class="btn" onclick="signIn()">Sign In / Register</button>
+            </div>
+            
+            <div id="userSection" class="hidden">
+                <div class="user-info">
+                    <div>
+                        <h3 id="userName">Welcome back!</h3>
+                        <p id="userEmail"></p>
+                    </div>
+                    <button class="btn btn-secondary" onclick="signOut()">Sign Out</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="appContent" class="hidden">
+            <div class="upload-area" id="uploadArea">
+                <h3>Drop files here or click to upload</h3>
+                <p>Supports PDF, PNG, JPEG - Any document type</p>
+                <input type="file" id="fileInput" multiple accept=".pdf,.png,.jpg,.jpeg" style="display: none;">
+                <button class="btn" onclick="document.getElementById('fileInput').click()">Choose Files</button>
+            </div>
+
+            <div class="document-grid" id="documentGrid">
+                <!-- Documents will be populated here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration - These will be replaced by setup script
+        const CONFIG = {
+            COGNITO_DOMAIN: 'https://documentgpt-1757887191.auth.us-east-1.amazoncognito.com',
+            COGNITO_CLIENT_ID: '65n88t230fi2pb0ukrvrtc39ue',
+            COGNITO_REDIRECT_URI: 'https://documentgpt.io/',
+            API_BASE_URL: 'https://ns7ycm3h04.execute-api.us-east-1.amazonaws.com/prod'
+        };
+
+        let currentUser = null;
+        let documents = [];
+
+        // Authentication functions
+        function signIn() {
+            const authUrl = `${CONFIG.COGNITO_DOMAIN}/login?client_id=${CONFIG.COGNITO_CLIENT_ID}&response_type=code&scope=openid+profile+email&redirect_uri=${encodeURIComponent(CONFIG.COGNITO_REDIRECT_URI)}`;
+            window.location.href = authUrl;
+        }
+
+        function signOut() {
+            const logoutUrl = `${CONFIG.COGNITO_DOMAIN}/logout?client_id=${CONFIG.COGNITO_CLIENT_ID}&logout_uri=${encodeURIComponent(CONFIG.COGNITO_REDIRECT_URI)}`;
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('idToken');
+            window.location.href = logoutUrl;
+        }
+
+        // Handle OAuth callback
+        function handleAuthCallback() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const code = urlParams.get('code');
+            
+            if (code) {
+                exchangeCodeForTokens(code);
+            } else {
+                checkExistingAuth();
+            }
+        }
+
+        async function exchangeCodeForTokens(code) {
+            try {
+                const response = await fetch(`${CONFIG.COGNITO_DOMAIN}/oauth2/token`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        grant_type: 'authorization_code',
+                        client_id: CONFIG.COGNITO_CLIENT_ID,
+                        code: code,
+                        redirect_uri: CONFIG.COGNITO_REDIRECT_URI
+                    })
+                });
+
+                const tokens = await response.json();
+                
+                if (tokens.access_token) {
+                    localStorage.setItem('accessToken', tokens.access_token);
+                    localStorage.setItem('idToken', tokens.id_token);
+                    
+                    // Clean URL
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                    
+                    await loadUserProfile();
+                    showNotification('Successfully signed in!', 'success');
+                } else {
+                    throw new Error('Failed to get tokens');
+                }
+            } catch (error) {
+                console.error('Token exchange failed:', error);
+                showNotification('Authentication failed. Please try again.', 'error');
+            }
+        }
+
+        function checkExistingAuth() {
+            const accessToken = localStorage.getItem('accessToken');
+            if (accessToken) {
+                loadUserProfile();
+            }
+        }
+
+        async function loadUserProfile() {
+            try {
+                const idToken = localStorage.getItem('idToken');
+                if (idToken) {
+                    const payload = JSON.parse(atob(idToken.split('.')[1]));
+                    currentUser = {
+                        name: payload.name || payload['cognito:username'] || 'User',
+                        email: payload.email || '',
+                        sub: payload.sub
+                    };
+                    
+                    updateUI();
+                    loadDocuments();
+                }
+            } catch (error) {
+                console.error('Failed to load user profile:', error);
+                localStorage.removeItem('accessToken');
+                localStorage.removeItem('idToken');
+            }
+        }
+
+        function updateUI() {
+            if (currentUser) {
+                document.getElementById('loginSection').classList.add('hidden');
+                document.getElementById('userSection').classList.remove('hidden');
+                document.getElementById('appContent').classList.remove('hidden');
+                
+                document.getElementById('userName').textContent = `Welcome, ${currentUser.name}!`;
+                document.getElementById('userEmail').textContent = currentUser.email;
+            } else {
+                document.getElementById('loginSection').classList.remove('hidden');
+                document.getElementById('userSection').classList.add('hidden');
+                document.getElementById('appContent').classList.add('hidden');
+            }
+        }
+
+        // File upload handling
+        function setupFileUpload() {
+            const uploadArea = document.getElementById('uploadArea');
+            const fileInput = document.getElementById('fileInput');
+
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.classList.add('dragover');
+            });
+
+            uploadArea.addEventListener('dragleave', () => {
+                uploadArea.classList.remove('dragover');
+            });
+
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove('dragover');
+                handleFiles(e.dataTransfer.files);
+            });
+
+            uploadArea.addEventListener('click', () => {
+                fileInput.click();
+            });
+
+            fileInput.addEventListener('change', (e) => {
+                handleFiles(e.target.files);
+            });
+        }
+
+        async function handleFiles(files) {
+            for (let file of files) {
+                await uploadFile(file);
+            }
+        }
+
+        async function uploadFile(file) {
+            const docId = generateId();
+            
+            // Add processing document to UI
+            const processingDoc = {
+                docId,
+                filename: file.name,
+                status: 'processing',
+                uploadTime: new Date().toISOString()
+            };
+            
+            documents.unshift(processingDoc);
+            updateDocumentGrid();
+
+            try {
+                // Get presigned URL
+                const presignResponse = await fetch(`${CONFIG.API_BASE_URL}/presign`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+                    },
+                    body: JSON.stringify({
+                        filename: file.name,
+                        contentType: file.type
+                    })
+                });
+
+                if (!presignResponse.ok) {
+                    throw new Error(`Failed to get upload URL: ${presignResponse.status}`);
+                }
+
+                const { uploadUrl, key } = await presignResponse.json();
+
+                // Upload to S3
+                const uploadResponse = await fetch(uploadUrl, {
+                    method: 'PUT',
+                    body: file,
+                    headers: {
+                        'Content-Type': file.type
+                    }
+                });
+
+                if (!uploadResponse.ok) {
+                    throw new Error(`Upload failed: ${uploadResponse.status}`);
+                }
+
+                // Process document
+                const processResponse = await fetch(`${CONFIG.API_BASE_URL}/process`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+                    },
+                    body: JSON.stringify({
+                        s3Key: key,
+                        filename: file.name
+                    })
+                });
+
+                if (!processResponse.ok) {
+                    throw new Error(`Processing failed: ${processResponse.status}`);
+                }
+
+                const result = await processResponse.json();
+                
+                // Update document with results
+                const docIndex = documents.findIndex(d => d.docId === docId);
+                if (docIndex !== -1) {
+                    documents[docIndex] = {
+                        ...result,
+                        docId: result.docId || docId,
+                        filename: file.name,
+                        status: 'completed'
+                    };
+                }
+
+                showNotification(`${file.name} processed successfully!`, 'success');
+            } catch (error) {
+                console.error('Upload/processing error:', error);
+                
+                const docIndex = documents.findIndex(d => d.docId === docId);
+                if (docIndex !== -1) {
+                    documents[docIndex] = {
+                        ...processingDoc,
+                        status: 'error',
+                        error: error.message
+                    };
+                }
+                
+                showNotification(`Failed to process ${file.name}: ${error.message}`, 'error');
+            }
+
+            updateDocumentGrid();
+        }
+
+        async function loadDocuments() {
+            try {
+                const response = await fetch(`${CONFIG.API_BASE_URL}/documents`, {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    documents = data.documents || [];
+                    updateDocumentGrid();
+                }
+            } catch (error) {
+                console.error('Failed to load documents:', error);
+            }
+        }
+
+        function updateDocumentGrid() {
+            const grid = document.getElementById('documentGrid');
+            
+            if (documents.length === 0) {
+                grid.innerHTML = '<p style="text-align: center; color: #666; grid-column: 1/-1;">No documents yet. Upload your first document to get started!</p>';
+                return;
+            }
+
+            grid.innerHTML = documents.map(doc => createDocumentCard(doc)).join('');
+        }
+
+        function createDocumentCard(doc) {
+            const statusClass = `status-${doc.status}`;
+            const fields = doc.fields || {};
+            
+            return `
+                <div class="document-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h4>${doc.filename}</h4>
+                        <span class="status-badge ${statusClass}">${doc.status}</span>
+                    </div>
+                    
+                    ${doc.docType ? `<p><strong>Type:</strong> ${doc.docType}</p>` : ''}
+                    ${doc.uploadTime ? `<p><strong>Uploaded:</strong> ${new Date(doc.uploadTime).toLocaleDateString()}</p>` : ''}
+                    
+                    ${doc.error ? `<p style="color: #e53e3e; margin-top: 10px;"><strong>Error:</strong> ${doc.error}</p>` : ''}
+                    
+                    ${Object.keys(fields).length > 0 ? `
+                        <div style="margin-top: 15px;">
+                            <strong>Extracted Fields:</strong>
+                            ${Object.entries(fields).slice(0, 5).map(([key, value]) => `
+                                <div class="field-item">
+                                    <span class="field-label">${formatFieldName(key)}</span>
+                                    <span class="field-value">${typeof value === 'object' ? value.value : value}</span>
+                                </div>
+                            `).join('')}
+                            ${Object.keys(fields).length > 5 ? `<p style="font-style: italic; margin-top: 10px;">+${Object.keys(fields).length - 5} more fields</p>` : ''}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        function formatFieldName(key) {
+            return key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        }
+
+        function generateId() {
+            return 'doc_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        function showNotification(message, type) {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => notification.classList.add('show'), 100);
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => document.body.removeChild(notification), 300);
+            }, 3000);
+        }
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', () => {
+            setupFileUpload();
+            handleAuthCallback();
+        });
+    </script>
+</body>
+</html>
